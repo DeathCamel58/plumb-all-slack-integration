@@ -1,0 +1,20 @@
+{
+  "name": "plumb-all-slack-integration",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@slack/bolt": "^3.4.1",
+    "co": "^4.6.0",
+    "dotenv": "^10.0.0",
+    "imap-simple": "^5.1.0",
+    "lodash": "^4.17.21",
+    "mailparser": "^3.2.0"
+  }
+}
