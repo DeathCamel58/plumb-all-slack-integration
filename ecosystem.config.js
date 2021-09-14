@@ -22,7 +22,7 @@ module.exports = {
             "ref": "origin/master",
             "repo": "https://github.com/DeathCamel58/plumb-all-slack-integration.git",
             "path": "/root/plumb-all-slack-integration",
-            "post-deploy" : "npm install; pm2 startOrRestart ecosystem.config.js --env development"
+            "post-deploy" : "npm install; pm2 startOrRestart ecosystem.config.js --env production"
         }
     }
 }
