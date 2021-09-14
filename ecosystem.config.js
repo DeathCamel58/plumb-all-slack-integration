@@ -4,7 +4,8 @@ module.exports = {
         script : "npm",
         args : "start",
         env_production: {
-            NODE_ENV : "production"
+            NODE_ENV : "production",
+            DOTENV_CONFIG_PATH: '/root/plumb-all-slack-integration/.env'
         },
         env_development: {
             NODE_ENV : "development",
