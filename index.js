@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: '/root/plumb-all-slack-integration/.env' });
 let slack = require('./util/slackBot.js');
 let messageConstructor = require('./util/messageConstructor.js');
 
