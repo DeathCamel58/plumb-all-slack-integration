@@ -6,7 +6,7 @@ module.exports = {
         cron_restart: '* * * * *',
         env_production: {
             NODE_ENV : "production",
-            DOTENV_CONFIG_PATH: '/root/plumb-all-slack-integration/.env'
+            PATH: '/root/plumb-all-slack-integration/.env'
         },
         env_development: {
             NODE_ENV : "development",
