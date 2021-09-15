@@ -3,7 +3,6 @@ module.exports = {
         name   : "plumb-all-slack-integration",
         script : "npm",
         args : "start",
-        cron_restart: '* * * * *',
         env_production: {
             NODE_ENV : "production",
             PATH: '/root/plumb-all-slack-integration/.env'
