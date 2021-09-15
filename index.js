@@ -23,8 +23,7 @@ async function handleMessages(connection, item) {
     if (!mail.text.includes("Email of All Messages to 3646 PLUMB-ALL")) {
         await handleMessage(connection, item, mail, id);
     } else {
-        console.log(mail.text);
-        console.log("Ignoring email...");
+        console.log("Ignoring email (it's a concatenation of all previous day's emails)...");
     }
 }
 
@@ -37,13 +36,11 @@ async function sleep(ms) {
 async function runSingle() {
     let connection = await emailClient.connect();
     let connect = await emailClient.connectToMail(connection);
-    console.log("Connected to mailbox")
     let messages = await emailClient.getNewMail(connection)
-    console.log("Got the new mail")
     await Promise.all(messages.map(async (item) => {
         await handleMessages(connection, item);
     }))
-    console.log("Handled all mail.")
+    await emailClient.disconnect(connection);
 }
 
 async function run() {

@@ -4,7 +4,8 @@ module.exports = {
     connect,
     connectToMail,
     getNewMail,
-    moveAndMarkEmail
+    moveAndMarkEmail,
+    disconnect
 }
 
 let config = {
@@ -47,4 +48,14 @@ async function moveAndMarkEmail(connection, id, fromWhere) {
     } else if (fromWhere === "Website") {
         await connection.moveMessage(id, "Website Contact")
     }
+}
+
+async function disconnect(imapsConnection) {
+    await imapsConnection.imap.closeBox(false, (err) => {
+        if (err) {
+            console.log("Error occurred while closing the inbox:")
+            console.log(err);
+        }
+    })
+    await imapsConnection.end();
 }
