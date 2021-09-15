@@ -19,6 +19,12 @@ const app = new App({
     console.log('Logged into Slack!');
 })();
 
+/**
+ * Takes message, and sends it to slack with given username
+ * @param message The message to send
+ * @param username Username to send the message as
+ * @returns {Promise<void>} Promise that resolves after message is sent
+ */
 async function sendMessage(message, username) {
     console.log(message)
 

@@ -3,6 +3,11 @@ module.exports = {
     createMessage
 }
 
+/**
+ * Takes email and decides what source to process it as originating from
+ * @param mail Email
+ * @returns {(*|string)[]|*[]} [ human friendly message with contact information, source from which email originated ]
+ */
 function createMessage(mail) {
     if (mail.subject === "Message from Answerphone") {
         let parsed = emailParser.parseMessageFromAnswerphone(mail.text);
@@ -16,6 +21,11 @@ function createMessage(mail) {
     return [null, null]
 }
 
+/**
+ * Creates a standard contact message based on email from Answerphone
+ * @param parsed Email body
+ * @returns {string} The standard contact message
+ */
 function createMessageFromAnswerphone(parsed) {
     let fullAddress = parsed['address'] + ", " + parsed['city'] + " " + parsed['state'] + ", " + parsed['zip'];
     let fullAddressForLink = fullAddress.replace(/\s/g, '+');
@@ -34,6 +44,12 @@ function createMessageFromAnswerphone(parsed) {
     return message;
 }
 
+
+/**
+ * Creates a standard contact message based on email from the website contact form
+ * @param parsed Email body
+ * @returns {string} The standard contact message
+ */
 function createMessageFromWebsite(parsed) {
     let fullAddress = parsed['address'];
     let fullAddressForLink = fullAddress.replace(/\s/g, '+');

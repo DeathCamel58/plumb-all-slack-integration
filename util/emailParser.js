@@ -3,6 +3,11 @@ module.exports = {
     parseMessageFromWebsite
 }
 
+/**
+ * Takes email body from Answerphone service, and generates an array of contact information
+ * @param message Email body
+ * @returns {*[]} Array of contact details
+ */
 function parseMessageFromAnswerphone(message) {
     let details = [];
     details['phone'] = message.split("<D: ")[1].split(" > ")[0];
@@ -22,6 +27,11 @@ function parseMessageFromAnswerphone(message) {
     return details;
 }
 
+/**
+ * Takes email body from website contact form, and generates an array of contact information
+ * @param message Email body
+ * @returns {*[]} Array of contact details
+ */
 function parseMessageFromWebsite(message) {
     let details = [];
     details['phone'] = message.split("phone:")[1].split("address")[0].replace(/\-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ');
@@ -35,6 +45,11 @@ function parseMessageFromWebsite(message) {
     return details;
 }
 
+/**
+ * Takes in a phone number, and returns the number in the standard format: `(xxx) xxx-xxxx`
+ * @param phone Unparsed phone number
+ * @returns {null|*} Parsed Phone Number
+ */
 function normalizePhoneNumber(phone) {
     //normalize string and remove all unnecessary characters
     phone = phone.replace(/[^\d]/g, "");
