@@ -1,31 +1,16 @@
-require('dotenv').config({ path: '/root/plumb-all-slack-integration/.env' });
+require('dotenv').config();
 let slack = require('./util/slackBot.js');
 let messageConstructor = require('./util/messageConstructor.js');
+let emailClient = require('./util/emailClient.js')
 
-let imaps = require('imap-simple');
 const simpleParser = require('mailparser').simpleParser;
 const _ = require('lodash');
-
-let config = {
-    imap: {
-        user: (process.env.emailAddress || ""),
-        password: (process.env.emailPassword || ""),
-        host: process.env.emailHost || "outlook.office365.com",
-        port: process.env.emailPort || 993,
-        tls: process.env.emailTls || true
-    }
-};
 
 async function handleMessage(connection, item, mail, id) {
     let [message, fromWhere] = messageConstructor.createMessage(mail);
     if (fromWhere != null) {
         await slack.sendMessage(message, fromWhere + " Contact");
-        await connection.addFlags(id, "\Seen")
-        if (fromWhere === "Call") {
-            await connection.moveMessage(id, "Answering Service")
-        } else if (fromWhere === "Website") {
-            await connection.moveMessage(id, "Website Contact")
-        }
+        await emailClient.moveAndMarkEmail(connection, id, fromWhere)
     }
 }
 
@@ -43,27 +28,6 @@ async function handleMessages(connection, item) {
     }
 }
 
-async function getMessages(connection) {
-    return connection.openBox('INBOX').then(async function () {
-        // Fetch emails from the last 24h
-        // `90 * 24` sets the time to 90 days
-        let delay = 90 * 24 * 3600 * 1000;
-        let yesterday = new Date();
-        yesterday.setTime(Date.now() - delay);
-        yesterday = yesterday.toISOString();
-        let searchCriteria = ['UNSEEN', ['SINCE', yesterday]];
-
-        let fetchOptions = {
-            bodies: ['HEADER', 'TEXT', ''],
-        };
-        await connection.search(searchCriteria, fetchOptions).then(async function (messages) {
-            await Promise.all(messages.map(async (item) => {
-                await handleMessages(connection, item);
-            }))
-        });
-    });
-}
-
 async function sleep(ms) {
     return new Promise((resolve) => {
         setTimeout(resolve, ms);
@@ -71,8 +35,15 @@ async function sleep(ms) {
 }
 
 async function runSingle() {
-    let connection = await imaps.connect(config)
-    await getMessages(connection);
+    let connection = await emailClient.connect();
+    let connect = await emailClient.connectToMail(connection);
+    console.log("Connected to mailbox")
+    let messages = await emailClient.getNewMail(connection)
+    console.log("Got the new mail")
+    await Promise.all(messages.map(async (item) => {
+        await handleMessages(connection, item);
+    }))
+    console.log("Handled all mail.")
 }
 
 async function run() {
