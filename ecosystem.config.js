@@ -5,6 +5,7 @@ module.exports = {
         args : "start",
         env_production: {
             NODE_ENV : "production",
+            ENV_LOCATION : "/root/plumb-all-slack-integration/.env"
         },
         env_development: {
             NODE_ENV : "development",
