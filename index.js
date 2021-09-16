@@ -78,7 +78,13 @@ async function runSingle() {
  */
 async function startProcessing() {
     while (true) {
-        await runSingle();
+        try {
+            await runSingle();
+        } catch (err) {
+            console.log("Error thrown!");
+            console.log(err);
+            console.log("Waiting a bit, and restarting event loop.")
+        }
         await sleep(process.env.emailCheckInterval || 30000)
     }
 }
