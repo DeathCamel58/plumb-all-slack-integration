@@ -67,6 +67,8 @@ async function moveAndMarkEmail(connection, id, fromWhere) {
         await connection.moveMessage(id, "Answering Service")
     } else if (fromWhere === "Website") {
         await connection.moveMessage(id, "Website Contact")
+    } else if (fromWhere === "Jobber Request") {
+        await connection.moveMessage(id, "Jobber Request")
     }
 }
 

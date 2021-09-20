@@ -1,6 +1,7 @@
 module.exports = {
     parseMessageFromAnswerphone,
-    parseMessageFromWebsite
+    parseMessageFromWebsite,
+    parseMessageFromJobber
 }
 
 /**
@@ -42,6 +43,25 @@ function parseMessageFromWebsite(message) {
     details['email'] = message.split("email:")[1].split("phone")[0].replace(/\-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ');
     details['address'] = message.split("address:")[1].split("website")[0].replace(/\-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ');
     details['message'] = message.split("message:")[1].split("Submitted at")[0].replace(/(?:\r\n|\r|\n|\-)/g, ' ').replace('~', '').replace(/\s+/g, ' ');
+    return details;
+}
+
+/**
+ * Takes email body from Jobber, and generates an array of contact information
+ * @param message Email body
+ * @returns {*[]} Array of contact details
+ */
+function parseMessageFromJobber(message) {
+    let details = [];
+    details['phone'] = message.split("Phone:")[1].split("Address")[0].replace(/\-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ').slice(1, -1);
+    if (normalizePhoneNumber(details['phone'])!= null) {
+        details['phone'] = normalizePhoneNumber(details['phone']);
+    }
+    details['name'] = message.split("Contact name:")[1].split("Email")[0].replace(/\-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ').slice(1, -1);
+    details['email'] = message.split("Email:")[1].split("Phone")[0].replace(/\-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ').slice(1, -1);
+    details['address'] = message.split("Address:")[1].split("View Request")[0].replace(/\-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ').replace(/&quot;+/g, '"').slice(1, -1);
+    details['message'] = message.split("View Request:")[1].split("\n")[0].replace(/(?:\r\n|\r|\n)/g, ' ').replace(/\s+/g, ' ').slice(1);
+    details['message'] = "<" + details['message'] + "|Details in Jobber> (You may have to hold on that link, copy it, and paste it into your web browser to access it)"
     return details;
 }
 
