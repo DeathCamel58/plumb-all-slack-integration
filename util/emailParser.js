@@ -53,14 +53,14 @@ function parseMessageFromWebsite(message) {
  */
 function parseMessageFromJobber(message) {
     let details = [];
-    details['phone'] = message.split("Phone:")[1].split("Address")[0].replace(/\-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ').slice(1, -1);
+    details['phone'] = message.split("PHONE")[1].split("ADDRESS")[0].replace(/\-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ').slice(1, -1);
     if (normalizePhoneNumber(details['phone'])!= null) {
         details['phone'] = normalizePhoneNumber(details['phone']);
     }
-    details['name'] = message.split("Contact name:")[1].split("Email")[0].replace(/\-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ').slice(1, -1);
-    details['email'] = message.split("Email:")[1].split("Phone")[0].replace(/\-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ').slice(1, -1);
-    details['address'] = message.split("Address:")[1].split("View Request")[0].replace(/\-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ').replace(/&quot;+/g, '"').slice(1, -1);
-    details['message'] = message.split("View Request:")[1].split("\n")[0].replace(/(?:\r\n|\r|\n)/g, ' ').replace(/\s+/g, ' ').slice(1);
+    details['name'] = message.split("CONTACT NAME")[1].split("EMAIL")[0].replace(/\-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ').slice(1, -1);
+    details['email'] = message.split("EMAIL")[1].split("PHONE")[0].replace(/\-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ').slice(1, -1);
+    details['address'] = message.split("ADDRESS")[1].split("View Request")[0].replace(/\-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ').replace(/&quot;+/g, '"').slice(1, -1);
+    details['message'] = message.split("View Request")[1].slice(2).split("\n")[0].replace(/(?:\r\n|\r|\n)/g, ' ').replace(/\s+/g, ' ').slice(0, -1);
     details['message'] = "<" + details['message'] + "|Details in Jobber> (You may have to hold on that link, copy it, and paste it into your web browser to access it)"
     return details;
 }
