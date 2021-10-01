@@ -115,4 +115,4 @@ app.post( '/googleAdsForm', ( req, res ) => {
     res.sendStatus( 200 );
 } );
 
-app.listen( 47092, () => console.log( 'Node.js server started on port 9000.' ) );
+app.listen( 47092, "0.0.0.0", () => console.log( 'Node.js server started on port 9000.' ) );
