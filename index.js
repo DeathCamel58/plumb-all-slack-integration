@@ -2,6 +2,8 @@ require('dotenv').config({ path: process.env.ENV_LOCATION || '/root/plumb-all-sl
 let slack = require('./util/slackBot.js');
 let messageConstructor = require('./util/messageConstructor.js');
 let emailClient = require('./util/emailClient.js')
+const express = require( 'express' );
+const app = express();
 
 const simpleParser = require('mailparser').simpleParser;
 const _ = require('lodash');
@@ -18,7 +20,9 @@ async function handleMessage(connection, item, mail, id) {
     let [message, fromWhere] = messageConstructor.createMessage(mail);
     if (fromWhere != null) {
         await slack.sendMessage(message, fromWhere + " Contact");
-        await emailClient.moveAndMarkEmail(connection, id, fromWhere)
+        if (fromWhere !== "Google Ads"){
+            await emailClient.moveAndMarkEmail(connection, id, fromWhere)
+        }
     }
 }
 
@@ -90,3 +94,25 @@ async function startProcessing() {
 }
 
 startProcessing()
+
+
+// Webhook Server
+app.use( express.json() );
+
+async function processMessage(webhookBody) {
+    let googleKey = process.env.googleKey || "testkey";
+    if (webhookBody.google_key === googleKey) {
+        await handleMessage(null, null, webhookBody, null)
+    } else {
+        console.log('Incoming webhook was not authenticated! Incoming follows:');
+        console.log(webhookBody)
+    }
+}
+
+app.post( '/googleAdsForm', ( req, res ) => {
+    processMessage(req.body);
+
+    res.sendStatus( 200 );
+} );
+
+app.listen( 9000, () => console.log( 'Node.js server started on port 9000.' ) );

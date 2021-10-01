@@ -1,7 +1,8 @@
 module.exports = {
     parseMessageFromAnswerphone,
     parseMessageFromWebsite,
-    parseMessageFromJobber
+    parseMessageFromJobber,
+    parseMessageFromGoogleAds
 }
 
 /**
@@ -62,6 +63,43 @@ function parseMessageFromJobber(message) {
     details['address'] = message.split("ADDRESS")[1].split("View Request")[0].replace(/\-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ').replace(/&quot;+/g, '"').slice(1, -1);
     details['message'] = message.split("View Request")[1].slice(2).split("\n")[0].replace(/(?:\r\n|\r|\n)/g, ' ').replace(/\s+/g, ' ').slice(0, -1);
     details['message'] = "<" + details['message'] + "|Details in Jobber> (You may have to hold on that link, copy it, and paste it into your web browser to access it)"
+    return details;
+}
+
+/**
+ * Takes email body from Google Ads leads form, and generates an array of contact information
+ * @param message Email body
+ * @returns {*[]} Array of contact details
+ */
+function parseMessageFromGoogleAds(message) {
+    let details = [];
+
+    message.user_column_data.forEach(function(item) {
+        if (item.column_id === "FIRST_NAME") (
+            details['name'] = item.string_value
+        )
+        else if (item.column_id === "LAST_NAME") {
+            details['name'] += " " + item.string_value
+        }
+        else if (item.column_id === "PHONE_NUMBER") {
+            details['phone'] = item.string_value
+        }
+        else if (item.column_id === "EMAIL") {
+            details['email'] = item.string_value
+        }
+        else if (item.column_id === "CITY") {
+            details['city'] = item.string_value
+        }
+        else if (item.column_id === "SERVICE") {
+            details['message'] = item.string_value
+        }
+    });
+
+    if (typeof(details['phone']) !== 'undefined'){
+        if (normalizePhoneNumber(details['phone'])!= null) {
+            details['phone'] = normalizePhoneNumber(details['phone']);
+        }
+    }
     return details;
 }
 

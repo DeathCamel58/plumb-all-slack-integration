@@ -9,20 +9,29 @@ module.exports = {
  * @returns {(*|string)[]|*[]} [ human friendly message with contact information, source from which email originated ]
  */
 function createMessage(mail) {
-    if (mail.subject === "Message from Answerphone") {
-        let parsed = emailParser.parseMessageFromAnswerphone(mail.text);
-        let message = createMessageFromAnswerphone(parsed);
-        return [message, "Call"]
-    } else if (mail.subject.includes("New submission from")) {
-        let parsed = emailParser.parseMessageFromWebsite(mail.text);
-        let message = createMessageFromWebsite(parsed);
-        return [message, "Website"]
-    } else if (mail.subject.includes("You received a new request from")) {
-        let parsed = emailParser.parseMessageFromJobber(mail.text);
-        let message = createMessageFromJobber(parsed);
-        return [message, "Jobber Request"]
+    // Process Emails
+    if (typeof(mail.subject) !== 'undefined') {
+        if (mail.subject === "Message from Answerphone") {
+            let parsed = emailParser.parseMessageFromAnswerphone(mail.text);
+            let message = createMessageFromAnswerphone(parsed);
+            return [message, "Call"]
+        } else if (mail.subject.includes("New submission from")) {
+            let parsed = emailParser.parseMessageFromWebsite(mail.text);
+            let message = createMessageFromWebsite(parsed);
+            return [message, "Website"]
+        } else if (mail.subject.includes("You received a new request from")) {
+            let parsed = emailParser.parseMessageFromJobber(mail.text);
+            let message = createMessageFromJobber(parsed);
+            return [message, "Jobber Request"]
+        }
+        return [null, null]
     }
-    return [null, null]
+    // Process Webhooks
+    else {
+        let parsed = emailParser.parseMessageFromGoogleAds(mail);
+        let message = createMessageFromGoogleAds(parsed);
+        return [message, "Google Ads"]
+    }
 }
 
 /**
@@ -93,5 +102,18 @@ function createMessageFromJobber(parsed) {
             `Address: <https://www.google.com/maps?hl=en&q=${fullAddressForLink}|${fullAddress}>\n` +
             `Message: ${parsed['message']}`;
     }
+    return message;
+}
+
+/**
+ * Creates a standard contact message based on email from the website contact form
+ * @param parsed Email body
+ * @returns {string} The standard contact message
+ */
+function createMessageFromGoogleAds(parsed) {
+    let message = `=== New Message From Google Ads form ===\n` +
+            `Caller: ${parsed['name']} ${parsed['phone'] ?  " ( " + parsed['phone'] + " )" : "" }${parsed['email'] ?  " ( " + parsed['email'] + " )" : "" }\n` +
+            `${parsed['city'] ?  "City: " + parsed['city'] + "\n" : "Didn't give city.\n" }` +
+            `${parsed['message'] ?  "Interested in: " + parsed['message'] : "Didn't give message." }`;
     return message;
 }
