@@ -19,7 +19,7 @@ function parseMessageFromAnswerphone(message) {
     details['name'] = message.split("CALLER:  ")[1].split("\n")[0].replace(/\s+/g, ' ').slice(0, -1);
     details['address'] = message.split("ADDRESS:  ")[1].split("\n")[0].replace(/\s+/g, ' ').slice(0, -1);
     details['city'] = message.split("CITY:  ")[1].split("ST ")[0].replace(/\s+/g, ' ').slice(0, -1);
-    details['state'] = message.split("ST ")[1].split("ZIP ")[0].replace(/\s+/g, '');
+    details['state'] = message.split("CITY:  ")[1].split(' ST  ')[1].split("ZIP ")[0].replace(/\s+/g, '');
     details['zip'] = message.split("ZIP ")[1].split("\n")[0].replace(/\s+/g, '');
     details['message'] = message.split("RE: ")[1].split("~ CALLERID:")[0].replace(/(?:\r\n|\r|\n)/g, ' ').replace('~', '').replace(/\s+/g, ' ').slice(0, -1);
     details['callerid'] = message.split("CALLERID:  ")[1].split("MSGID: ")[0].replace(/\s/g, '');
