@@ -40,14 +40,12 @@ async function handleMessages(connection, email) {
     let idHeader = "Imap-Id: "+id+"\r\n";
 
     let mail = await simpleParser(idHeader+all.body);
-    if (mail.text) {
+    if (["notification@getjobber.com", "submissions@formsubmit.co", "operator@youransweringservices.com", "answerphoneoperator@dixie-net.com"].includes(mail.from.value[0].address)) {
         if (!mail.text.includes("Email of All Messages to 3646 PLUMB-ALL")) {
             await handleMessage(connection, email, mail, id);
         } else {
             console.log("Ignoring email (it's a concatenation of all previous day's emails)...");
         }
-    } else {
-        console.log("No text in body of email")
     }
 }
 

@@ -22,7 +22,7 @@ function parseMessageFromAnswerphone(message) {
     let state = message.split("CITY:  ")[1].split(" ST  ")[1].split("ZIP ")[0].replace(/\s+/g, '');
     let zip = message.split("ZIP ")[1].split("\n")[0].replace(/\s+/g, '');
     let fullAddress = address + ", " + city + " " + state + ", " + zip;
-    let contactMessage = message.split("RE: ")[1].split("~ CALLERID:")[0].replace(/(?:\r\n|\r|\n)/g, ' ').replace('~', '').replace(/\s+/g, ' ').slice(0, -1);
+    let contactMessage = message.split("RE: ")[1].split("~ CALLERID:")[0].replace(/\r\n|\r|\n/g, ' ').replace('~', '').replace(/\s+/g, ' ').slice(0, -1);
     let callerid = message.split("CALLERID:  ")[1].split("MSGID: ")[0].replace(/\s/g, '');
     if (normalizePhoneNumber(callerid)!= null) {
         callerid = normalizePhoneNumber(callerid);
@@ -44,7 +44,7 @@ function parseMessageFromWebsite(message) {
     let name = message.split("name:")[1].split("email")[0].replace(/-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ');
     let email = message.split("email:")[1].split("phone")[0].replace(/-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ');
     let address = message.split("address:")[1].split("website")[0].replace(/-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ');
-    let contactMessage = message.split("message:")[1].split("Submitted at")[0].replace(/(?:\r\n|\r|\n|-)/g, ' ').replace('~', '').replace(/\s+/g, ' ');
+    let contactMessage = message.split("message:")[1].split("Submitted at")[0].replace(/\r\n|\r|\n|-/g, ' ').replace('~', '').replace(/\s+/g, ' ');
 
     return new Contact("Message From Website", name, phone, undefined, email, address, contactMessage);
 }
@@ -62,7 +62,7 @@ function parseMessageFromJobber(message) {
     let name = message.split("CONTACT NAME")[1].split("EMAIL")[0].replace(/-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ').slice(1, -1);
     let email = message.split("EMAIL")[1].split("PHONE")[0].replace(/-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ').slice(1, -1);
     let address = message.split("ADDRESS")[1].split("View Request")[0].replace(/-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ').replace(/&quot;+/g, '"').slice(1, -1);
-    let contactMessage = message.split("View Request")[1].slice(2).split("\n")[0].replace(/(?:\r\n|\r|\n)/g, ' ').replace(/\s+/g, ' ').slice(0, -1);
+    let contactMessage = message.split("View Request")[1].slice(2).split("\n")[0].replace(/\r\n|\r|\n/g, ' ').replace(/\s+/g, ' ').slice(0, -1);
     contactMessage = "<" + contactMessage + "|Details in Jobber> (You may have to hold on that link, copy it, and paste it into your web browser to access it)";
 
     return new Contact("Message from Jobber Request", name, phone, undefined, email, address, contactMessage);
