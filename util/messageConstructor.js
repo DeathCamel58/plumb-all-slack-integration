@@ -13,107 +13,19 @@ function createMessage(mail) {
     if (typeof(mail.subject) !== 'undefined') {
         if (mail.subject === "Message from Answerphone") {
             let parsed = emailParser.parseMessageFromAnswerphone(mail.text);
-            let message = createMessageFromAnswerphone(parsed);
-            return [message, "Call"]
+            return [parsed.messageToSend(), "Call"]
         } else if (mail.subject.includes("New submission from")) {
             let parsed = emailParser.parseMessageFromWebsite(mail.text);
-            let message = createMessageFromWebsite(parsed);
-            return [message, "Website"]
+            return [parsed.messageToSend(), "Website"]
         } else if (mail.subject.includes("You received a new request from")) {
             let parsed = emailParser.parseMessageFromJobber(mail.text);
-            let message = createMessageFromJobber(parsed);
-            return [message, "Jobber Request"]
+            return [parsed.messageToSend(), "Jobber Request"]
         }
         return [null, null]
     }
     // Process Webhooks
     else {
         let parsed = emailParser.parseMessageFromGoogleAds(mail);
-        let message = createMessageFromGoogleAds(parsed);
-        return [message, "Google Ads"]
+        return [parsed.messageToSend(), "Google Ads"]
     }
-}
-
-/**
- * Creates a standard contact message based on email from Answerphone
- * @param parsed Email body
- * @returns {string} The standard contact message
- */
-function createMessageFromAnswerphone(parsed) {
-    let fullAddress = parsed['address'] + ", " + parsed['city'] + " " + parsed['state'] + ", " + parsed['zip'];
-    let fullAddressForLink = fullAddress.replace(/\s/g, '+');
-    let message;
-    if (parsed['phone'] === parsed['callerid']) {
-        message = `=== New Call ===\n` +
-            `Caller: ${parsed['name']} ( ${parsed['phone']} )\n` +
-            `Address: <https://www.google.com/maps?hl=en&q=${fullAddressForLink}|${fullAddress}>\n` +
-            `Message: ${parsed['message']}`;
-    } else {
-        message = `=== New Call ===\n` +
-            `Caller: ${parsed['name']} ( Left ${parsed['phone']} but called from: ${parsed['callerid']})\n` +
-            `Address: <https://www.google.com/maps?hl=en&q=${fullAddressForLink}|${fullAddress}>\n` +
-            `Message: ${parsed['message']}`;
-    }
-    return message;
-}
-
-/**
- * Creates a standard contact message based on email from the website contact form
- * @param parsed Email body
- * @returns {string} The standard contact message
- */
-function createMessageFromWebsite(parsed) {
-    let fullAddress = parsed['address'];
-    let fullAddressForLink = fullAddress.replace(/\s/g, '+');
-    let message;
-    if (parsed['address'] === "[text your-address]") {
-        message = `=== New Message From Website ===\n` +
-            `Caller: ${parsed['name']} ( ${parsed['phone']} ) ( ${parsed['email']} )\n` +
-            `Address: None Given\n` +
-            `Subject: ${parsed['subject']}\n` +
-            `Message: ${parsed['message']}`;
-    } else {
-        message = `=== New Message From Website ===\n` +
-            `Caller: ${parsed['name']} ( ${parsed['phone']} ) ( ${parsed['email']} )\n` +
-            `Address: <https://www.google.com/maps?hl=en&q=${fullAddressForLink}|${fullAddress}>\n` +
-            `Message: ${parsed['message']}`;
-    }
-    return message;
-}
-
-/**
- * Creates a standard contact message based on email from the website contact form
- * @param parsed Email body
- * @returns {string} The standard contact message
- */
-function createMessageFromJobber(parsed) {
-    let fullAddress = parsed['address'];
-    let fullAddressForLink = fullAddress.replace(/\s/g, '+');
-    let message;
-    if (parsed['address'] === "[text your-address]") {
-        message = `=== New Message From Jobber Request ===\n` +
-            `Caller: ${parsed['name']} ( ${parsed['phone']} ) ( ${parsed['email']} )\n` +
-            `Address: None Given\n` +
-            `Subject: ${parsed['subject']}\n` +
-            `Message: ${parsed['message']}`;
-    } else {
-        message = `=== New Message From Jobber Request ===\n` +
-            `Caller: ${parsed['name']} ( ${parsed['phone']} ) ( ${parsed['email']} )\n` +
-            `Address: <https://www.google.com/maps?hl=en&q=${fullAddressForLink}|${fullAddress}>\n` +
-            `Message: ${parsed['message']}`;
-    }
-    return message;
-}
-
-/**
- * Creates a standard contact message based on email from the website contact form
- * @param parsed Email body
- * @returns {string} The standard contact message
- */
-function createMessageFromGoogleAds(parsed) {
-    let message = `=== New Message From Google Ads form ===\n` +
-            `Caller: ${parsed['name']} ${parsed['phone'] ?  " ( " + parsed['phone'] + " )" : "" }${parsed['email'] ?  " ( " + parsed['email'] + " )" : "" }\n` +
-            `${parsed['city'] ?  "City: " + parsed['city'] + "\n" : "Didn't give city.\n" }` +
-            `${parsed['message'] ?  "Interested in: " + parsed['message'] : "Didn't give message." }`;
-    return message;
 }
