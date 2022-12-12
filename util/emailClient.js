@@ -22,7 +22,7 @@ const client = Client.initWithMiddleware({
  * @returns {Promise<any>}
  */
 async function getMail() {
-    let response = await client.api(`/users/${(process.env.emailAddress || "")}/mailFolders/Inbox/messages?$filter=isRead eq false&top=10`).header('Prefer','outlook.body-content-type="text"').get();
+    let response = await client.api(`/users/${(process.env.emailAddress || "")}/mailFolders/Inbox/messages?$filter=isRead eq false&top=100`).header('Prefer','outlook.body-content-type="text"').get();
 
     return response.value;
 }
