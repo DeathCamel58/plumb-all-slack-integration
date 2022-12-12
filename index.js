@@ -5,23 +5,20 @@ let emailClient = require('./util/emailClient.js');
 const express = require( 'express' );
 const app = express();
 
-const simpleParser = require('mailparser').simpleParser;
 const _ = require('lodash');
 
 /**
  * Creates a message to send in slack, and sends it off if it is a contact email
- * @param connection Email client connection
  * @param item Raw email to process
- * @param mail simpleParser parsed email
- * @param id ID of the email being processed
+ * @param mail email
  * @returns {Promise<void>} Promise that resolves after message sent, or ignored
  */
-async function handleMessage(connection, item, mail, id) {
+async function handleMessage(mail) {
     let [message, fromWhere] = messageConstructor.createMessage(mail);
     if (fromWhere != null) {
         await slack.sendMessage(message, fromWhere + " Contact");
         if (fromWhere !== "Google Ads"){
-            await emailClient.moveAndMarkEmail(connection, id, fromWhere)
+            await emailClient.moveMarkEmail(mail, fromWhere);
         }
     }
 }
@@ -30,21 +27,18 @@ async function handleMessage(connection, item, mail, id) {
  * Checks if the email is a concatenation of all the previous day's emails.
  * If not, it passes email to function that processes this email for sending
  * If it is, does nothing
- * @param connection Email client connection
  * @param email Single email to process
  * @returns {Promise<void>} Promise that resolves after completion
  */
-async function handleMessages(connection, email) {
+async function handleMessages(email) {
     let all = _.find(email.parts, { "which": "" })
-    let id = email.attributes.uid;
-    let idHeader = "Imap-Id: "+id+"\r\n";
 
-    let mail = await simpleParser(idHeader+all.body);
-    if (["notification@getjobber.com", "submissions@formsubmit.co", "operator@youransweringservices.com", "answerphoneoperator@dixie-net.com"].includes(mail.from.value[0].address)) {
-        if (!mail.text.includes("Email of All Messages to 3646 PLUMB-ALL")) {
-            await handleMessage(connection, email, mail, id);
+    if (["notification@getjobber.com", "submissions@formsubmit.co", "operator@youransweringservices.com", "answerphoneoperator@dixie-net.com"].includes(email.from.emailAddress.address)) {
+        if (!email.body.content.includes("Email of All Messages to 3646 PLUMB-ALL")) {
+            await handleMessage(email);
         } else {
-            console.log("Ignoring email (it's a concatenation of all previous day's emails)...");
+            console.log("Moving email (it's a concatenation of all previous day's emails)...");
+            await emailClient.moveMarkEmail(email, "Call")
         }
     }
 }
@@ -65,13 +59,10 @@ async function sleep(ms) {
  * @returns {Promise<void>} Promise that resolves after all emails are processed and disconnected from email
  */
 async function runSingle() {
-    let connection = await emailClient.connect();
-    let connect = await emailClient.openInbox(connection);
-    let messages = await emailClient.getNewMail(connection, 90 * 24 * 3600 * 1000)
+    let messages = await emailClient.getMail();
     await Promise.all(messages.map(async (item) => {
-        await handleMessages(connection, item);
+        await handleMessages(item);
     }))
-    await emailClient.disconnect(connection);
 }
 
 /**

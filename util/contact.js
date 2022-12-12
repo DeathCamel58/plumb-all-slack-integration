@@ -6,32 +6,32 @@ class Contact {
         /**
          * The type of contact
          */
-        this.contactType = type;
+        this.contactType = (type != null ? type.replace(/^\s+|\s+$/g, ''): type);
         /**
          * The name of the contact
          */
-        this.contactName = name;
+        this.contactName = (name != null ? name.replace(/^\s+|\s+$/g, ''): name);
         /**
          * The phone of the contact
          */
-        this.contactPhone = phone;
+        this.contactPhone = (phone != null ? phone.replace(/^\s+|\s+$/g, ''): phone);
         /**
          * The alternate phone of the contact
          * NOTE: This is usually the phone number they called from, rather than the phone number they left.
          */
-        this.contactAlternatePhone = alternatePhone;
+        this.contactAlternatePhone = (alternatePhone != null ? alternatePhone.replace(/^\s+|\s+$/g, ''): alternatePhone);
         /**
          * The email of the contact
          */
-        this.contactEmail = email;
+        this.contactEmail = (email != null ? email.replace(/^\s+|\s+$/g, ''): email);
         /**
          * The address of the contact
          */
-        this.contactAddress = address;
+        this.contactAddress = (address != null ? address.replace(/^\s+|\s+$/g, ''): address);
         /**
          * The message from the contact
          */
-        this.contactMessage = message;
+        this.contactMessage = (message != null ? message.replace(/^\s+|\s+$/g, ''): message);
     }
 
     get type() {
@@ -99,7 +99,7 @@ class Contact {
         let message = `=== New ${this.contactType} ===\n`;
 
         // If there is an alternate phone number, use it.
-        if (this.contactAlternatePhone !== undefined) {
+        if (this.contactAlternatePhone !== undefined && this.contactAlternatePhone !== this.contactPhone) {
             contactInfoParts.push(`( Left ${this.contactPhone} but called from: ${this.contactAlternatePhone} )`);
         } else {
             if (this.contactPhone !== undefined) {

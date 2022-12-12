@@ -1,88 +1,76 @@
-let imaps = require('imap-simple');
+require('dotenv').config({ path: process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env' });
+require('isomorphic-fetch');
+const { ClientSecretCredential } = require("@azure/identity");
+const {Client} = require("@microsoft/microsoft-graph-client");
+const { TokenCredentialAuthenticationProvider } = require("@microsoft/microsoft-graph-client/authProviders/azureTokenCredentials");
+
+// Create an instance of the TokenCredential class that is imported
+const credential = new ClientSecretCredential(process.env.TENANT_ID, process.env.CLIENT_ID, process.env.CLIENT_SECRET);
+
+// Set your scopes and options for TokenCredential.getToken (Check the ` interface GetTokenOptions` in (TokenCredential Implementation)[https://github.com/Azure/azure-sdk-for-js/blob/master/sdk/core/core-auth/src/tokenCredential.ts])
+
+const authProvider = new TokenCredentialAuthenticationProvider(credential, { scopes: ["https://graph.microsoft.com/.default"] });
+
+const client = Client.initWithMiddleware({
+    debugLogging: (!!process.env.DEBUGGING),
+    authProvider,
+});
+
+/**
+ * Gets unread emails in the Inbox of the user.
+ * NOTE: This only returns up to 100 emails.
+ * @returns {Promise<any>}
+ */
+async function getMail() {
+    let response = await client.api(`/users/${(process.env.emailAddress || "")}/mailFolders/Inbox/messages?$filter=isRead eq false&top=10`).header('Prefer','outlook.body-content-type="text"').get();
+
+    return response.value;
+}
+
+/**
+ * Gets unread emails in the Inbox of the user.
+ * NOTE: This only returns up to 100 emails.
+ * @returns {Promise<any>}
+ */
+async function moveMarkEmail(email, fromWhere) {
+    // Initialize the response object.
+    let response = undefined;
+
+    // Create a dictionary of all folders and ID's
+    let folders = {}
+    response = await client.api(`/users/${(process.env.emailAddress || "")}/mailFolders?$top=100`).get();
+    for (const folder of response.value) {
+        folders[folder.displayName] = folder.id;
+    }
+
+    // Figure out which email folder to move this to.
+    let destinationFolder = undefined;
+    if (fromWhere === "Call") {
+        destinationFolder = folders["Answering Service"];
+    } else if (fromWhere === "Website") {
+        destinationFolder = folders["Website Contact"];
+    } else if (fromWhere === "Jobber Request") {
+        destinationFolder = folders["Jobber Request"];
+    } else {
+        console.log("Not sure where to move this email:");
+        console.log(email);
+        return;
+    }
+
+    // Mark as read
+    let message = {
+        isRead: true
+    }
+    response = await client.api(`/users/${(process.env.emailAddress || "")}/messages/${email.id}`).update(message);
+
+    // Move the email
+    message = {
+        destinationID: destinationFolder
+    }
+    response = await client.api(`/users/${(process.env.emailAddress || "")}/messages/${email.id}/move`).post(message);
+}
 
 module.exports = {
-    connect,
-    openInbox,
-    getNewMail,
-    moveAndMarkEmail,
-    disconnect
-}
-
-let config = {
-    imap: {
-        user: (process.env.emailAddress || ""),
-        password: (process.env.emailPassword || ""),
-        host: process.env.emailHost || "outlook.office365.com",
-        port: process.env.emailPort || 993,
-        tls: process.env.emailTls || true
-    }
-};
-
-/**
- * Connects to email server
- * @returns {Promise<Promise|undefined>} imap-simple connection
- */
-async function connect() {
-    return imaps.connect(config)
-}
-
-/**
- * Uses pre-existing connection to open the `INBOX` folder on server
- * @param connection imap-simple connection
- * @returns {Promise<*>} Opened inbox
- */
-async function openInbox(connection) {
-    return connection.openBox('INBOX');
-}
-
-/**
- * Searches for unread emails within a certain timeframe
- * @param connection imap-simple connection
- * @param sinceTime Number of milliseconds to look back in the search for new emails
- * @returns {Promise<*>} Promise that resolves after search completed and resolves to array of all unread email
- */
-async function getNewMail(connection, sinceTime) {
-    let yesterday = new Date();
-    yesterday.setTime(Date.now() - sinceTime);
-    yesterday = yesterday.toISOString();
-    let searchCriteria = ['UNSEEN', ['SINCE', yesterday]];
-
-    let fetchOptions = {
-        bodies: ['HEADER', 'TEXT', ''],
-    };
-
-    return connection.search(searchCriteria, fetchOptions)
-}
-
-/**
- * Moves email to proper email folder, and marks the email as read
- * @param connection imap-simple connection
- * @param id ID of the email to handle
- * @param fromWhere Where the email originated from
- * @returns {Promise<void>} Promise that resolves after email moved and marked as read
- */
-async function moveAndMarkEmail(connection, id, fromWhere) {
-    await connection.addFlags(id, "\Seen")
-    if (fromWhere === "Call") {
-        await connection.moveMessage(id, "Answering Service")
-    } else if (fromWhere === "Website") {
-        await connection.moveMessage(id, "Website Contact")
-    } else if (fromWhere === "Jobber Request") {
-        await connection.moveMessage(id, "Jobber Request")
-    }
-}
-
-/**
- * Disconnects from email server
- * @param connection imap-simple connection
- * @returns {Promise<void>} Promise that resolves after successful disconnect from server
- */
-async function disconnect(connection) {
-    await connection.imap.closeBox(false, (err) => {
-        if (err) {
-            console.log("Error occurred while closing the inbox:")
-            console.log(err);
-        }
-    })
-    await connection.end();
+    getMail,
+    moveMarkEmail
 }

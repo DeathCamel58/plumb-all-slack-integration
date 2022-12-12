@@ -12,13 +12,13 @@ function createMessage(mail) {
     // Process Emails
     if (typeof(mail.subject) !== 'undefined') {
         if (mail.subject === "Message from Answerphone") {
-            let parsed = emailParser.parseMessageFromAnswerphone(mail.text);
+            let parsed = emailParser.parseMessageFromAnswerphone(mail.body.content);
             return [parsed.messageToSend(), "Call"]
         } else if (mail.subject.includes("New submission from")) {
-            let parsed = emailParser.parseMessageFromWebsite(mail.text);
+            let parsed = emailParser.parseMessageFromWebsite(mail.body.content);
             return [parsed.messageToSend(), "Website"]
         } else if (mail.subject.includes("You received a new request from")) {
-            let parsed = emailParser.parseMessageFromJobber(mail.text);
+            let parsed = emailParser.parseMessageFromJobber(mail.body.content);
             return [parsed.messageToSend(), "Jobber Request"]
         }
         return [null, null]
