@@ -4,7 +4,9 @@ module.exports = {
     parseMessageFromAnswerphone,
     parseMessageFromWebsite,
     parseMessageFromJobber,
-    parseMessageFromGoogleAds
+    parseMessageFromGoogleAds,
+    normalizePhoneNumber,
+    cleanText
 }
 
 const db = new Database('Calls');
@@ -19,14 +21,14 @@ function parseMessageFromAnswerphone(message) {
     if (normalizePhoneNumber(phone)!= null) {
         phone = normalizePhoneNumber(phone);
     }
-    let name = message.split("CALLER:  ")[1].split("\n")[0].replace(/\s+/g, ' ');
-    let address = message.split("ADDRESS:  ")[1].split("\n")[0].replace(/\s+/g, ' ').slice(0, -1);
-    let city = message.split("CITY:  ")[1].split(" ST  ")[0].replace(/\s+/g, ' ').slice(0, -1);
-    let state = message.split("CITY:  ")[1].split(" ST  ")[1].split("ZIP ")[0].replace(/\s+/g, '');
-    let zip = message.split("ZIP ")[1].split("\n")[0].replace(/\s+/g, '');
+    let name = cleanText(message.split("CALLER:  ")[1].split("\n")[0]);
+    let address = cleanText(message.split("ADDRESS:  ")[1].split("\n")[0]);
+    let city = cleanText(message.split("CITY:  ")[1].split(" ST  ")[0]);
+    let state = cleanText(message.split("CITY:  ")[1].split(" ST  ")[1].split("ZIP ")[0]);
+    let zip = cleanText(message.split("ZIP ")[1].split("\n")[0]);
     let fullAddress = address + ", " + city + " " + state + ", " + zip;
-    let contactMessage = message.split("RE: ")[1].split("~ CALLERID:")[0].replace(/\r\n|\r|\n/g, ' ').replace('~', '').replace(/\s+/g, ' ');
-    let callerid = message.split("CALLERID:  ")[1].split("MSGID: ")[0].replace(/\s/g, '');
+    let contactMessage = cleanText(message.split("RE: ")[1].split("~ CALLERID:")[0]);
+    let callerid = cleanText(message.split("CALLERID:  ")[1].split("MSGID: ")[0]);
     if (normalizePhoneNumber(callerid)!= null) {
         callerid = normalizePhoneNumber(callerid);
     }
@@ -42,14 +44,15 @@ function parseMessageFromAnswerphone(message) {
  * @returns {Contact} Contact Object
  */
 function parseMessageFromWebsite(message) {
-    let phone = message.split("phone:")[1].split("address")[0].replace(/-/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ');
+    let parts = message.split("________________________________");
+    let phone = cleanText(parts[2].split("phone:")[1]);
     if (normalizePhoneNumber(phone)!= null) {
         phone = normalizePhoneNumber(phone);
     }
-    let name = message.split("name:")[1].split("email")[0].replace(/_+/g, '').replace(/-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ');
-    let email = message.split("email:")[1].split("phone")[0].replace(/_+/g, '').replace(/-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ');
-    let address = message.split("address:")[1].split("website")[0].replace(/_+/g, '').replace(/-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ');
-    let contactMessage = message.split("message:")[1].split("Submitted at")[0].replace(/_+/g, '').replace(/\r\n|\r|\n|-/g, ' ').replace('~', '').replace(/\s+/g, ' ');
+    let name = cleanText(parts[0].split("name:")[1]);
+    let email = cleanText(parts[1].split("email:")[1]);
+    let address = cleanText(parts[3].split("address:")[1]);
+    let contactMessage = cleanText(parts[5].split("message:")[1]);
 
     let contact = new Contact("Message From Website", name, phone, undefined, email, address, contactMessage);
     db.addContact(contact, message);
@@ -62,15 +65,15 @@ function parseMessageFromWebsite(message) {
  * @returns {Contact} Array of contact details
  */
 function parseMessageFromJobber(message) {
-    let phone = message.split("Phone")[1].split("Address")[0].replace(/-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ');
+    let phone = cleanText(message.split("Phone")[1].split("Address")[0]);
     if (normalizePhoneNumber(phone)!= null) {
         phone = normalizePhoneNumber(phone);
     }
-    let name = message.split("Contact name")[1].split("Email")[0].replace(/-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ');
-    let email = message.split("Email")[1].split("Phone")[0].replace(/-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ');
-    let address = message.split("\nAddress")[1].split("View Request")[0].replace(/-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ').replace(/&quot;+/g, '"');
-    let contactMessage = message.split("View Request")[1].split("\n")[0].replace(/\r\n|\r|\n/g, ' ').replace(/\s+/g, ' ').slice(1, -2);
-    contactMessage = "<" + contactMessage + "|Details in Jobber> (You may have to hold on that link, copy it, and paste it into your web browser to access it)";
+    let name = cleanText(message.split("Contact name")[1].split("Email")[0]);
+    let email = cleanText(message.split("Email")[1].split("Phone")[0]);
+    let address = cleanText(message.split("\nAddress")[1].split("View Request")[0]);
+    let contactMessage = cleanText(message.split("View Request")[1].split("\n")[0].split(">")[0]);
+    contactMessage = contactMessage + "|Details in Jobber> (You may have to hold on that link, copy it, and paste it into your web browser to access it)";
 
     let contact = new Contact("Message From Jobber Request", name, phone, undefined, email, address, contactMessage);
     db.addContact(contact, message);
@@ -136,4 +139,34 @@ function normalizePhoneNumber(phone) {
     }
 
     return null;
+}
+
+/**
+ * Takes in dirty, ugly text (with newlines, duplicate spaces, etc) and returns a pretty version
+ * @param textToClean The ugly text to clean
+ * @returns {string} The pretty text
+ */
+function cleanText(textToClean) {
+    if (textToClean === undefined || textToClean === "") {
+        return "";
+    }
+    let cleaned = textToClean;
+
+    // Replace newlines and carriage returns with spaces
+    cleaned = cleaned.replace(/\n+/g, ' ');
+    cleaned = cleaned.replace(/\r+/g, ' ');
+
+    // Replace ~s with space
+    cleaned = cleaned.replace(/~+/g, ' ');
+
+    // Replace -s with space
+    cleaned = cleaned.replace(/--+/g, ' ');
+
+    // Replace multiple spaces with single space
+    cleaned = cleaned.replace(/\s+/g, ' ');
+
+    // Replace leading and trailing spaces
+    cleaned = cleaned.replace(/^\s+|\s+$/g, '');
+
+    return cleaned;
 }

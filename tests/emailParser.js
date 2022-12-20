@@ -1,6 +1,6 @@
 const assert = require('assert');
 const Contact = require('../util/emailParser.js');
-const {parseMessageFromAnswerphone, parseMessageFromWebsite, parseMessageFromJobber} = require("../util/emailParser");
+const {parseMessageFromAnswerphone, parseMessageFromWebsite, parseMessageFromJobber, normalizePhoneNumber, cleanText} = require("../util/emailParser");
 
 // We can group similar tests inside a `describe` block
 describe("Email Parser", () => {
@@ -262,7 +262,62 @@ describe("Email Parser", () => {
         });
 
         it("Get Message", () => {
-            assert.equal(contact.message, "<https://a.url.com/ls/click?upn=no-doxxin|Details in Jobber> (You may have to hold on that link, copy it, and paste it into your web browser to access it)");
+            assert.equal(contact.message, "<https://a.url.com/ls/click?upn=no-doxxing|Details in Jobber> (You may have to hold on that link, copy it, and paste it into your web browser to access it)");
+        });
+    });
+
+    describe( "Data Cleaning", () => {
+        it("Normalize Phone Number (spaces)", () => {
+            let normalized = normalizePhoneNumber("1 2 3 4 5 6 7 8 9 0");
+            assert.equal(normalized, "(123) 456-7890");
+        });
+        it("Normalize Phone Number (leading and trailing spaces)", () => {
+            let normalized = normalizePhoneNumber(" 1234567890 ");
+            assert.equal(normalized, "(123) 456-7890");
+        });
+        it("Normalize Phone Number (hyphens)", () => {
+            let normalized = normalizePhoneNumber("123-456-7890");
+            assert.equal(normalized, "(123) 456-7890");
+        });
+        it("Clean Text (undefined)", () => {
+            let normalized = cleanText();
+            assert.equal(normalized, "");
+        });
+        it("Clean Text (\\n)", () => {
+            let normalized = cleanText("This is\nsome test\ntext!");
+            assert.equal(normalized, "This is some test text!");
+        });
+        it("Clean Text (\\r)", () => {
+            let normalized = cleanText("This is\nsome test\ntext!");
+            assert.equal(normalized, "This is some test text!");
+        });
+        it("Clean Text (\\n + \\r)", () => {
+            let normalized = cleanText("This is\n\r\n\rsome test\n\r\n\rtext!");
+            assert.equal(normalized, "This is some test text!");
+        });
+        it("Clean Text (duplicate spaces)", () => {
+            let normalized = cleanText("This         is   some    test       text!");
+            assert.equal(normalized, "This is some test text!");
+        });
+        it("Clean Text (leading and trailing spaces)", () => {
+            let normalized = cleanText("  This is some test text!  ");
+            assert.equal(normalized, "This is some test text!");
+        });
+        it("Clean Text (~)", () => {
+            let normalized = cleanText("This is~some~test text!");
+            assert.equal(normalized, "This is some test text!");
+        });
+        it("Clean Text (~s)", () => {
+            let normalized = cleanText("This is~~some~~~~~~~test text!");
+            assert.equal(normalized, "This is some test text!");
+        });
+        it("Clean Text (-)", () => {
+            let normalized = cleanText("This is - some test text!");
+            assert.equal(normalized, "This is - some test text!");
+        });
+        it("Clean Text (-s)", () => {
+            let normalized = cleanText("This is ------------ some test text!");
+            assert.equal(normalized, "This is some test text!");
         });
     });
 });
