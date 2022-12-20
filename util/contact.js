@@ -126,7 +126,7 @@ class Contact {
         if (this.contactAddress !== "-, - -, -" && this.contactAddress !== "NA, NA NA, NA") {
             message += `Address: <https://www.google.com/maps?hl=en&q=${fullAddressForLink}|${this.contactAddress}>\n`;
         } else {
-            message += `Address: Didn't leave one`;
+            message += `Address: Didn't leave one\n`;
         }
 
         // If this is a Jobber request, put in the link
