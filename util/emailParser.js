@@ -1,5 +1,5 @@
 let Contact = require('./contact.js');
-let Database = require('./database.js');
+let { logContact } = require('./posthog.js');
 module.exports = {
     parseMessageFromAnswerphone,
     parseMessageFromWebsite,
@@ -8,8 +8,6 @@ module.exports = {
     normalizePhoneNumber,
     cleanText
 }
-
-const db = new Database('Calls');
 
 /**
  * Takes email body from Answerphone service, and generates an array of contact information
@@ -34,7 +32,7 @@ function parseMessageFromAnswerphone(message) {
     }
 
     let contact = new Contact("Call", name, phone, callerid, undefined, fullAddress, contactMessage);
-    db.addContact(contact, message);
+    logContact(contact, message);
     return contact;
 }
 
@@ -55,7 +53,7 @@ function parseMessageFromWebsite(message) {
     let contactMessage = cleanText(parts[5].split("message:")[1]);
 
     let contact = new Contact("Message From Website", name, phone, undefined, email, address, contactMessage);
-    db.addContact(contact, message);
+    logContact(contact, message);
     return contact;
 }
 
@@ -76,7 +74,7 @@ function parseMessageFromJobber(message) {
     contactMessage = contactMessage + "|Details in Jobber> (You may have to hold on that link, copy it, and paste it into your web browser to access it)";
 
     let contact = new Contact("Message From Jobber Request", name, phone, undefined, email, address, contactMessage);
-    db.addContact(contact, message);
+    logContact(contact, message);
     return contact;
 }
 
@@ -116,7 +114,7 @@ function parseMessageFromGoogleAds(message) {
     }
 
     let contact = new Contact("Lead from Google Ads", details['name'], details['phone'], undefined, details['email'], details['city'], details['message']);
-    db.addContact(contact, message);
+    logContact(contact, message);
     return contact;
 }
 
