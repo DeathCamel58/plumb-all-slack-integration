@@ -3,9 +3,6 @@ const { PostHog: Posthog } = require('posthog-node');
 const crypto = require('crypto');
 let Contact = require('./contact.js');
 
-console.log(process.env.POSTHOG_TOKEN);
-console.log(process.env.POSTHOG_HOST);
-
 const client = new Posthog(
     process.env.POSTHOG_TOKEN,
     {
@@ -19,8 +16,6 @@ const client = new Posthog(
  * @param originalMessage The message that was parsed into a contact.
  */
 function logContact(contact, originalMessage) {
-    console.log(contact);
-    console.log(originalMessage);
     let randomID = crypto.randomBytes(16).toString('hex');
     let data = {
         distinctId: randomID,
