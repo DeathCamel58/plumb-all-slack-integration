@@ -1,10 +1,13 @@
 let Contact = require('./contact.js');
+let Database = require('./database.js');
 module.exports = {
     parseMessageFromAnswerphone,
     parseMessageFromWebsite,
     parseMessageFromJobber,
     parseMessageFromGoogleAds
 }
+
+const db = new Database('Calls');
 
 /**
  * Takes email body from Answerphone service, and generates an array of contact information
@@ -28,7 +31,9 @@ function parseMessageFromAnswerphone(message) {
         callerid = normalizePhoneNumber(callerid);
     }
 
-    return new Contact("Call", name, phone, callerid, undefined, fullAddress, contactMessage);
+    let contact = new Contact("Call", name, phone, callerid, undefined, fullAddress, contactMessage);
+    db.addContact(contact, message);
+    return contact;
 }
 
 /**
@@ -46,7 +51,9 @@ function parseMessageFromWebsite(message) {
     let address = message.split("address:")[1].split("website")[0].replace(/_+/g, '').replace(/-+/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ');
     let contactMessage = message.split("message:")[1].split("Submitted at")[0].replace(/_+/g, '').replace(/\r\n|\r|\n|-/g, ' ').replace('~', '').replace(/\s+/g, ' ');
 
-    return new Contact("Message From Website", name, phone, undefined, email, address, contactMessage);
+    let contact = new Contact("Message From Website", name, phone, undefined, email, address, contactMessage);
+    db.addContact(contact, message);
+    return contact;
 }
 
 /**
@@ -65,7 +72,9 @@ function parseMessageFromJobber(message) {
     let contactMessage = message.split("View Request")[1].split("\n")[0].replace(/\r\n|\r|\n/g, ' ').replace(/\s+/g, ' ').slice(1, -2);
     contactMessage = "<" + contactMessage + "|Details in Jobber> (You may have to hold on that link, copy it, and paste it into your web browser to access it)";
 
-    return new Contact("Message From Jobber Request", name, phone, undefined, email, address, contactMessage);
+    let contact = new Contact("Message From Jobber Request", name, phone, undefined, email, address, contactMessage);
+    db.addContact(contact, message);
+    return contact;
 }
 
 /**
@@ -103,7 +112,9 @@ function parseMessageFromGoogleAds(message) {
         }
     }
 
-    return new Contact("Lead from Google Ads", details['name'], details['phone'], undefined, details['email'], details['city'], details['message']);
+    let contact = new Contact("Lead from Google Ads", details['name'], details['phone'], undefined, details['email'], details['city'], details['message']);
+    db.addContact(contact, message);
+    return contact;
 }
 
 /**

@@ -22,7 +22,7 @@ const client = Client.initWithMiddleware({
  * @returns {Promise<any>}
  */
 async function getMail() {
-    let response = await client.api(`/users/${(process.env.emailAddress || "")}/mailFolders/Inbox/messages?$filter=isRead eq false&top=100`).header('Prefer','outlook.body-content-type="text"').get();
+    let response = await client.api(`/users/${(process.env.EMAIL_ADDRESS || "")}/mailFolders/Inbox/messages?$filter=isRead eq false&top=100`).header('Prefer','outlook.body-content-type="text"').get();
 
     return response.value;
 }
@@ -38,7 +38,7 @@ async function moveMarkEmail(email, fromWhere) {
 
     // Create a dictionary of all folders and ID's
     let folders = {}
-    response = await client.api(`/users/${(process.env.emailAddress || "")}/mailFolders?$top=100`).get();
+    response = await client.api(`/users/${(process.env.EMAIL_ADDRESS || "")}/mailFolders?$top=100`).get();
     for (const folder of response.value) {
         folders[folder.displayName] = folder.id;
     }
@@ -61,13 +61,13 @@ async function moveMarkEmail(email, fromWhere) {
     let message = {
         isRead: true
     }
-    response = await client.api(`/users/${(process.env.emailAddress || "")}/messages/${email.id}`).update(message);
+    response = await client.api(`/users/${(process.env.EMAIL_ADDRESS || "")}/messages/${email.id}`).update(message);
 
     // Move the email
     message = {
         destinationID: destinationFolder
     }
-    response = await client.api(`/users/${(process.env.emailAddress || "")}/messages/${email.id}/move`).post(message);
+    response = await client.api(`/users/${(process.env.EMAIL_ADDRESS || "")}/messages/${email.id}/move`).post(message);
 }
 
 module.exports = {

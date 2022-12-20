@@ -4,11 +4,11 @@ module.exports = {
     sendMessage
 }
 
-const slackCallChannelName = (process.env.slackChannel || "calls");
+const slackCallChannelName = (process.env.SLACK_CHANNEL || "calls");
 
 const app = new App({
-    signingSecret: process.env.slackSigningSecret || "",
-    token: process.env.slackToken || ""
+    signingSecret: process.env.SLACK_SIGNING_SECRET || "",
+    token: process.env.SLACK_TOKEN || ""
 });
 
 // Log into Slack and such
