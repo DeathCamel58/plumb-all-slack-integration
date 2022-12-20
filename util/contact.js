@@ -99,16 +99,16 @@ class Contact {
         let message = `=== New ${this.contactType} ===\n`;
 
         // If there is an alternate phone number, use it.
-        if (this.contactAlternatePhone !== undefined && this.contactAlternatePhone !== this.contactPhone) {
+        if (this.contactAlternatePhone !== undefined && this.contactAlternatePhone !== "" && this.contactAlternatePhone !== this.contactPhone) {
             contactInfoParts.push(`( Left ${this.contactPhone} but called from: ${this.contactAlternatePhone} )`);
         } else {
-            if (this.contactPhone !== undefined) {
+            if (this.contactPhone !== undefined && this.contactPhone !== "") {
                 contactInfoParts.push(`( ${this.contactPhone} )`);
             }
         }
 
         // If there is an email, use it.
-        if (this.contactEmail !== undefined) {
+        if (this.contactEmail !== undefined && this.contactEmail !== "") {
             contactInfoParts.push(`( ${this.contactEmail} )`);
         }
 
@@ -123,7 +123,7 @@ class Contact {
         message += `Caller: ${this.contactName} ${parenthesisContactInfo}\n`;
 
         // If there's an address, use it.
-        if (this.contactAddress !== "-, - -, -" && this.contactAddress !== "NA, NA NA, NA") {
+        if (this.contactAddress !== "-, - -, -" && this.contactAddress !== "NA, NA NA, NA" && this.contactAddress !== "") {
             message += `Address: <https://www.google.com/maps?hl=en&q=${fullAddressForLink}|${this.contactAddress}>\n`;
         } else {
             message += `Address: Didn't leave one\n`;
