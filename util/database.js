@@ -77,17 +77,32 @@ class Database {
         this.db.prepare(`
         INSERT INTO contacts (type, name, phone, alternatePhone, email, address, message, original)
         VALUES (
-            ${contact.type ? '\'' + contact.type.replace('\'', '&apos;').replace('"', '&quot') + '\'' : 'NULL'},
-            ${contact.name ? '\'' + contact.name.replace('\'', '&apos;').replace('"', '&quot') + '\'' : 'NULL'},
-            ${contact.phone ? '\'' + contact.phone.replace('\'', '&apos;').replace('"', '&quot') + '\'' : 'NULL'},
-            ${contact.alternatePhone ? '\'' + contact.alternatePhone.replace('\'', '&apos;').replace('"', '&quot') + '\'' : 'NULL'},
-            ${contact.email ? '\'' + contact.email.replace('\'', '&apos;').replace('"', '&quot') + '\'' : 'NULL'},
-            ${contact.address ? '\'' + contact.address.replace('\'', '&apos;').replace('"', '&quot') + '\'' : 'NULL'},
-            ${contact.message ? '\'' + contact.message.replace('\'', '&apos;').replace('"', '&quot') + '\'' : 'NULL'},
-            ${originalMessage ? '\'' + originalMessage.replace('\'', '&apos;').replace('"', '&quot') + '\'' : 'NULL'});
+            ${contact.type ? '\'' + escapeQuery(contact.type) + '\'' : 'NULL'},
+            ${contact.name ? '\'' + escapeQuery(contact.name) + '\'' : 'NULL'},
+            ${contact.phone ? '\'' + escapeQuery(contact.phone) + '\'' : 'NULL'},
+            ${contact.alternatePhone ? '\'' + escapeQuery(contact.alternatePhone) + '\'' : 'NULL'},
+            ${contact.email ? '\'' + escapeQuery(contact.email) + '\'' : 'NULL'},
+            ${contact.address ? '\'' + escapeQuery(contact.address) + '\'' : 'NULL'},
+            ${contact.message ? '\'' + escapeQuery(contact.message) + '\'' : 'NULL'},
+            ${originalMessage ? '\'' + escapeQuery(originalMessage) + '\'' : 'NULL'});
         `).run();
         this.db.close();
     }
+}
+
+/**
+ * Takes an unsafe string, and encodes it to keep from causing issues
+ * @param queryString The string to ensure is escaped
+ * @returns {string} The escaped string
+ */
+function escapeQuery(queryString) {
+    // Encode the string
+    let escaped = encodeURIComponent(queryString);
+
+    // Remove single quotes from the string
+    escaped = escaped.replace(/'/g, "&apos;");
+
+    return escaped;
 }
 
 module.exports = Database;
