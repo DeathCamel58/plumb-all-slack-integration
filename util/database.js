@@ -96,10 +96,8 @@ class Database {
  * @returns {string} The escaped string
  */
 function escapeQuery(queryString) {
-    // Encode the string
-    let escaped = encodeURIComponent(queryString);
-
-    // Remove single quotes from the string
+    // Remove quotes from the string
+    let escaped = queryString.replace(/"/g, "&quot;");
     escaped = escaped.replace(/'/g, "&apos;");
 
     return escaped;
