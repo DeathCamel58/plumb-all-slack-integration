@@ -4,6 +4,8 @@ const crypto = require('crypto');
 let Contact = require('./contact.js');
 const { searchPlace } = require("./apis/Google-Maps");
 
+const fetch = require('node-fetch');
+
 const client = new Posthog(
     process.env.POSTHOG_TOKEN,
     {
@@ -16,17 +18,111 @@ if (!!process.env.DEBUGGING) {
     client.debug(true);
 }
 
+async function individualSearch(searchQuery) {
+    let query = encodeURIComponent(JSON.stringify(searchQuery));
+    let url = `https://app.posthog.com/api/projects/${process.env.POSTHOG_PROJECT_ID}/persons/?properties=${query}`;
+    let response = await fetch(url, {
+        method: 'get',
+        headers: {'Authorization': `Bearer ${process.env.POSTHOG_API_TOKEN}`}
+    });
+
+    let data = await response.text();
+    data = JSON.parse(data);
+    return data;
+}
+
+/**
+ * Searches PostHog for a Contact
+ * @param contact The contact to search for
+ * @returns {undefined|string} The id of the first matching PostHog Person, or `undefined` if none
+ */
+async function searchForUser(contact) {
+    // If contact doesn't have data to search with, return undefined
+    if (contact.name === undefined &&
+        contact.email === undefined &&
+        contact.phone === undefined &&
+        contact.alternatePhone === undefined &&
+        contact.address === undefined) {
+        return undefined;
+    }
+
+    // This will store all found IDs that match (can store the same one multiple times)
+    let potentialIDs = []
+
+    // Search all contact parts
+    if (contact.name !== undefined) {
+        let query = [{
+            key: "name",
+            value: contact.name,
+            operator: "exact",
+            type: "person"
+        }];
+        let results = await individualSearch(query);
+        for (let result of results.results) {
+            potentialIDs.push(result.distinct_ids[0]);
+        }
+    }
+    if (contact.email !== undefined) {
+        let query = [{
+            key: "email",
+            value: contact.email,
+            operator: "exact",
+            type: "person"
+        }];
+        let results = await individualSearch(query);
+        for (let result of results.results) {
+            potentialIDs.push(result.distinct_ids[0]);
+        }
+    }
+    if (contact.alternatePhone !== undefined) {
+        let query = [{
+            key: "alternatePhone",
+            value: contact.alternatePhone,
+            operator: "exact",
+            type: "person"
+        }];
+        let results = await individualSearch(query);
+        for (let result of results.results) {
+            potentialIDs.push(result.distinct_ids[0]);
+        }
+    }
+    if (contact.address !== undefined) {
+        let query = [{
+            key: "address",
+            value: contact.address,
+            operator: "exact",
+            type: "person"
+        }];
+        let results = await individualSearch(query);
+        for (let result of results.results) {
+            potentialIDs.push(result.distinct_ids[0]);
+        }
+    }
+
+    // let result = await searchForUser(searchQuery);
+
+    if (potentialIDs.length === 0) {
+        return undefined;
+    }
+
+    // Count occurrences in the array of possible, and return the most frequent one
+    // This is because a person will likely match more searches if they match
+    let counts = potentialIDs.reduce((a, c) => {
+        a[c] = (a[c] || 0) + 1;
+        return a;
+    }, {});
+    let maxCount = Math.max(...Object.values(counts));
+    let mostFrequent = Object.keys(counts).filter(k => counts[k] === maxCount);
+
+    return mostFrequent[0];
+}
+
 /**
  * Logs a contact to PostHog
  * @param contact The Contact that was parsed
  * @param originalMessage The message that was parsed into a contact.
  */
 async function logContact(contact, originalMessage) {
-    console.log("Sending contact to PostHog");
-    let randomID = crypto.randomBytes(16).toString('hex');
-
-    // TODO: Check if the user already exists in PostHog, and use their `distinctID` if they do
-
     // If the contact has an address, resolve it to a place object using Google Maps
     let place;
     if (contact.address !== '' && contact.address !== undefined) {
@@ -62,24 +158,35 @@ async function logContact(contact, originalMessage) {
         }
     }
 
+    // Search for the person in Posthog
+    let id = crypto.randomBytes(16).toString('hex');
+    let posthogPerson = await searchForUser(contact);
 
-    // Identify the user to allow PostHog to display client details properly
-    let identifyData = {
-        distinctId: randomID,
-        properties: {
-            name: contact.name,
-            phone: contact.phone,
-            alternatePhone: contact.phone,
-            email: contact.email,
-            address: contact.address,
-            $set
+    // If this is a new person, add them to PostHog
+    if (posthogPerson === undefined) {
+        console.log(`Adding ${contact.name} to PostHog`);
+
+        // Identify the user to allow PostHog to display client details properly
+        let identifyData = {
+            distinctId: id,
+            properties: {
+                name: contact.name,
+                phone: contact.phone,
+                alternatePhone: contact.phone,
+                email: contact.email,
+                address: contact.address,
+                $set
+            }
         }
+        client.identify(identifyData)
+    } else {
+        id = posthogPerson;
+        console.log(`Matched ${contact.name} to PostHog ID ${id}`)
     }
-    client.identify(identifyData)
 
-    // Create an event for the new user
+    // Create an event for the person in PostHog
     let captureData = {
-        distinctId: randomID,
+        distinctId: id,
         event: 'contact made',
         properties: {
             type: contact.type,
