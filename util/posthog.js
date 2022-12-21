@@ -16,6 +16,11 @@ const client = new Posthog(
  * @param originalMessage The message that was parsed into a contact.
  */
 function logContact(contact, originalMessage) {
+    console.log("Sending contact to PostHog");
+    if (!!process.env.DEBUGGING) {
+        console.log(contact);
+        console.log(originalMessage);
+    }
     let randomID = crypto.randomBytes(16).toString('hex');
     let data = {
         distinctId: randomID,
@@ -31,6 +36,9 @@ function logContact(contact, originalMessage) {
             originalMessage: originalMessage
         }
     };
+    if (!!process.env.DEBUGGING) {
+        console.log(data);
+    }
 
     client.capture(data);
     client.flush();
