@@ -10,6 +10,11 @@ const client = new Posthog(
     }
 );
 
+// Enable PostHog debugging if debugging is enabled
+if (!!process.env.DEBUGGING) {
+    client.debug(true);
+}
+
 /**
  * Logs a contact to PostHog
  * @param contact The Contact that was parsed
@@ -17,30 +22,38 @@ const client = new Posthog(
  */
 function logContact(contact, originalMessage) {
     console.log("Sending contact to PostHog");
-    if (!!process.env.DEBUGGING) {
-        console.log(contact);
-        console.log(originalMessage);
-    }
     let randomID = crypto.randomBytes(16).toString('hex');
-    let data = {
+
+    // TODO: Check if the user already exists in PostHog, and use their `distinctID` if they do
+
+    // Identify the user to allow PostHog to display client details properly
+    // TODO: Integrate with Google Maps to get location data for PostHog
+    // Ref: https://posthog.com/docs/integrate/user-properties#geoip-properties
+    let identifyData = {
         distinctId: randomID,
-        event: 'contact made',
         properties: {
-            type: contact.type,
             name: contact.name,
             phone: contact.phone,
             alternatePhone: contact.phone,
             email: contact.email,
             address: contact.address,
+        }
+    }
+    client.identify(identifyData)
+
+    // Create an event for the new user
+    let captureData = {
+        distinctId: randomID,
+        event: 'contact made',
+        properties: {
+            type: contact.type,
             message: contact.message,
             originalMessage: originalMessage
         }
     };
-    if (!!process.env.DEBUGGING) {
-        console.log(data);
-    }
+    client.capture(captureData);
 
-    client.capture(data);
+    // Send all queued data to PostHog
     client.flush();
 }
 
