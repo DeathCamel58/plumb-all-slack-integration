@@ -42,7 +42,7 @@ async function logContact(contact, originalMessage) {
     // Set the location data for the user if a place is resolved
     let $set = {};
     if (place !== undefined) {
-        if (place.data.status !== "ZERO_RESULTS") {
+        if (place.results.length > 0) {
             $set = {
                 $geoip_city_name: place.results[0].address_components[2].long_name,
                 $geoip_country_code: place.results[0].address_components[5].short_name,
