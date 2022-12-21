@@ -9,6 +9,29 @@ let { logContact } = require('./posthog.js');
 port = 47092;
 
 /**
+ * TODO: Verify the authenticity of Jobber webhooks
+ * @param webhookBody
+ * @returns {Promise<void>}
+ */
+async function jobberAuthenticate(webhookBody) {
+    let GOOGLE_KEY = process.env.GOOGLE_KEY || "testkey";
+    if (webhookBody.google_key === GOOGLE_KEY) {
+        await handleMessage(null, null, webhookBody, null)
+    } else {
+        console.log('Incoming webhook was not authenticated! Incoming follows:');
+        console.log(webhookBody)
+    }
+}
+
+app.post( '/jobber/:WEBHOOK_TYPE', ( req, res ) => {
+    console.log("Jobber webhook received!");
+    console.log(req.params);
+    console.log("Data was");
+    console.log(req.body);
+    res.sendStatus( 200 );
+} );
+
+/**
  * TODO: Add webhooks
  */
 app.get('/', (req, res) => {
