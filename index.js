@@ -89,8 +89,8 @@ startProcessing()
 // app.use( express.json() );
 //
 // async function processMessage(webhookBody) {
-//     let GOOGLE_KEY = process.env.GOOGLE_KEY || "testkey";
-//     if (webhookBody.google_key === GOOGLE_KEY) {
+//     let GOOGLE_ADS_KEY = process.env.GOOGLE_ADS_KEY || "testkey";
+//     if (webhookBody.google_key === GOOGLE_ADS_KEY) {
 //         await handleMessage(null, null, webhookBody, null)
 //     } else {
 //         console.log('Incoming webhook was not authenticated! Incoming follows:');
