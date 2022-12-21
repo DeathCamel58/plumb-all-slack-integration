@@ -1,12 +1,16 @@
 require('dotenv').config({ path: process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env' });
 const express = require('express');
+const bodyParser = require("body-parser");
 const path = require("path");
-const app = express();
 let Contact = require('./contact.js');
 let { logContact } = require('./posthog.js');
 
+// The app object
+const app = express();
 // The port to run the webserver on.
 port = 47092;
+// Use body-parser's JSON parsing
+app.use(bodyParser.json())
 
 /**
  * TODO: Verify the authenticity of Jobber webhooks
@@ -23,6 +27,9 @@ async function jobberAuthenticate(webhookBody) {
     }
 }
 
+/**
+ * Log all post type webhooks
+ */
 app.post( '/jobber/:WEBHOOK_TYPE', ( req, res ) => {
     console.log("Jobber webhook received!");
     console.log(req.params);
