@@ -16,7 +16,7 @@ module.exports = {
         ignore_path: [
             "node_modules"
         ],
-        log_file: '/root/plumb-all-slack-integration'
+        log_file: '/root/plumb-all-slack-integration/runtime.log'
     }],
 
     // Deployment to server configuration
