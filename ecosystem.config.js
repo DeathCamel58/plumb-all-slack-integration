@@ -9,9 +9,14 @@ module.exports = {
         },
         env_development: {
             NODE_ENV : "development",
+            DEBUGGING: true
         },
         autorestart: true,
-        watch: true
+        watch: true,
+        ignore_path: [
+            "node_modules"
+        ],
+        log_file: '/root/plumb-all-slack-integration'
     }],
 
     // Deployment to server configuration
@@ -19,7 +24,7 @@ module.exports = {
         production: {
             "key": "deploy.pem",
             "user": "root",
-            "host": "ftp.preview-wp.plumb-all.com",
+            "host": "pm2.plumb-all.com",
             "ref": "origin/master",
             "repo": "https://github.com/DeathCamel58/plumb-all-slack-integration.git",
             "path": "/root/plumb-all-slack-integration",
