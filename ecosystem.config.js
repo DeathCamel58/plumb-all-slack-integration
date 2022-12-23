@@ -9,6 +9,7 @@ module.exports = {
         },
         env_development: {
             NODE_ENV : "development",
+            ENV_LOCATION : "/root/plumb-all-slack-integration/.env",
             DEBUGGING: true
         },
         autorestart: true,
