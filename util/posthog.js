@@ -75,7 +75,7 @@ async function searchForUser(contact) {
             type: "person"
         }];
         let results = await individualSearch(query).catch(e => console.log(e));
-        if (results.length !== undefined) {
+        if (results.results.length !== undefined && results.results.length !== 0) {
             for (let result of results.results) {
                 potentialIDs.push(result.distinct_ids[0]);
             }
@@ -89,7 +89,7 @@ async function searchForUser(contact) {
             type: "person"
         }];
         let results = await individualSearch(query);
-        if (results.length !== undefined) {
+        if (results.results.length !== undefined && results.results.length !== 0) {
             for (let result of results.results) {
                 potentialIDs.push(result.distinct_ids[0]);
             }
@@ -103,7 +103,7 @@ async function searchForUser(contact) {
             type: "person"
         }];
         let results = await individualSearch(query);
-        if (results.length !== undefined) {
+        if (results.results.length !== undefined && results.results.length !== 0) {
             for (let result of results.results) {
                 potentialIDs.push(result.distinct_ids[0]);
             }
@@ -117,7 +117,7 @@ async function searchForUser(contact) {
             type: "person"
         }];
         let results = await individualSearch(query);
-        if (results.length !== undefined) {
+        if (results.results.length !== undefined && results.results.length !== 0) {
             for (let result of results.results) {
                 potentialIDs.push(result.distinct_ids[0]);
             }
