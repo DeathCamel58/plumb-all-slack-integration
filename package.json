@@ -1,10 +1,10 @@
 {
   "name": "plumb-all-slack-integration",
   "version": "1.0.0",
-  "description": "",
+  "description": "Plumb-All's Bot for handling calls, and monitoring events in Jobber",
   "main": "index.js",
   "keywords": [],
-  "author": "",
+  "author": "Dylan Corrales",
   "license": "ISC",
   "scripts": {
     "start": "node index.js"
