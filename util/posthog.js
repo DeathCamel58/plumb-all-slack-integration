@@ -26,12 +26,24 @@ if (!!process.env.DEBUGGING) {
 async function individualSearch(searchQuery) {
     let query = encodeURIComponent(JSON.stringify(searchQuery));
     let url = `https://app.posthog.com/api/projects/${process.env.POSTHOG_PROJECT_ID}/persons/?properties=${query}`;
-    let response = await fetch(url, {
-        method: 'get',
-        headers: {'Authorization': `Bearer ${process.env.POSTHOG_API_TOKEN}`}
-    });
+    let response = [];
+    try {
+        response = await fetch(url, {
+            method: 'get',
+            headers: {'Authorization': `Bearer ${process.env.POSTHOG_API_TOKEN}`}
+        });
+    } catch (e) {
+        console.log(`Failed to run a PostHog API search.`);
+        console.log(e);
+    }
 
-    let data = await response.text();
+    let data = [];
+    try {
+        data = await response.text();
+    } catch (e) {
+        console.log(`Failed to get text from PostHog API search.`);
+        console.log(e);
+    }
     data = JSON.parse(data);
     return data;
 }
