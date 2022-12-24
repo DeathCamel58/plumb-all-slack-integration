@@ -39,7 +39,7 @@ async function moveMarkEmail(email, fromWhere) {
     // Create a dictionary of all folders and ID's
     let folders = {}
     try {
-        response = await client.api(`/users/${(process.env.EMAIL_ADDRESS || "")}/mailFolders?$top=100`).get();
+        response = await client.api(`/users/${(process.env.EMAIL_ADDRESS || "")}/mailFolders?$top=100`).get().catch(e => console.log(`Error when getting folders ${e}`));
     } catch (e) {
         console.log(`Failed to get a list of folders from email.`);
         console.log(e);
@@ -69,7 +69,7 @@ async function moveMarkEmail(email, fromWhere) {
         isRead: true
     }
     try {
-        response = await client.api(`/users/${(process.env.EMAIL_ADDRESS || "")}/messages/${email.id}`).update(message);
+        response = await client.api(`/users/${(process.env.EMAIL_ADDRESS || "")}/messages/${email.id}`).update(message).catch(e => console.log(`Error when marking as read ${e}`));
     } catch (e) {
         console.log(`Failed to mark email as read: ${email.id}`);
         console.log(e)
@@ -80,7 +80,7 @@ async function moveMarkEmail(email, fromWhere) {
         destinationID: destinationFolder
     }
     try {
-        response = await client.api(`/users/${(process.env.EMAIL_ADDRESS || "")}/messages/${email.id}/move`).post(message);
+        response = await client.api(`/users/${(process.env.EMAIL_ADDRESS || "")}/messages/${email.id}/move`).post(message).catch(e => console.log(`Error when moving email ${e}`));
     } catch (e) {
         console.log(`Failed to move: ${email.id}`);
         console.log(e)

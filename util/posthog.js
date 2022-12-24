@@ -31,7 +31,7 @@ async function individualSearch(searchQuery) {
         response = await fetch(url, {
             method: 'get',
             headers: {'Authorization': `Bearer ${process.env.POSTHOG_API_TOKEN}`}
-        });
+        }).catch(e => console.log(`Error when making PostHog API call ${e}`));
     } catch (e) {
         console.log(`Failed to run a PostHog API search.`);
         console.log(e);
@@ -39,7 +39,7 @@ async function individualSearch(searchQuery) {
 
     let data = [];
     try {
-        data = await response.text();
+        data = await response.text().catch(e => console.log(`Error when getting text from PostHog API call ${e}`));
     } catch (e) {
         console.log(`Failed to get text from PostHog API search.`);
         console.log(e);
@@ -74,7 +74,7 @@ async function searchForUser(contact) {
             operator: "exact",
             type: "person"
         }];
-        let results = await individualSearch(query);
+        let results = await individualSearch(query).catch(e => console.log(e));
         if (results.length !== 0) {
             for (let result of results.results) {
                 potentialIDs.push(result.distinct_ids[0]);
