@@ -200,7 +200,7 @@ async function logContact(contact, originalMessage) {
                 alternatePhone: contact.phone,
                 email: contact.email,
                 address: contact.address,
-                $set: JSON.stringify(clientLocationData)
+                $set: clientLocationData
             }
         }
         client.identify(identifyData)
@@ -217,7 +217,7 @@ async function logContact(contact, originalMessage) {
             type: contact.type,
             message: contact.message,
             originalMessage: originalMessage,
-            $set: JSON.stringify(clientLocationData)
+            $set: clientLocationData
         }
     };
     client.capture(captureData);
