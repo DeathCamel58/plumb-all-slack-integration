@@ -161,10 +161,10 @@ async function logContact(contact, originalMessage) {
     }
 
     // Set the location data for the user if a place is resolved
-    let $set = {};
+    let clientLocationData = {};
     if (place !== undefined) {
         if (place.results.length > 0) {
-            $set = {
+            clientLocationData = {
                 $geoip_city_name: place.results[0].address_components[2].long_name,
                 $geoip_country_code: place.results[0].address_components[5].short_name,
                 $geoip_country_name: place.results[0].address_components[5].long_name,
@@ -183,7 +183,7 @@ async function logContact(contact, originalMessage) {
         }
     }
 
-    // Search for the person in Posthog
+    // Search for the person in PostHog
     let id = crypto.randomBytes(16).toString('hex');
     let posthogPerson = await searchForUser(contact);
 
@@ -200,7 +200,7 @@ async function logContact(contact, originalMessage) {
                 alternatePhone: contact.phone,
                 email: contact.email,
                 address: contact.address,
-                $set
+                $set: JSON.stringify(clientLocationData)
             }
         }
         client.identify(identifyData)
@@ -217,7 +217,7 @@ async function logContact(contact, originalMessage) {
             type: contact.type,
             message: contact.message,
             originalMessage: originalMessage,
-            $set
+            $set: JSON.stringify(clientLocationData)
         }
     };
     client.capture(captureData);
