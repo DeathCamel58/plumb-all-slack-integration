@@ -209,9 +209,6 @@ async function logContact(contact, originalMessage) {
         console.log(`Matched ${contact.name} to PostHog ID ${id}`)
     }
 
-    // Create a new random id for the event
-    id = crypto.randomBytes(16).toString('hex');
-
     // Create an event for the person in PostHog
     let captureData = {
         distinctId: id,
