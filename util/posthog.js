@@ -18,6 +18,11 @@ if (!!process.env.DEBUGGING) {
     client.debug(true);
 }
 
+/**
+ * Runs an individual search against the PostHog API
+ * @param searchQuery The query to make
+ * @returns {Promise<*>} The parsed API response
+ */
 async function individualSearch(searchQuery) {
     let query = encodeURIComponent(JSON.stringify(searchQuery));
     let url = `https://app.posthog.com/api/projects/${process.env.POSTHOG_PROJECT_ID}/persons/?properties=${query}`;
@@ -58,8 +63,10 @@ async function searchForUser(contact) {
             type: "person"
         }];
         let results = await individualSearch(query);
-        for (let result of results.results) {
-            potentialIDs.push(result.distinct_ids[0]);
+        if (results.length !== 0) {
+            for (let result of results.results) {
+                potentialIDs.push(result.distinct_ids[0]);
+            }
         }
     }
     if (contact.email !== undefined) {
@@ -70,8 +77,10 @@ async function searchForUser(contact) {
             type: "person"
         }];
         let results = await individualSearch(query);
-        for (let result of results.results) {
-            potentialIDs.push(result.distinct_ids[0]);
+        if (results.length !== 0) {
+            for (let result of results.results) {
+                potentialIDs.push(result.distinct_ids[0]);
+            }
         }
     }
     if (contact.alternatePhone !== undefined) {
@@ -82,8 +91,10 @@ async function searchForUser(contact) {
             type: "person"
         }];
         let results = await individualSearch(query);
-        for (let result of results.results) {
-            potentialIDs.push(result.distinct_ids[0]);
+        if (results.length !== 0) {
+            for (let result of results.results) {
+                potentialIDs.push(result.distinct_ids[0]);
+            }
         }
     }
     if (contact.address !== undefined) {
@@ -94,8 +105,10 @@ async function searchForUser(contact) {
             type: "person"
         }];
         let results = await individualSearch(query);
-        for (let result of results.results) {
-            potentialIDs.push(result.distinct_ids[0]);
+        if (results.length !== 0) {
+            for (let result of results.results) {
+                potentialIDs.push(result.distinct_ids[0]);
+            }
         }
     }
 
