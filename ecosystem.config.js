@@ -3,6 +3,7 @@ module.exports = {
         name   : "plumb-all-slack-integration",
         script : "npm",
         args : "start",
+        interpreter: "/root/.nvm/versions/node/v18.12.1/bin/node",
         env_production: {
             NODE_ENV : "production",
             ENV_LOCATION : "/root/plumb-all-slack-integration/.env"
@@ -29,7 +30,7 @@ module.exports = {
             "ref": "origin/master",
             "repo": "https://github.com/DeathCamel58/plumb-all-slack-integration.git",
             "path": "/root/plumb-all-slack-integration",
-            "post-deploy" : "npm install; pm2 startOrRestart ecosystem.config.js --env production"
+            "post-deploy" : "/root/.nvm/versions/node/v18.12.1/bin/npm install; pm2 startOrRestart ecosystem.config.js --env production"
         }
     }
 }
