@@ -1,5 +1,5 @@
 node_modules
-.env
+.env_*
 .idea
 deploy.pem
 deploy.pem.pub
