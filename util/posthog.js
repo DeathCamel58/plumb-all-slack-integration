@@ -9,7 +9,8 @@ const fetch = require('node-fetch');
 const client = new Posthog(
     process.env.POSTHOG_TOKEN,
     {
-        host: process.env.POSTHOG_HOST
+        host: process.env.POSTHOG_HOST,
+        personalApiKey: process.env.POSTHOG_API_TOKEN
     }
 );
 
@@ -123,8 +124,6 @@ async function searchForUser(contact) {
             }
         }
     }
-
-    // let result = await searchForUser(searchQuery);
 
     if (potentialIDs.length === 0) {
         return undefined;

@@ -6,7 +6,8 @@ module.exports = {
         interpreter: "/root/.nvm/versions/node/v18.12.1/bin/node",
         env_production: {
             NODE_ENV : "production",
-            ENV_LOCATION : "/root/plumb-all-slack-integration/.env"
+            ENV_LOCATION : "/root/plumb-all-slack-integration/.env",
+            DEBUGGING: true
         },
         env_development: {
             NODE_ENV : "development",
