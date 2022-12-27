@@ -19,6 +19,12 @@ function sleep(ms) {
     });
 }
 
+function jobberSetAuthorization(code) {
+    console.log(`Replacing first Authorization with second.\n${process.env.JOBBER_AUTHORIZATION_CODE}\n${code}`);
+    process.env.JOBBER_AUTHORIZATION_CODE = code;
+    console.log(`It is now: ${process.env.JOBBER_AUTHORIZATION_CODE}`);
+}
+
 async function requestJobberAuthorization() {
     let redirect_URI = `${process.env.WEB_URL}/jobber/authorize`;
     redirect_URI = encodeURIComponent(redirect_URI);
