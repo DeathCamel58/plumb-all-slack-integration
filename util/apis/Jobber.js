@@ -19,12 +19,18 @@ function sleep(ms) {
     });
 }
 
+/**
+ * Sets the JOBBER_AUTHORIZATION_CODE
+ * @param code The new authorization code
+ */
 function jobberSetAuthorization(code) {
-    console.log(`Replacing first Authorization with second.\n${process.env.JOBBER_AUTHORIZATION_CODE}\n${code}`);
     process.env.JOBBER_AUTHORIZATION_CODE = code;
-    console.log(`It is now: ${process.env.JOBBER_AUTHORIZATION_CODE}`);
 }
 
+/**
+ * Sends a message to slack that the user can click on to get authorization
+ * @returns {Promise<void>}
+ */
 async function requestJobberAuthorization() {
     let redirect_URI = `${process.env.WEB_URL}/jobber/authorize`;
     redirect_URI = encodeURIComponent(redirect_URI);
