@@ -180,5 +180,6 @@ query ClientQuery {
 
 module.exports = {
     getInvoiceData,
-    getClientData
+    getClientData,
+    jobberSetAuthorization
 };
