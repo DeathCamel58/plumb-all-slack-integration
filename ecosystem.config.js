@@ -3,8 +3,8 @@ let NODE_VERSION = "18.12.1";
 module.exports = {
     apps : [{
         name   : "plumb-all-slack-integration",
-        script : `/root/.nvm/versions/node/v${NODE_VERSION}/bin/npm`,
-        args : "start",
+        script : `/root/.nvm/versions/node/v${NODE_VERSION}/bin/node`,
+        args : "index.js",
         interpreter: `/root/.nvm/versions/node/v${NODE_VERSION}/bin/node`,
         env_production: {
             NODE_ENV : "production",
