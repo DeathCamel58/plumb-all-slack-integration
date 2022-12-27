@@ -50,6 +50,7 @@ async function refreshAccessToken() {
             data = await response.text();
             data = JSON.parse(data);
             JOBBER_ACCESS_TOKEN = data.access_token;
+            let refresh_token = data.refresh_token;
 
             // Save the refresh token to file
             let file = process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env';
@@ -58,7 +59,8 @@ async function refreshAccessToken() {
                     return console.log(err);
                 }
 
-                var result = data.replace(process.env.JOBBER_REFRESH_TOKEN, data.refresh_token);
+                let result = data.replace(process.env.JOBBER_REFRESH_TOKEN, refresh_token);
+                process.env.JOBBER_REFRESH_TOKEN = refresh_token;
 
                 fs.writeFile(file, result, 'utf8', function (err) {
                     if (err) {
@@ -66,11 +68,9 @@ async function refreshAccessToken() {
                         console.log(err);
                     } else {
                         console.log('Received new Jobber Refresh Token!');
-                        process.exit();
                     }
                 });
             });
-            process.env.JOBBER_REFRESH_TOKEN = data.refresh_token;
         }
         if ( response.status === 401 ) {
             console.log(`Got ${response.status} while refreshing access token. Requesting authorization!`);
@@ -97,7 +97,10 @@ async function makeRequest(query) {
             body: `{"query":${JSON.stringify(query)}}`
         });
 
-        if (response.status === 401) {
+        if ( response.status === 200 ) {
+            success = true;
+        }
+        if ( response.status === 401 ) {
             console.log(`Got ${response.status} from the Jobber API. Refreshing access token and trying again!`)
             await refreshAccessToken();
         }
