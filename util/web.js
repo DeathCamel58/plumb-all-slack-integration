@@ -5,6 +5,7 @@ const bodyParser = require("body-parser");
 const path = require("path");
 let Contact = require('./contact.js');
 let { invoiceWebhookHandle, clientWebhookHandle } = require("./apis/JobberWebHookHandler.js");
+let { jobberSetAuthorization } = require('./apis/Jobber.js');
 
 // The app object
 const app = express();
