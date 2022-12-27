@@ -96,6 +96,20 @@ async function searchForUser(contact) {
             }
         }
     }
+    if (contact.phone !== undefined) {
+        let query = [{
+            key: "phone",
+            value: contact.phone,
+            operator: "exact",
+            type: "person"
+        }];
+        let results = await individualSearch(query);
+        if (results.results.length !== undefined && results.results.length !== 0) {
+            for (let result of results.results) {
+                potentialIDs.push(result.distinct_ids[0]);
+            }
+        }
+    }
     if (contact.alternatePhone !== undefined) {
         let query = [{
             key: "alternatePhone",
@@ -162,11 +176,11 @@ function getPlaceLocationPart(place, addressComponentIndex, key) {
 }
 
 /**
- * Logs a contact to PostHog
- * @param contact The Contact that was parsed
- * @param originalMessage The message that was parsed into a contact.
+ * Logs the contact to PostHog, updating the client if they already exist
+ * @param contact The client to log to PostHog
+ * @returns {Promise<string>} The ID of the client in PostHog
  */
-async function logContact(contact, originalMessage) {
+async function sendClientToPostHog(contact) {
     // If the contact has an address, resolve it to a place object using Google Maps
     let place;
     if (contact.address !== '' && contact.address !== undefined) {
@@ -182,23 +196,25 @@ async function logContact(contact, originalMessage) {
     // Set the location data for the user if a place is resolved
     let clientLocationData = {};
     if (place !== undefined) {
-        if (place.results.length > 0) {
-            clientLocationData = {
-                $geoip_city_name: getPlaceLocationPart(place, 2, 'long_name') ,
-                $geoip_country_code: getPlaceLocationPart(place, 5, 'short_name'),
-                $geoip_country_name: getPlaceLocationPart(place, 5, 'long_name'),
-                // $geoip_latitude: ADD THE LATITUDE,
-                // $geoip_longitude: ADD THE LONGITUDE,
-                $geoip_postal_code: getPlaceLocationPart(place, 6, 'long_name'),
-                $geoip_subdivision_1_name: getPlaceLocationPart(place, 3, 'long_name'),
-                $initial_geoip_city_name: getPlaceLocationPart(place, 2, 'long_name'),
-                $initial_geoip_country_code: getPlaceLocationPart(place, 5, 'short_name'),
-                $initial_geoip_country_name: getPlaceLocationPart(place, 5, 'long_name'),
-                // $initial_geoip_latitude: ADD THE LATITUDE,
-                // $initial_geoip_longitude: ADD THE LONGITUDE,
-                $initial_geoip_postal_code: getPlaceLocationPart(place, 6, 'long_name'),
-                $initial_geoip_subdivision_1_name: getPlaceLocationPart(place, 3, 'long_name'),
-            };
+        if (place.results !== undefined) {
+            if (place.results.length > 0) {
+                clientLocationData = {
+                    $geoip_city_name: getPlaceLocationPart(place, 2, 'long_name'),
+                    $geoip_country_code: getPlaceLocationPart(place, 5, 'short_name'),
+                    $geoip_country_name: getPlaceLocationPart(place, 5, 'long_name'),
+                    // $geoip_latitude: ADD THE LATITUDE,
+                    // $geoip_longitude: ADD THE LONGITUDE,
+                    $geoip_postal_code: getPlaceLocationPart(place, 6, 'long_name'),
+                    $geoip_subdivision_1_name: getPlaceLocationPart(place, 3, 'long_name'),
+                    $initial_geoip_city_name: getPlaceLocationPart(place, 2, 'long_name'),
+                    $initial_geoip_country_code: getPlaceLocationPart(place, 5, 'short_name'),
+                    $initial_geoip_country_name: getPlaceLocationPart(place, 5, 'long_name'),
+                    // $initial_geoip_latitude: ADD THE LATITUDE,
+                    // $initial_geoip_longitude: ADD THE LONGITUDE,
+                    $initial_geoip_postal_code: getPlaceLocationPart(place, 6, 'long_name'),
+                    $initial_geoip_subdivision_1_name: getPlaceLocationPart(place, 3, 'long_name'),
+                };
+            }
         }
     }
 
@@ -209,24 +225,38 @@ async function logContact(contact, originalMessage) {
     // If this is a new person, add them to PostHog
     if (posthogPerson === undefined) {
         console.log(`Adding ${contact.name} to PostHog`);
-
-        // Identify the user to allow PostHog to display client details properly
-        let identifyData = {
-            distinctId: id,
-            properties: {
-                name: contact.name,
-                phone: contact.phone,
-                alternatePhone: contact.phone,
-                email: contact.email,
-                address: contact.address,
-                $set: clientLocationData
-            }
-        }
-        client.identify(identifyData)
     } else {
         id = posthogPerson;
         console.log(`Matched ${contact.name} to PostHog ID ${id}`)
     }
+
+    // Identify the user to allow PostHog to display client details properly
+    let identifyData = {
+        distinctId: id,
+        properties: {
+            name: contact.name,
+            phone: contact.phone,
+            alternatePhone: contact.phone,
+            email: contact.email,
+            address: contact.address,
+            latestContactSource: contact.type,
+            $set: clientLocationData
+        }
+    }
+    client.identify(identifyData)
+
+    client.flush();
+
+    return id;
+}
+
+/**
+ * Logs a contact to PostHog
+ * @param contact The Contact that was parsed
+ * @param originalMessage The message that was parsed into a contact.
+ */
+async function logContact(contact, originalMessage) {
+    let id = await sendClientToPostHog(contact);
 
     // Create an event for the person in PostHog
     let captureData = {
@@ -235,16 +265,54 @@ async function logContact(contact, originalMessage) {
         properties: {
             type: contact.type,
             message: contact.message,
-            originalMessage: originalMessage,
-            $set: clientLocationData
+            originalMessage: originalMessage
         }
     };
     client.capture(captureData);
 
     // Send all queued data to PostHog
-    client.flush();
+}
+
+/**
+ * Logs a created client in Jobber to PostHog
+ * @param jobberClient The Contact that was parsed
+ */
+async function logClient(jobberClient) {
+    let contact = new Contact(null, jobberClient.name, jobberClient.phones[0].number, jobberClient.phones[0].number, jobberClient.defaultEmails[0], `${jobberClient.billingAddress.street} ${jobberClient.billingAddress.city} ${jobberClient.billingAddress.province} ${jobberClient.billingAddress.postalCode}`);
+
+    return await sendClientToPostHog(contact);
+}
+
+/**
+ * Logs a created Invoice in Jobber to PostHog
+ * @param jobberInvoice The Invoice that was parsed
+ * @param clientID The client ID to use for the event
+ */
+async function logInvoice(jobberInvoice, clientID) {
+    // TODO: Find if the invoice event already exists in PostHog. If so, update invoice.
+    console.log(jobberInvoice);
+
+
+    // Create an event for in PostHog
+    let captureData = {
+        distinctId: clientID,
+        event: 'invoice made',
+        properties: {
+            subject: jobberInvoice.subject,
+            invoiceNumber: jobberInvoice.invoiceNumber,
+            depositAmount: jobberInvoice.amounts.depositAmount,
+            discountAmount: jobberInvoice.amounts.discountAmount,
+            invoiceBalance: jobberInvoice.amounts.invoiceBalance,
+            paymentsTotal: jobberInvoice.amounts.paymentsTotal,
+            subtotal: jobberInvoice.amounts.subtotal,
+            total: jobberInvoice.amounts.total
+        }
+    };
+    client.capture(captureData);
 }
 
 module.exports = {
-    logContact
+    logContact,
+    logClient,
+    logInvoice
 };

@@ -1,34 +1,83 @@
 require('dotenv').config({ path: process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env' });
+let fs = require('fs');
 const express = require('express');
 const bodyParser = require("body-parser");
 const path = require("path");
 let Contact = require('./contact.js');
-let { logContact } = require('./posthog.js');
+let { invoiceWebhookHandle, clientWebhookHandle } = require("./apis/JobberWebHookHandler.js");
 
 // The app object
 const app = express();
 // The port to run the webserver on.
 port = 47092;
 // Use body-parser's JSON parsing
-app.use(bodyParser.json())
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
 /**
- * TODO: Verify the authenticity of Jobber webhooks
- * @param webhookBody
- * @returns {Promise<void>}
+ * Handle Invoice Webhooks
  */
-async function jobberAuthenticate(webhookBody) {
-    let GOOGLE_ADS_KEY = process.env.GOOGLE_ADS_KEY || "testkey";
-    if (webhookBody.google_key === GOOGLE_ADS_KEY) {
-        await handleMessage(null, null, webhookBody, null)
-    } else {
-        console.log('Incoming webhook was not authenticated! Incoming follows:');
-        console.log(webhookBody)
-    }
-}
+app.post( '/jobber/INVOICE_CREATE', ( req, res ) => {
+    console.log(req.body);
+    res.sendStatus( 200 );
+
+    invoiceWebhookHandle(req);
+} );
+
+app.post( '/jobber/INVOICE_UPDATE', ( req, res ) => {
+    console.log(req.body);
+    res.sendStatus( 200 );
+
+    // TODO: Maybe update the already existing invoice event to show remaining balance now?
+    // invoiceWebhookHandle(req);
+} );
 
 /**
- * Log all post type webhooks
+ * Handle Client Webhooks
+ */
+app.post( '/jobber/CLIENT_CREATE', ( req, res ) => {
+    console.log(req.body);
+    res.sendStatus( 200 );
+
+    clientWebhookHandle(req);
+} );
+
+app.post( '/jobber/CLIENT_UPDATE', ( req, res ) => {
+    console.log(req.body);
+    res.sendStatus( 200 );
+
+    clientWebhookHandle(req);
+} );
+
+/**
+ * Handles a new Jobber Authorization Code, sets it in the config, then exits
+ */
+app.get( '/jobber/authorize', ( req, res ) => {
+    let file = process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env';
+    res.sendStatus( 200 );
+    fs.readFile(file, 'utf8', function (err,data) {
+        if (err) {
+            return console.log(err);
+        }
+
+        var result = data.replace(process.env.JOBBER_AUTHORIZATION_CODE, req.query.code);
+
+        fs.writeFile(file, result, 'utf8', function (err) {
+            if (err) {
+                console.log('Failed to save the Jobber Authorization Code to file.')
+                console.log(err);
+            } else {
+                console.log('Received new Jobber authorization!');
+                // console.log('Received new Jobber authorization! Restarting now.');
+                // process.exit();
+            }
+        });
+    });
+    process.env.JOBBER_AUTHORIZATION_CODE = req.query.code;
+} );
+
+/**
+ * Log all other webhooks
  */
 app.post( '/jobber/:WEBHOOK_TYPE', ( req, res ) => {
     console.log("Jobber webhook received!");
