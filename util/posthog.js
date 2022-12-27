@@ -142,6 +142,26 @@ async function searchForUser(contact) {
 }
 
 /**
+ * Gets the data at an index of a place's address_components
+ * @param place Place to find data for
+ * @param addressComponentIndex Index of address_components
+ * @param key Key to get value from
+ * @returns {string} The data, or empty string
+ */
+function getPlaceLocationPart(place, addressComponentIndex, key) {
+    // Check that the index exists in address_components
+    if (place.results[0].address_components.length > addressComponentIndex) {
+        // Check if we should return long_name or short_name
+        if (key in place.results[0].address_components[addressComponentIndex]) {
+            return place.results[0].address_components[addressComponentIndex][key];
+        } else {
+            // Neither short_name nor long_name exist at index. Return empty string
+            return "";
+        }
+    }
+}
+
+/**
  * Logs a contact to PostHog
  * @param contact The Contact that was parsed
  * @param originalMessage The message that was parsed into a contact.
@@ -164,20 +184,20 @@ async function logContact(contact, originalMessage) {
     if (place !== undefined) {
         if (place.results.length > 0) {
             clientLocationData = {
-                $geoip_city_name: place.results[0].address_components[2].long_name,
-                $geoip_country_code: place.results[0].address_components[5].short_name,
-                $geoip_country_name: place.results[0].address_components[5].long_name,
+                $geoip_city_name: getPlaceLocationPart(place, 2, 'long_name') ,
+                $geoip_country_code: getPlaceLocationPart(place, 5, 'short_name'),
+                $geoip_country_name: getPlaceLocationPart(place, 5, 'long_name'),
                 // $geoip_latitude: ADD THE LATITUDE,
                 // $geoip_longitude: ADD THE LONGITUDE,
-                $geoip_postal_code: place.results[0].address_components[6].long_name,
-                $geoip_subdivision_1_name: place.results[0].address_components[3].long_name,
-                $initial_geoip_city_name: place.results[0].address_components[2].long_name,
-                $initial_geoip_country_code: place.results[0].address_components[5].short_name,
-                $initial_geoip_country_name: place.results[0].address_components[5].long_name,
+                $geoip_postal_code: getPlaceLocationPart(place, 6, 'long_name'),
+                $geoip_subdivision_1_name: getPlaceLocationPart(place, 3, 'long_name'),
+                $initial_geoip_city_name: getPlaceLocationPart(place, 2, 'long_name'),
+                $initial_geoip_country_code: getPlaceLocationPart(place, 5, 'short_name'),
+                $initial_geoip_country_name: getPlaceLocationPart(place, 5, 'long_name'),
                 // $initial_geoip_latitude: ADD THE LATITUDE,
                 // $initial_geoip_longitude: ADD THE LONGITUDE,
-                $initial_geoip_postal_code: place.results[0].address_components[6].long_name,
-                $initial_geoip_subdivision_1_name: place.results[0].address_components[3].long_name,
+                $initial_geoip_postal_code: getPlaceLocationPart(place, 6, 'long_name'),
+                $initial_geoip_subdivision_1_name: getPlaceLocationPart(place, 3, 'long_name'),
             };
         }
     }
