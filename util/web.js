@@ -69,7 +69,7 @@ app.get( '/jobber/authorize', ( req, res ) => {
             } else {
                 console.log('Received new Jobber authorization!');
                 // console.log('Received new Jobber authorization! Restarting now.');
-                // process.exit();
+                jobberSetAuthorization(req.query.code);
             }
         });
     });
