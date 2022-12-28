@@ -23,8 +23,47 @@ function sleep(ms) {
  * Sets the JOBBER_AUTHORIZATION_CODE
  * @param code The new authorization code
  */
-function jobberSetAuthorization(code) {
+async function jobberSetAuthorization(code) {
     process.env.JOBBER_AUTHORIZATION_CODE = code;
+    let success = false;
+    let response;
+    while (!success) {
+        let response = await fetch(`https://api.getjobber.com/api/oauth/token?client_id=${process.env.JOBBER_CLIENT_ID}&client_secret=${process.env.JOBBER_APP_SECRET}&grant_type=authorization_code&code=${process.env.JOBBER_AUTHORIZATION_CODE}`, {
+            method: 'post'
+        });
+
+        if ( response.status === 200 ) {
+            success = true;
+            data = await response.text();
+            data = JSON.parse(data);
+            JOBBER_ACCESS_TOKEN = data.access_token;
+            let refresh_token = data.refresh_token;
+
+            // Save the refresh token to file
+            let file = process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env';
+            fs.readFile(file, 'utf8', function (err,data) {
+                if (err) {
+                    return console.log(err);
+                }
+
+                let result = data.replace(process.env.JOBBER_REFRESH_TOKEN, refresh_token);
+                process.env.JOBBER_REFRESH_TOKEN = refresh_token;
+
+                fs.writeFile(file, result, 'utf8', function (err) {
+                    if (err) {
+                        console.log('Failed to save the Jobber Refresh Token to file.')
+                        console.log(err);
+                    } else {
+                        console.log('Received new Jobber Refresh Token!');
+                    }
+                });
+            });
+        }
+        if ( response.status === 401 ) {
+            console.log(`Got ${response.status} while refreshing access token. Requesting authorization!`);
+            await requestJobberAuthorization();
+        }
+    }
 }
 
 /**
@@ -47,8 +86,12 @@ async function refreshAccessToken() {
     let success = false;
     let response;
     while (!success) {
-        let response = await fetch(`https://api.getjobber.com/api/oauth/token?client_id=${process.env.JOBBER_CLIENT_ID}&client_secret=${process.env.JOBBER_APP_SECRET}&grant_type=authorization_code&code=${process.env.JOBBER_AUTHORIZATION_CODE}`, {
-            method: 'post'
+        let response = await fetch(`https://api.getjobber.com/api/oauth/token`, {
+            method: 'post',
+            headers: {
+                "content-type": "application/x-www-form-urlencoded"
+            },
+            body: `client_id=${process.env.JOBBER_CLIENT_ID}&client_secret=${process.env.JOBBER_APP_SECRET}&grant_type=refresh_token&refresh_token=${process.env.JOBBER_REFRESH_TOKEN}`
         });
 
         if ( response.status === 200 ) {

@@ -56,12 +56,13 @@ app.post( '/jobber/CLIENT_UPDATE', ( req, res ) => {
 app.get( '/jobber/authorize', ( req, res ) => {
     let file = process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env';
     res.sendStatus( 200 );
+    let oldAuthCode = process.env.JOBBER_AUTHORIZATION_CODE;
     fs.readFile(file, 'utf8', function (err,data) {
         if (err) {
             return console.log(err);
         }
 
-        var result = data.replace(process.env.JOBBER_AUTHORIZATION_CODE, req.query.code);
+        let result = data.replace(oldAuthCode, req.query.code);
 
         fs.writeFile(file, result, 'utf8', function (err) {
             if (err) {
