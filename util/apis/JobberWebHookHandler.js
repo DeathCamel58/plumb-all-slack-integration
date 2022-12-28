@@ -1,6 +1,6 @@
 const crypto = require('crypto');
-let { getInvoiceData, getClientData } = require("./Jobber.js");
-let { logClient, logInvoice } = require('../posthog.js');
+let { getInvoiceData, getQuoteData, getClientData } = require("./Jobber.js");
+let { logClient, logInvoice, logQuote, logQuoteUpdate } = require('../posthog.js');
 
 
 /**
@@ -48,18 +48,50 @@ async function clientWebhookHandle(req) {
     let body = req.body;
     let authentic = jobberVerify(body, req.header('X-Jobber-Hmac-SHA256'));
 
-    // TODO: Ensure the webhook is authentic
-
-    console.log(body.data.webHookEvent.itemId);
-
     // Get client data
     let client = await getClientData(body.data.webHookEvent.itemId);
     // Insert/Update client in PostHog
     await logClient(client);
 }
 
+/**
+ * Adds quote event in PostHog
+ * @param req The incoming web data
+ * @returns {Promise<void>}
+ */
+async function quoteCreateWebhookHandle(req) {
+    let body = req.body;
+    let authentic = jobberVerify(body, req.header('X-Jobber-Hmac-SHA256'));
+
+    // Get quote data
+    let quote = await getQuoteData(body.data.webHookEvent.itemId);
+    // Insert/Update client in PostHog
+    let clientID = await logClient(quote.client);
+    // Insert quote in PostHog
+    await logQuote(quote, clientID);
+}
+
+/**
+ * Adds quote acceptance event in PostHog
+ * @param req The incoming web data
+ * @returns {Promise<void>}
+ */
+async function quoteUpdateWebhookHandle(req) {
+    let body = req.body;
+    let authentic = jobberVerify(body, req.header('X-Jobber-Hmac-SHA256'));
+
+    // Get quote data
+    let quote = await getQuoteData(body.data.webHookEvent.itemId);
+    // Insert/Update client in PostHog
+    let clientID = await logClient(quote.client);
+    // Update quote in PostHog
+    await logQuoteUpdate(quote, clientID);
+}
+
 
 module.exports = {
     clientWebhookHandle,
-    invoiceWebhookHandle
+    invoiceWebhookHandle,
+    quoteCreateWebhookHandle,
+    quoteUpdateWebhookHandle
 };

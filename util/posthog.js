@@ -310,7 +310,7 @@ async function logClient(jobberClient) {
     let defaultPhone;
     for (let i = 0; i < jobberClient.phones.length; i++) {
         if (jobberClient.phones[i].primary) {
-            defaultEmail = jobberClient.phones[i].number;
+            defaultPhone = jobberClient.phones[i].number;
         }
     }
 
@@ -325,11 +325,7 @@ async function logClient(jobberClient) {
  * @param clientID The client ID to use for the event
  */
 async function logInvoice(jobberInvoice, clientID) {
-    // TODO: Find if the invoice event already exists in PostHog. If so, update invoice.
-    console.log(jobberInvoice);
-
-
-    // Create an event for in PostHog
+    // Create an event for invoice in PostHog
     let captureData = {
         api_key: process.env.POSTHOG_TOKEN,
         event: 'invoice made',
@@ -348,8 +344,61 @@ async function logInvoice(jobberInvoice, clientID) {
     await usePostHogAPI('capture/', 'post', captureData);
 }
 
+/**
+ * Logs a created quote in Jobber to PostHog
+ * @param jobberQuote The quote that was parsed
+ * @param clientID The client ID to use for the event
+ */
+async function logQuote(jobberQuote, clientID) {
+    // Create an event for quote in PostHog
+    let captureData = {
+        api_key: process.env.POSTHOG_TOKEN,
+        event: 'quote made',
+        properties: {
+            distinct_id: clientID,
+            quoteNumber: jobberQuote.quoteNumber,
+            quoteStatus: jobberQuote.quoteStatus,
+            depositAmount: jobberQuote.amounts.depositAmount,
+            discountAmount: jobberQuote.amounts.discountAmount,
+            outstandingDepositAmount: jobberQuote.amounts.outstandingDepositAmount,
+            subtotal: jobberQuote.amounts.subtotal,
+            total: jobberQuote.amounts.total
+        }
+    };
+    await usePostHogAPI('capture/', 'post', captureData);
+}
+
+/**
+ * Logs a created quote in Jobber to PostHog
+ * @param jobberQuote The quote that was parsed
+ * @param clientID The client ID to use for the event
+ */
+async function logQuoteUpdate(jobberQuote, clientID) {
+    // Check if the quote is not accepted
+    if (jobberQuote.quoteStatus === "approved") {
+        // Create an event for quote in PostHog
+        let captureData = {
+            api_key: process.env.POSTHOG_TOKEN,
+            event: 'quote accepted',
+            properties: {
+                distinct_id: clientID,
+                quoteNumber: jobberQuote.quoteNumber,
+                quoteStatus: jobberQuote.quoteStatus,
+                depositAmount: jobberQuote.amounts.depositAmount,
+                discountAmount: jobberQuote.amounts.discountAmount,
+                outstandingDepositAmount: jobberQuote.amounts.outstandingDepositAmount,
+                subtotal: jobberQuote.amounts.subtotal,
+                total: jobberQuote.amounts.total
+            }
+        };
+        await usePostHogAPI('capture/', 'post', captureData);
+    }
+}
+
 module.exports = {
     logContact,
     logClient,
+    logQuote,
+    logQuoteUpdate,
     logInvoice
 };
