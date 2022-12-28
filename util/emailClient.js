@@ -12,7 +12,6 @@ const credential = new ClientSecretCredential(process.env.TENANT_ID, process.env
 const authProvider = new TokenCredentialAuthenticationProvider(credential, { scopes: ["https://graph.microsoft.com/.default"] });
 
 const client = Client.initWithMiddleware({
-    debugLogging: (!!process.env.DEBUGGING),
     authProvider,
 });
 
