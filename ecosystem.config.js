@@ -6,8 +6,7 @@ module.exports = {
         script : `/root/.nvm/versions/node/v${NODE_VERSION}/bin/npm`,
         args : "start",
         node_args: [
-            "--inspect",
-            "--inspect-port=9229"
+            "--inspect=0.0.0.0:9229"
         ],
         interpreter: `/root/.nvm/versions/node/v${NODE_VERSION}/bin/node`,
         env_production: {
