@@ -1,22 +1,32 @@
 require('dotenv').config({ path: process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env' });
-const { PostHog: Posthog } = require('posthog-node');
 const crypto = require('crypto');
 let Contact = require('./contact.js');
 const { searchPlace } = require("./apis/Google-Maps");
 
 const fetch = require('node-fetch');
 
-const client = new Posthog(
-    process.env.POSTHOG_TOKEN,
-    {
-        host: process.env.POSTHOG_HOST,
-        personalApiKey: process.env.POSTHOG_API_TOKEN
+/**
+ * Sends a raw request to PostHog's API
+ * @param url The endpoint url. E.g. `contact/`
+ * @param httpMethod The HTTP method type. E.g. `post`
+ * @param data The data to send to the endpoint
+ * @returns {Promise<void>}
+ */
+async function usePostHogAPI(url, httpMethod, data) {
+    let query = JSON.stringify(data);
+    let response = [];
+    try {
+        response = await fetch(`${process.env.POSTHOG_HOST}/${url}`, {
+            method: httpMethod,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: query
+        }).catch(e => console.log(`Error when making PostHog API call ${e}`));
+    } catch (e) {
+        console.log(`Failed to run a PostHog API search.`);
+        console.log(e);
     }
-);
-
-// Enable PostHog debugging if debugging is enabled
-if (!!process.env.DEBUGGING) {
-    client.debug(true);
 }
 
 /**
@@ -194,11 +204,11 @@ async function sendClientToPostHog(contact) {
     }
 
     // Set the location data for the user if a place is resolved
-    let clientLocationData = {};
+    let clientData = {};
     if (place !== undefined) {
         if (place.results !== undefined) {
             if (place.results.length > 0) {
-                clientLocationData = {
+                clientData = {
                     $geoip_city_name: getPlaceLocationPart(place, 2, 'long_name'),
                     $geoip_country_code: getPlaceLocationPart(place, 5, 'short_name'),
                     $geoip_country_name: getPlaceLocationPart(place, 5, 'long_name'),
@@ -231,21 +241,20 @@ async function sendClientToPostHog(contact) {
     }
 
     // Identify the user to allow PostHog to display client details properly
+    clientData.name = contact.name;
+    clientData.phone = contact.phone;
+    clientData.alternatePhone = contact.phone;
+    clientData.email = contact.email;
+    clientData.address = contact.address;
+    clientData.latestContactSource = contact.type;
     let identifyData = {
-        distinctId: id,
-        properties: {
-            name: contact.name,
-            phone: contact.phone,
-            alternatePhone: contact.phone,
-            email: contact.email,
-            address: contact.address,
-            latestContactSource: contact.type,
-            $set: clientLocationData
-        }
+        api_key: process.env.POSTHOG_TOKEN,
+        distinct_id: id,
+        event: '$identify',
+        $set: clientData
     }
-    client.identify(identifyData)
 
-    client.flush();
+    await usePostHogAPI('capture/', 'post', identifyData);
 
     return id;
 }
@@ -260,15 +269,16 @@ async function logContact(contact, originalMessage) {
 
     // Create an event for the person in PostHog
     let captureData = {
-        distinctId: id,
+        api_key: process.env.POSTHOG_TOKEN,
         event: 'contact made',
         properties: {
+            distinct_id: id,
             type: contact.type,
             message: contact.message,
             originalMessage: originalMessage
         }
     };
-    client.capture(captureData);
+    await usePostHogAPI('capture/', 'post', captureData);
 
     // Send all queued data to PostHog
 }
@@ -295,9 +305,10 @@ async function logInvoice(jobberInvoice, clientID) {
 
     // Create an event for in PostHog
     let captureData = {
-        distinctId: clientID,
+        api_key: process.env.POSTHOG_TOKEN,
         event: 'invoice made',
         properties: {
+            distinct_id: clientID,
             subject: jobberInvoice.subject,
             invoiceNumber: jobberInvoice.invoiceNumber,
             depositAmount: jobberInvoice.amounts.depositAmount,
@@ -308,7 +319,7 @@ async function logInvoice(jobberInvoice, clientID) {
             total: jobberInvoice.amounts.total
         }
     };
-    client.capture(captureData);
+    await usePostHogAPI('capture/', 'post', captureData);
 }
 
 module.exports = {

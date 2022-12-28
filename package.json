@@ -21,7 +21,6 @@
     "isomorphic-fetch": "^3.0.0",
     "lodash": "^4.17.21",
     "node-fetch": "^2.6.7",
-    "posthog-node": "^2.2.3",
     "request": "^2.88.2"
   },
   "devDependencies": {
