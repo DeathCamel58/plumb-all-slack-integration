@@ -395,10 +395,32 @@ async function logQuoteUpdate(jobberQuote, clientID) {
     }
 }
 
+/**
+ * Logs a created job in Jobber to PostHog
+ * @param jobberQuote The job that was parsed
+ * @param clientID The client ID to use for the event
+ */
+async function logJob(jobberQuote, clientID) {
+    // Create an event for quote in PostHog
+    let captureData = {
+        api_key: process.env.POSTHOG_TOKEN,
+        event: 'job made',
+        properties: {
+            distinct_id: clientID,
+            jobNumber: jobberQuote.jobNumber,
+            jobStatus: jobberQuote.jobStatus,
+            title: jobberQuote.title,
+            total: jobberQuote.total
+        }
+    };
+    await usePostHogAPI('capture/', 'post', captureData);
+}
+
 module.exports = {
     logContact,
     logClient,
     logQuote,
     logQuoteUpdate,
+    logJob,
     logInvoice
 };

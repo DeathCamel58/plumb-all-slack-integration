@@ -249,6 +249,37 @@ query QuoteQuery {
 }
 
 /**
+ * Runs Jobber Invoice query for given itemID, and returns the data
+ * @param itemID The itemID in the webhook
+ * @returns {Promise<*>} The data for the invoice
+ */
+async function getJobData(itemID) {
+    let query =
+        `
+query JobQuery {
+    job (id: "${itemID}") {
+        client {
+            id
+        }
+        jobberWebUri
+        jobNumber
+        jobStatus
+        title
+        total
+    }
+}
+        `;
+
+    let jobResponse = await makeRequest(query);
+
+    let client = await getClientData(jobResponse.job.client.id);
+
+    jobResponse.job.client = client;
+
+    return jobResponse.job;
+}
+
+/**
  * Runs Jobber Client query for given itemID, and returns the data
  * @param itemID The itemID in the webhook
  * @returns {Promise<*>} The data for the invoice
@@ -294,6 +325,7 @@ query ClientQuery {
 module.exports = {
     getInvoiceData,
     getQuoteData,
+    getJobData,
     getClientData,
     jobberSetAuthorization
 };
