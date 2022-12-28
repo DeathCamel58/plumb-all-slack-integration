@@ -20,13 +20,16 @@ function jobberVerify(webhookBody, jobberHmac) {
     return true;
 }
 
+// TODO: Ensure the webhook is authentic for all handlers
+
+/**
+ * Creates an invoice event in PostHog
+ * @param req The incoming web data
+ * @returns {Promise<void>}
+ */
 async function invoiceWebhookHandle(req) {
     let body = req.body;
     let authentic = jobberVerify(body, req.header('X-Jobber-Hmac-SHA256'));
-
-    // TODO: Ensure the webhook is authentic
-
-    console.log(body.data.webHookEvent.itemId);
 
     // Get Invoice data
     let invoice = await getInvoiceData(body.data.webHookEvent.itemId);
@@ -36,6 +39,11 @@ async function invoiceWebhookHandle(req) {
     await logInvoice(invoice, clientID);
 }
 
+/**
+ * Adds/Updates client in PostHog
+ * @param req The incoming web data
+ * @returns {Promise<void>}
+ */
 async function clientWebhookHandle(req) {
     let body = req.body;
     let authentic = jobberVerify(body, req.header('X-Jobber-Hmac-SHA256'));
