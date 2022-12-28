@@ -209,11 +209,22 @@ async function getClientData(itemID) {
 query ClientQuery {
   client (id: "${itemID}") {
     name
+    companyName
     defaultEmails
     phones {
       number
       primary
     }
+    emails {
+      address
+      primary
+    }
+    firstName
+    lastName
+    isCompany
+    jobberWebUri
+    secondaryName
+    title
     billingAddress {
       street
       city

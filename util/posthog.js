@@ -288,7 +288,21 @@ async function logContact(contact, originalMessage) {
  * @param jobberClient The Contact that was parsed
  */
 async function logClient(jobberClient) {
-    let contact = new Contact(null, jobberClient.name, jobberClient.phones[0].number, jobberClient.phones[0].number, jobberClient.defaultEmails[0], `${jobberClient.billingAddress.street} ${jobberClient.billingAddress.city} ${jobberClient.billingAddress.province} ${jobberClient.billingAddress.postalCode}`);
+    let defaultEmail;
+    for (let i = 0; i < jobberClient.emails.length; i++) {
+        if (jobberClient.emails[i].primary) {
+            defaultEmail = jobberClient.emails[i].address;
+        }
+    }
+
+    let defaultPhone;
+    for (let i = 0; i < jobberClient.phones.length; i++) {
+        if (jobberClient.phones[i].primary) {
+            defaultEmail = jobberClient.phones[i].number;
+        }
+    }
+
+    let contact = new Contact(null, jobberClient.name, jobberClient.phones[0].number, (defaultPhone !== undefined ? defaultPhone : null), (defaultEmail !== undefined ? defaultEmail : null), `${jobberClient.billingAddress.street} ${jobberClient.billingAddress.city} ${jobberClient.billingAddress.province} ${jobberClient.billingAddress.postalCode}`);
 
     return await sendClientToPostHog(contact);
 }
