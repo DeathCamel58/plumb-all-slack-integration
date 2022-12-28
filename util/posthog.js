@@ -22,7 +22,19 @@ async function usePostHogAPI(url, httpMethod, data) {
                 'Content-Type': 'application/json'
             },
             body: query
-        }).catch(e => console.log(`Error when making PostHog API call ${e}`));
+        })
+        switch (response.status) {
+            // HTTP: OK
+            case 200:
+                // Do nothing
+                break;
+            // HTTP Bad Request
+            case 400:
+            default:
+                console.log(`Received status ${response.status} from posthog. Body follows.`);
+                let text = await response.text();
+                console.log(text);
+        }
     } catch (e) {
         console.log(`Failed to run a PostHog API search.`);
         console.log(e);

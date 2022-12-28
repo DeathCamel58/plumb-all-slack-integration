@@ -141,17 +141,28 @@ async function makeRequest(query) {
             method: 'post',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${JOBBER_ACCESS_TOKEN}`
+                'Authorization': `Bearer ${JOBBER_ACCESS_TOKEN}`,
+                'X-JOBBER-GRAPHQL-VERSION': '2022-12-07'
             },
             body: `{"query":${JSON.stringify(query)}}`
         });
 
-        if ( response.status === 200 ) {
-            success = true;
-        }
-        if ( response.status === 401 ) {
-            console.log(`Got ${response.status} from the Jobber API. Refreshing access token and trying again!`)
-            await refreshAccessToken();
+        switch (response.status) {
+            // HTTP: OK
+            case 200:
+                success = true;
+                break;
+            // HTTP: Unauthorized
+            case 401:
+                console.log(`Got ${response.status} from the Jobber API. Refreshing access token and trying again!`)
+                await refreshAccessToken();
+                break;
+            // HTTP: All Others
+            default:
+                console.log(`Got ${response.status} while running query. Body follows.`);
+                let text = await response.text();
+                console.log(text);
+                break;
         }
     }
 
