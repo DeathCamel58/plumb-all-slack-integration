@@ -19,12 +19,14 @@ app.use(bodyParser.urlencoded({ extended: true }));
  * Handle Invoice Webhooks
  */
 app.post( '/jobber/INVOICE_CREATE', ( req, res ) => {
+    console.info('Got an INVOICE_CREATE event from Jobber!');
     res.sendStatus( 200 );
 
     invoiceWebhookHandle(req);
 } );
 
 app.post( '/jobber/INVOICE_UPDATE', ( req, res ) => {
+    console.info('Got an INVOICE_UPDATE event from Jobber!');
     res.sendStatus( 200 );
 
     // TODO: Maybe update the already existing invoice event to show remaining balance now?
@@ -35,12 +37,14 @@ app.post( '/jobber/INVOICE_UPDATE', ( req, res ) => {
  * Handle Client Webhooks
  */
 app.post( '/jobber/CLIENT_CREATE', ( req, res ) => {
+    console.info('Got an CLIENT_CREATE event from Jobber!');
     res.sendStatus( 200 );
 
     clientWebhookHandle(req);
 } );
 
 app.post( '/jobber/CLIENT_UPDATE', ( req, res ) => {
+    console.info('Got an CLIENT_UPDATE event from Jobber!');
     res.sendStatus( 200 );
 
     clientWebhookHandle(req);
@@ -50,12 +54,14 @@ app.post( '/jobber/CLIENT_UPDATE', ( req, res ) => {
  * Handle Quote Webhooks
  */
 app.post( '/jobber/QUOTE_CREATE', ( req, res ) => {
+    console.info('Got an QUOTE_CREATE event from Jobber!');
     res.sendStatus( 200 );
 
     quoteCreateWebhookHandle(req);
 } );
 
 app.post( '/jobber/QUOTE_UPDATE', ( req, res ) => {
+    console.info('Got an QUOTE_UPDATE event from Jobber!');
     res.sendStatus( 200 );
 
     quoteUpdateWebhookHandle(req);
@@ -65,6 +71,7 @@ app.post( '/jobber/QUOTE_UPDATE', ( req, res ) => {
  * Handle Job Webhooks
  */
 app.post( '/jobber/JOB_CREATE', ( req, res ) => {
+    console.info('Got an JOB_CREATE event from Jobber!');
     res.sendStatus( 200 );
 
     jobCreateWebhookHandle(req);
