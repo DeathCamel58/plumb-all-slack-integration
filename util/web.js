@@ -4,7 +4,7 @@ const express = require('express');
 const bodyParser = require("body-parser");
 const path = require("path");
 let Contact = require('./contact.js');
-let { invoiceWebhookHandle, clientWebhookHandle } = require("./apis/JobberWebHookHandler.js");
+let { invoiceWebhookHandle, clientWebhookHandle, quoteCreateWebhookHandle, quoteUpdateWebhookHandle, jobCreateWebhookHandle } = require("./apis/JobberWebHookHandler.js");
 let { jobberSetAuthorization } = require('./apis/Jobber.js');
 
 // The app object
@@ -19,14 +19,12 @@ app.use(bodyParser.urlencoded({ extended: true }));
  * Handle Invoice Webhooks
  */
 app.post( '/jobber/INVOICE_CREATE', ( req, res ) => {
-    console.log(req.body);
     res.sendStatus( 200 );
 
     invoiceWebhookHandle(req);
 } );
 
 app.post( '/jobber/INVOICE_UPDATE', ( req, res ) => {
-    console.log(req.body);
     res.sendStatus( 200 );
 
     // TODO: Maybe update the already existing invoice event to show remaining balance now?
@@ -37,17 +35,39 @@ app.post( '/jobber/INVOICE_UPDATE', ( req, res ) => {
  * Handle Client Webhooks
  */
 app.post( '/jobber/CLIENT_CREATE', ( req, res ) => {
-    console.log(req.body);
     res.sendStatus( 200 );
 
     clientWebhookHandle(req);
 } );
 
 app.post( '/jobber/CLIENT_UPDATE', ( req, res ) => {
-    console.log(req.body);
     res.sendStatus( 200 );
 
     clientWebhookHandle(req);
+} );
+
+/**
+ * Handle Quote Webhooks
+ */
+app.post( '/jobber/QUOTE_CREATE', ( req, res ) => {
+    res.sendStatus( 200 );
+
+    quoteCreateWebhookHandle(req);
+} );
+
+app.post( '/jobber/QUOTE_UPDATE', ( req, res ) => {
+    res.sendStatus( 200 );
+
+    quoteUpdateWebhookHandle(req);
+} );
+
+/**
+ * Handle Job Webhooks
+ */
+app.post( '/jobber/JOB_CREATE', ( req, res ) => {
+    res.sendStatus( 200 );
+
+    jobCreateWebhookHandle(req);
 } );
 
 /**
@@ -82,7 +102,7 @@ app.get( '/jobber/authorize', ( req, res ) => {
  * Log all other webhooks
  */
 app.post( '/jobber/:WEBHOOK_TYPE', ( req, res ) => {
-    console.log("Jobber webhook received!");
+    console.log("Unhandled Jobber webhook received!");
     console.log(req.params);
     console.log("Data was");
     console.log(req.body);

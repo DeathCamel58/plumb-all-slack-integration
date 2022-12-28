@@ -22,7 +22,19 @@ async function usePostHogAPI(url, httpMethod, data) {
                 'Content-Type': 'application/json'
             },
             body: query
-        }).catch(e => console.log(`Error when making PostHog API call ${e}`));
+        })
+        switch (response.status) {
+            // HTTP: OK
+            case 200:
+                // Do nothing
+                break;
+            // HTTP Bad Request
+            case 400:
+            default:
+                console.log(`Received status ${response.status} from posthog. Body follows.`);
+                let text = await response.text();
+                console.log(text);
+        }
     } catch (e) {
         console.log(`Failed to run a PostHog API search.`);
         console.log(e);
@@ -288,7 +300,21 @@ async function logContact(contact, originalMessage) {
  * @param jobberClient The Contact that was parsed
  */
 async function logClient(jobberClient) {
-    let contact = new Contact(null, jobberClient.name, jobberClient.phones[0].number, jobberClient.phones[0].number, jobberClient.defaultEmails[0], `${jobberClient.billingAddress.street} ${jobberClient.billingAddress.city} ${jobberClient.billingAddress.province} ${jobberClient.billingAddress.postalCode}`);
+    let defaultEmail;
+    for (let i = 0; i < jobberClient.emails.length; i++) {
+        if (jobberClient.emails[i].primary) {
+            defaultEmail = jobberClient.emails[i].address;
+        }
+    }
+
+    let defaultPhone;
+    for (let i = 0; i < jobberClient.phones.length; i++) {
+        if (jobberClient.phones[i].primary) {
+            defaultPhone = jobberClient.phones[i].number;
+        }
+    }
+
+    let contact = new Contact(null, jobberClient.name, jobberClient.phones[0].number, (defaultPhone !== undefined ? defaultPhone : null), (defaultEmail !== undefined ? defaultEmail : null), `${jobberClient.billingAddress.street} ${jobberClient.billingAddress.city} ${jobberClient.billingAddress.province} ${jobberClient.billingAddress.postalCode}`);
 
     return await sendClientToPostHog(contact);
 }
@@ -299,11 +325,7 @@ async function logClient(jobberClient) {
  * @param clientID The client ID to use for the event
  */
 async function logInvoice(jobberInvoice, clientID) {
-    // TODO: Find if the invoice event already exists in PostHog. If so, update invoice.
-    console.log(jobberInvoice);
-
-
-    // Create an event for in PostHog
+    // Create an event for invoice in PostHog
     let captureData = {
         api_key: process.env.POSTHOG_TOKEN,
         event: 'invoice made',
@@ -322,8 +344,83 @@ async function logInvoice(jobberInvoice, clientID) {
     await usePostHogAPI('capture/', 'post', captureData);
 }
 
+/**
+ * Logs a created quote in Jobber to PostHog
+ * @param jobberQuote The quote that was parsed
+ * @param clientID The client ID to use for the event
+ */
+async function logQuote(jobberQuote, clientID) {
+    // Create an event for quote in PostHog
+    let captureData = {
+        api_key: process.env.POSTHOG_TOKEN,
+        event: 'quote made',
+        properties: {
+            distinct_id: clientID,
+            quoteNumber: jobberQuote.quoteNumber,
+            quoteStatus: jobberQuote.quoteStatus,
+            depositAmount: jobberQuote.amounts.depositAmount,
+            discountAmount: jobberQuote.amounts.discountAmount,
+            outstandingDepositAmount: jobberQuote.amounts.outstandingDepositAmount,
+            subtotal: jobberQuote.amounts.subtotal,
+            total: jobberQuote.amounts.total
+        }
+    };
+    await usePostHogAPI('capture/', 'post', captureData);
+}
+
+/**
+ * Logs a created quote in Jobber to PostHog
+ * @param jobberQuote The quote that was parsed
+ * @param clientID The client ID to use for the event
+ */
+async function logQuoteUpdate(jobberQuote, clientID) {
+    // Check if the quote is not accepted
+    if (jobberQuote.quoteStatus === "approved") {
+        // Create an event for quote in PostHog
+        let captureData = {
+            api_key: process.env.POSTHOG_TOKEN,
+            event: 'quote accepted',
+            properties: {
+                distinct_id: clientID,
+                quoteNumber: jobberQuote.quoteNumber,
+                quoteStatus: jobberQuote.quoteStatus,
+                depositAmount: jobberQuote.amounts.depositAmount,
+                discountAmount: jobberQuote.amounts.discountAmount,
+                outstandingDepositAmount: jobberQuote.amounts.outstandingDepositAmount,
+                subtotal: jobberQuote.amounts.subtotal,
+                total: jobberQuote.amounts.total
+            }
+        };
+        await usePostHogAPI('capture/', 'post', captureData);
+    }
+}
+
+/**
+ * Logs a created job in Jobber to PostHog
+ * @param jobberQuote The job that was parsed
+ * @param clientID The client ID to use for the event
+ */
+async function logJob(jobberQuote, clientID) {
+    // Create an event for quote in PostHog
+    let captureData = {
+        api_key: process.env.POSTHOG_TOKEN,
+        event: 'job made',
+        properties: {
+            distinct_id: clientID,
+            jobNumber: jobberQuote.jobNumber,
+            jobStatus: jobberQuote.jobStatus,
+            title: jobberQuote.title,
+            total: jobberQuote.total
+        }
+    };
+    await usePostHogAPI('capture/', 'post', captureData);
+}
+
 module.exports = {
     logContact,
     logClient,
+    logQuote,
+    logQuoteUpdate,
+    logJob,
     logInvoice
 };

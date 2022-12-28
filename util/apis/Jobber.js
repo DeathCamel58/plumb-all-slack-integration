@@ -141,17 +141,28 @@ async function makeRequest(query) {
             method: 'post',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${JOBBER_ACCESS_TOKEN}`
+                'Authorization': `Bearer ${JOBBER_ACCESS_TOKEN}`,
+                'X-JOBBER-GRAPHQL-VERSION': '2022-12-07'
             },
             body: `{"query":${JSON.stringify(query)}}`
         });
 
-        if ( response.status === 200 ) {
-            success = true;
-        }
-        if ( response.status === 401 ) {
-            console.log(`Got ${response.status} from the Jobber API. Refreshing access token and trying again!`)
-            await refreshAccessToken();
+        switch (response.status) {
+            // HTTP: OK
+            case 200:
+                success = true;
+                break;
+            // HTTP: Unauthorized
+            case 401:
+                console.log(`Got ${response.status} from the Jobber API. Refreshing access token and trying again!`)
+                await refreshAccessToken();
+                break;
+            // HTTP: All Others
+            default:
+                console.log(`Got ${response.status} while running query. Body follows.`);
+                let text = await response.text();
+                console.log(text);
+                break;
         }
     }
 
@@ -199,6 +210,76 @@ query InvoiceQuery {
 }
 
 /**
+ * Runs Jobber Invoice query for given itemID, and returns the data
+ * @param itemID The itemID in the webhook
+ * @returns {Promise<*>} The data for the invoice
+ */
+async function getQuoteData(itemID) {
+    let query =
+        `
+query QuoteQuery {
+    quote (id: "${itemID}") {
+        client {
+            id
+        }
+        jobberWebUri
+        quoteNumber
+        quoteStatus
+        title
+        amounts {
+          depositAmount
+          discountAmount
+          nonTaxAmount
+          outstandingDepositAmount
+          subtotal
+          taxAmount
+          total
+        }
+    }
+}
+        `;
+
+    let quoteResponse = await makeRequest(query);
+
+    let client = await getClientData(quoteResponse.quote.client.id);
+
+    quoteResponse.quote.client = client;
+
+    return quoteResponse.quote;
+}
+
+/**
+ * Runs Jobber Invoice query for given itemID, and returns the data
+ * @param itemID The itemID in the webhook
+ * @returns {Promise<*>} The data for the invoice
+ */
+async function getJobData(itemID) {
+    let query =
+        `
+query JobQuery {
+    job (id: "${itemID}") {
+        client {
+            id
+        }
+        jobberWebUri
+        jobNumber
+        jobStatus
+        title
+        total
+    }
+}
+        `;
+
+    let jobResponse = await makeRequest(query);
+
+    let client = await getClientData(jobResponse.job.client.id);
+
+    jobResponse.job.client = client;
+
+    return jobResponse.job;
+}
+
+/**
  * Runs Jobber Client query for given itemID, and returns the data
  * @param itemID The itemID in the webhook
  * @returns {Promise<*>} The data for the invoice
@@ -209,11 +290,22 @@ async function getClientData(itemID) {
 query ClientQuery {
   client (id: "${itemID}") {
     name
+    companyName
     defaultEmails
     phones {
       number
       primary
     }
+    emails {
+      address
+      primary
+    }
+    firstName
+    lastName
+    isCompany
+    jobberWebUri
+    secondaryName
+    title
     billingAddress {
       street
       city
@@ -232,6 +324,8 @@ query ClientQuery {
 
 module.exports = {
     getInvoiceData,
+    getQuoteData,
+    getJobData,
     getClientData,
     jobberSetAuthorization
 };
