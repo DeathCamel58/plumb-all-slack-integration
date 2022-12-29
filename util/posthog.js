@@ -16,13 +16,16 @@ async function usePostHogAPI(url, httpMethod, data) {
     let query = JSON.stringify(data);
     let response = [];
     try {
-        response = await fetch(`${process.env.POSTHOG_HOST}/${url}`, {
+        let options = {
             method: httpMethod,
             headers: {
                 'Content-Type': 'application/json'
-            },
-            body: query
-        })
+            }
+        }
+        if (data !== null && data !== undefined) {
+            options.body = query;
+        }
+        response = await fetch(`${process.env.POSTHOG_HOST}/${url}`, options)
         switch (response.status) {
             // HTTP: OK
             case 200:
@@ -44,11 +47,12 @@ async function usePostHogAPI(url, httpMethod, data) {
 /**
  * Runs an individual search against the PostHog API
  * @param searchQuery The query to make
+ * @param parameter The parameter to use in the URL. Defaults to `properties`.
  * @returns {Promise<*>} The parsed API response
  */
-async function individualSearch(searchQuery) {
-    let query = encodeURIComponent(JSON.stringify(searchQuery));
-    let url = `https://app.posthog.com/api/projects/${process.env.POSTHOG_PROJECT_ID}/persons/?properties=${query}`;
+async function individualSearch(searchQuery, parameter) {
+    let query = (parameter ? searchQuery : encodeURIComponent(JSON.stringify(searchQuery)));
+    let url = `https://app.posthog.com/api/projects/${process.env.POSTHOG_PROJECT_ID}/persons/?${parameter ? parameter : 'properties'}=${query}`;
     let response = [];
     try {
         response = await fetch(url, {
