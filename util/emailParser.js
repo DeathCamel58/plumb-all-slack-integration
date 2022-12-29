@@ -1,5 +1,6 @@
 let Contact = require('./contact.js');
 let { logContact } = require('./posthog.js');
+const { addTrelloContact } = require("./apis/Trello");
 module.exports = {
     parseMessageFromAnswerphone,
     parseMessageFromWebsite,
@@ -33,6 +34,7 @@ function parseMessageFromAnswerphone(message) {
 
     let contact = new Contact("Call", name, phone, callerid, undefined, fullAddress, contactMessage);
     logContact(contact, message);
+    addTrelloContact(contact);
     return contact;
 }
 
@@ -54,6 +56,7 @@ function parseMessageFromWebsite(message) {
 
     let contact = new Contact("Message From Website", name, phone, undefined, email, address, contactMessage);
     logContact(contact, message);
+    addTrelloContact(contact);
     return contact;
 }
 
@@ -75,6 +78,7 @@ function parseMessageFromJobber(message) {
 
     let contact = new Contact("Message From Jobber Request", name, phone, undefined, email, address, contactMessage);
     logContact(contact, message);
+    addTrelloContact(contact);
     return contact;
 }
 
@@ -115,6 +119,7 @@ function parseMessageFromGoogleAds(message) {
 
     let contact = new Contact("Lead from Google Ads", details['name'], details['phone'], undefined, details['email'], details['city'], details['message']);
     logContact(contact, message);
+    addTrelloContact(contact);
     return contact;
 }
 
