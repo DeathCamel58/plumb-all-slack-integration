@@ -253,7 +253,24 @@ async function sendClientToPostHog(contact) {
         console.log(`Adding ${contact.name} to PostHog`);
     } else {
         id = posthogPerson;
-        console.log(`Matched ${contact.name} to PostHog ID ${id}`)
+        console.log(`Matched ${contact.name} to PostHog ID ${id}`);
+
+        // Get the matched person in PostHog
+        let fullPostHogPerson = await individualSearch(`${id}`, 'distinct_id');
+        fullPostHogPerson = fullPostHogPerson.results[0];
+
+        // If the person is the same as what we would set, don't send to PostHog. This cuts down on unnecessary events.
+        let same = true;
+        if (contact.name !== fullPostHogPerson.properties.name ||
+            contact.phone !== fullPostHogPerson.properties.phone ||
+            contact.alternatePhone !== fullPostHogPerson.properties.alternatePhone ||
+            contact.email !== fullPostHogPerson.properties.email ||
+            contact.address !== fullPostHogPerson.properties.address) {
+            same = false;
+        }
+        if (same) {
+            return id;
+        }
     }
 
     // Identify the user to allow PostHog to display client details properly
