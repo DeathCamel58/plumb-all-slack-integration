@@ -4,7 +4,14 @@ const express = require('express');
 const bodyParser = require("body-parser");
 const path = require("path");
 let Contact = require('./contact.js');
-let { invoiceWebhookHandle, clientWebhookHandle, quoteCreateWebhookHandle, quoteUpdateWebhookHandle, jobCreateWebhookHandle, paymentCreateWebhookHandle } = require("./apis/JobberWebHookHandler.js");
+let {
+    invoiceWebhookHandle,
+    clientWebhookHandle,
+    quoteCreateWebhookHandle,
+    quoteUpdateWebhookHandle,
+    jobCreateWebhookHandle,
+    paymentCreateWebhookHandle
+} = require("./apis/JobberWebHookHandler.js");
 let { jobberSetAuthorization } = require('./apis/Jobber.js');
 
 // The app object

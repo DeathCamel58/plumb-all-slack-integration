@@ -1,6 +1,13 @@
 const crypto = require('crypto');
 let { getInvoiceData, getQuoteData, getClientData, getPaymentData } = require("./Jobber.js");
-let { logClient, logInvoice, logQuote, logQuoteUpdate, logJob, logPayment } = require('../posthog.js');
+let {
+    logClient,
+    logInvoice,
+    logQuote,
+    logQuoteUpdate,
+    logJob,
+    logPayment
+} = require('../posthog.js');
 const {getJobData} = require("./Jobber");
 
 
@@ -126,6 +133,7 @@ async function paymentCreateWebhookHandle(req) {
 
 module.exports = {
     clientWebhookHandle,
+    clientDeleteWebhookHandle,
     invoiceWebhookHandle,
     quoteCreateWebhookHandle,
     quoteUpdateWebhookHandle,
