@@ -133,7 +133,6 @@ async function paymentCreateWebhookHandle(req) {
 
 module.exports = {
     clientWebhookHandle,
-    clientDeleteWebhookHandle,
     invoiceWebhookHandle,
     quoteCreateWebhookHandle,
     quoteUpdateWebhookHandle,
