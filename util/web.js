@@ -4,7 +4,14 @@ const express = require('express');
 const bodyParser = require("body-parser");
 const path = require("path");
 let Contact = require('./contact.js');
-let { invoiceWebhookHandle, clientWebhookHandle, quoteCreateWebhookHandle, quoteUpdateWebhookHandle, jobCreateWebhookHandle } = require("./apis/JobberWebHookHandler.js");
+let {
+    invoiceWebhookHandle,
+    clientWebhookHandle,
+    quoteCreateWebhookHandle,
+    quoteUpdateWebhookHandle,
+    jobCreateWebhookHandle,
+    paymentCreateWebhookHandle
+} = require("./apis/JobberWebHookHandler.js");
 let { jobberSetAuthorization } = require('./apis/Jobber.js');
 
 // The app object
@@ -75,6 +82,16 @@ app.post( '/jobber/JOB_CREATE', ( req, res ) => {
     res.sendStatus( 200 );
 
     jobCreateWebhookHandle(req);
+} );
+
+/**
+ * Handle Payment Webhooks
+ */
+app.post( '/jobber/PAYMENT_CREATE', ( req, res ) => {
+    console.info('Got an PAYMENT_CREATE event from Jobber!');
+    res.sendStatus( 200 );
+
+    paymentCreateWebhookHandle(req);
 } );
 
 /**

@@ -1,6 +1,13 @@
 const crypto = require('crypto');
-let { getInvoiceData, getQuoteData, getClientData } = require("./Jobber.js");
-let { logClient, logInvoice, logQuote, logQuoteUpdate, logJob } = require('../posthog.js');
+let { getInvoiceData, getQuoteData, getClientData, getPaymentData } = require("./Jobber.js");
+let {
+    logClient,
+    logInvoice,
+    logQuote,
+    logQuoteUpdate,
+    logJob,
+    logPayment
+} = require('../posthog.js');
 const {getJobData} = require("./Jobber");
 
 
@@ -106,11 +113,30 @@ async function jobCreateWebhookHandle(req) {
     await logJob(quote, clientID);
 }
 
+/**
+ * Adds payment event in PostHog
+ * @param req The incoming web data
+ * @returns {Promise<void>}
+ */
+async function paymentCreateWebhookHandle(req) {
+    let body = req.body;
+    let authentic = jobberVerify(body, req.header('X-Jobber-Hmac-SHA256'));
+
+    // Get quote data
+    let payment = await getPaymentData(body.data.webHookEvent.itemId);
+    // Insert/Update client in PostHog
+    let clientID = await logClient(payment.client);
+    // Insert quote in PostHog
+    await logPayment(payment, clientID);
+}
+
 
 module.exports = {
     clientWebhookHandle,
+    clientDeleteWebhookHandle,
     invoiceWebhookHandle,
     quoteCreateWebhookHandle,
     quoteUpdateWebhookHandle,
-    jobCreateWebhookHandle
+    jobCreateWebhookHandle,
+    paymentCreateWebhookHandle
 };
