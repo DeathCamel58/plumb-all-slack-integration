@@ -34,7 +34,7 @@ async function usePostHogAPI(url, httpMethod, data) {
             // HTTP Bad Request
             case 400:
             default:
-                console.log(`Received status ${response.status} from posthog. Body follows.`);
+                console.log(`Received status ${response.status} from PostHog. Body follows.`);
                 let text = await response.text();
                 console.log(text);
         }
