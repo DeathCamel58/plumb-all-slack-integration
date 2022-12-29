@@ -322,20 +322,43 @@ async function logContact(contact, originalMessage) {
  */
 async function logClient(jobberClient) {
     let defaultEmail;
-    for (let i = 0; i < jobberClient.emails.length; i++) {
-        if (jobberClient.emails[i].primary) {
-            defaultEmail = jobberClient.emails[i].address;
+    if ('emails' in jobberClient) {
+        for (let i = 0; i < jobberClient.emails.length; i++) {
+            if (jobberClient.emails[i].primary) {
+                defaultEmail = jobberClient.emails[i].address;
+            }
         }
     }
 
     let defaultPhone;
-    for (let i = 0; i < jobberClient.phones.length; i++) {
-        if (jobberClient.phones[i].primary) {
-            defaultPhone = jobberClient.phones[i].number;
+    if ('phones' in jobberClient) {
+        if (jobberClient.phones.length > 0) {
+            defaultPhone = jobberClient.phones[0].number;
+            for (let i = 0; i < jobberClient.phones.length; i++) {
+                if (jobberClient.phones[i].primary) {
+                    defaultPhone = jobberClient.phones[i].number;
+                }
+            }
         }
     }
 
-    let contact = new Contact(null, jobberClient.name, jobberClient.phones[0].number, (defaultPhone !== undefined ? defaultPhone : null), (defaultEmail !== undefined ? defaultEmail : null), `${jobberClient.billingAddress.street} ${jobberClient.billingAddress.city} ${jobberClient.billingAddress.province} ${jobberClient.billingAddress.postalCode}`);
+    let address;
+    if (jobberClient.billingAddress !== null) {
+        if ('street' in jobberClient.billingAddress) {
+            address += `${jobberClient.billingAddress.street} `;
+        }
+        if ('city' in jobberClient.billingAddress) {
+            address += `${jobberClient.billingAddress.city} `;
+        }
+        if ('province' in jobberClient.billingAddress) {
+            address += `${jobberClient.billingAddress.province} `;
+        }
+        if ('postalCode' in jobberClient.billingAddress) {
+            address += `${jobberClient.billingAddress.postalCode}`;
+        }
+    }
+
+    let contact = new Contact(null, jobberClient.name, defaultPhone, (defaultPhone !== undefined ? defaultPhone : null), (defaultEmail !== undefined ? defaultEmail : null), address);
 
     return await sendClientToPostHog(contact);
 }
