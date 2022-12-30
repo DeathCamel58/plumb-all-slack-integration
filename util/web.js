@@ -180,10 +180,8 @@ app.post( '/jobber/PAYMENT_CREATE', ( req, res ) => {
 app.get( '/jobber/authorize', ( req, res ) => {
     res.sendStatus( 200 );
 
-    req.body = JSON.parse(req.body);
     // Process Request
     let file = process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env';
-    res.sendStatus( 200 );
     let oldAuthCode = process.env.JOBBER_AUTHORIZATION_CODE;
     fs.readFile(file, 'utf8', function (err,data) {
         if (err) {
