@@ -20,6 +20,32 @@ function sleep(ms) {
 }
 
 /**
+ * Takes in a Jobber webhook request, and checks if it's authentic
+ * @param req The request
+ * @returns {boolean} Is the webhook authentic?
+ */
+function verifyWebhook(req) {
+    // Ensure Slack's signature headers exist
+    if ("x-jobber-hmac-sha256" in req.headers) {
+        // Get the signature
+        let jobberSignature = req.headers['x-jobber-hmac-sha256'];
+        let body = req.body;
+
+        let mySignature = crypto
+            .createHmac('sha256', process.env.JOBBER_APP_SECRET)
+            .update(body, 'utf8')
+            .digest('base64');
+
+        if (crypto.timingSafeEqual(Buffer.from(mySignature, 'utf8'), Buffer.from(jobberSignature, 'utf8'))) {
+            return true;
+        }
+    }
+
+    // This is not signed properly
+    return false;
+}
+
+/**
  * Sets the JOBBER_AUTHORIZATION_CODE
  * @param code The new authorization code
  */
@@ -354,6 +380,7 @@ query PaymentQuery {
 }
 
 module.exports = {
+    verifyWebhook,
     getInvoiceData,
     getQuoteData,
     getJobData,

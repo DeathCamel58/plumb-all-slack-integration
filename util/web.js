@@ -27,17 +27,37 @@ app.use(bodyParser.text({ type: 'application/json' }));
  */
 app.post( '/jobber/INVOICE_CREATE', ( req, res ) => {
     console.info('Got an INVOICE_CREATE event from Jobber!');
-    res.sendStatus( 200 );
 
-    invoiceWebhookHandle(req);
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus( 200 );
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        invoiceWebhookHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
 } );
 
 app.post( '/jobber/INVOICE_UPDATE', ( req, res ) => {
     console.info('Got an INVOICE_UPDATE event from Jobber!');
-    res.sendStatus( 200 );
 
-    // TODO: Maybe update the already existing invoice event to show remaining balance now?
-    // invoiceWebhookHandle(req);
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus( 200 );
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        // TODO: Maybe update the already existing invoice event to show remaining balance now?
+        // invoiceWebhookHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
 } );
 
 /**
@@ -45,16 +65,36 @@ app.post( '/jobber/INVOICE_UPDATE', ( req, res ) => {
  */
 app.post( '/jobber/CLIENT_CREATE', ( req, res ) => {
     console.info('Got an CLIENT_CREATE event from Jobber!');
-    res.sendStatus( 200 );
 
-    clientWebhookHandle(req);
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus( 200 );
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        clientWebhookHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
 } );
 
 app.post( '/jobber/CLIENT_UPDATE', ( req, res ) => {
     console.info('Got an CLIENT_UPDATE event from Jobber!');
-    res.sendStatus( 200 );
 
-    clientWebhookHandle(req);
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus( 200 );
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        clientWebhookHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
 } );
 
 /**
@@ -62,16 +102,36 @@ app.post( '/jobber/CLIENT_UPDATE', ( req, res ) => {
  */
 app.post( '/jobber/QUOTE_CREATE', ( req, res ) => {
     console.info('Got an QUOTE_CREATE event from Jobber!');
-    res.sendStatus( 200 );
 
-    quoteCreateWebhookHandle(req);
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus( 200 );
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        quoteCreateWebhookHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
 } );
 
 app.post( '/jobber/QUOTE_UPDATE', ( req, res ) => {
     console.info('Got an QUOTE_UPDATE event from Jobber!');
-    res.sendStatus( 200 );
 
-    quoteUpdateWebhookHandle(req);
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus( 200 );
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        quoteUpdateWebhookHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
 } );
 
 /**
@@ -79,9 +139,19 @@ app.post( '/jobber/QUOTE_UPDATE', ( req, res ) => {
  */
 app.post( '/jobber/JOB_CREATE', ( req, res ) => {
     console.info('Got an JOB_CREATE event from Jobber!');
-    res.sendStatus( 200 );
 
-    jobCreateWebhookHandle(req);
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus( 200 );
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        jobCreateWebhookHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
 } );
 
 /**
@@ -89,37 +159,58 @@ app.post( '/jobber/JOB_CREATE', ( req, res ) => {
  */
 app.post( '/jobber/PAYMENT_CREATE', ( req, res ) => {
     console.info('Got an PAYMENT_CREATE event from Jobber!');
-    res.sendStatus( 200 );
 
-    paymentCreateWebhookHandle(req);
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus( 200 );
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        paymentCreateWebhookHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
 } );
 
 /**
  * Handles a new Jobber Authorization Code, sets it in the config, then exits
  */
 app.get( '/jobber/authorize', ( req, res ) => {
-    let file = process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env';
-    res.sendStatus( 200 );
-    let oldAuthCode = process.env.JOBBER_AUTHORIZATION_CODE;
-    fs.readFile(file, 'utf8', function (err,data) {
-        if (err) {
-            return console.log(err);
-        }
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus( 200 );
 
-        let result = data.replace(oldAuthCode, req.query.code);
-
-        fs.writeFile(file, result, 'utf8', function (err) {
+        req.body = JSON.parse(req.body);
+        // Process Request
+        let file = process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env';
+        res.sendStatus( 200 );
+        let oldAuthCode = process.env.JOBBER_AUTHORIZATION_CODE;
+        fs.readFile(file, 'utf8', function (err,data) {
             if (err) {
-                console.log('Failed to save the Jobber Authorization Code to file.')
-                console.log(err);
-            } else {
-                console.log('Received new Jobber authorization!');
-                // console.log('Received new Jobber authorization! Restarting now.');
-                Jobber.setAuthorization(req.query.code);
+                return console.log(err);
             }
+
+            let result = data.replace(oldAuthCode, req.query.code);
+
+            fs.writeFile(file, result, 'utf8', function (err) {
+                if (err) {
+                    console.log('Failed to save the Jobber Authorization Code to file.')
+                    console.log(err);
+                } else {
+                    console.log('Received new Jobber authorization!');
+                    // console.log('Received new Jobber authorization! Restarting now.');
+                    Jobber.setAuthorization(req.query.code);
+                }
+            });
         });
-    });
-    process.env.JOBBER_AUTHORIZATION_CODE = req.query.code;
+        process.env.JOBBER_AUTHORIZATION_CODE = req.query.code;
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
 } );
 
 /**
