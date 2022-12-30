@@ -13,14 +13,14 @@ let {
     paymentCreateWebhookHandle
 } = require("./apis/JobberWebHookHandler.js");
 let Jobber = require('./apis/Jobber.js');
+let Slack = require('./apis/SlackBot');
 
 // The app object
 const app = express();
 // The port to run the webserver on.
 port = 47092;
 // Use body-parser's JSON parsing
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.text({ type: 'application/json' }));
 
 /**
  * Handle Invoice Webhooks
@@ -134,10 +134,30 @@ app.post( '/jobber/:WEBHOOK_TYPE', ( req, res ) => {
 } );
 
 /**
+ * Handle Slack Event Webhooks
+ */
+app.post( '/slack/EVENT', ( req, res ) => {
+    console.info('Got an EVENT from Slack!');
+
+    // Verify that the webhook came from Slack
+    if (Slack.verifyWebhook(req)) {
+        // Webhook was valid.
+        // Respond with the challenge
+        res.send(req.body.challenge);
+        req.body = JSON.parse(req.body);
+        // Process Request
+        Slack.event(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
+} );
+
+/**
  * TODO: Add webhooks
  */
 app.get('/', (req, res) => {
-    res.send("hello world");
+    res.send("Hey! I'm plumb-all-slack integration. Plumb-All's Bot for stuff. This is not a website you should visit manually.");
 })
 
 app.listen( port, "0.0.0.0", () => console.log( `Node.js server started on port ${port}.` ) );
