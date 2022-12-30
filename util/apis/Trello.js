@@ -81,6 +81,14 @@ async function getTrelloList(boardId, listName) {
     return null;
 }
 
+/**
+ * Adds a card to trello with the provided information
+ * @param listId The list ID to add the card to
+ * @param name The name of the card
+ * @param description The description of the card
+ * @param address The address of the card
+ * @returns {Promise<void>}
+ */
 async function addTrelloCard(listId, name, description, address) {
     let data = {
         idList: listId,
@@ -103,12 +111,17 @@ async function addTrelloCard(listId, name, description, address) {
     let response = await useTrelloAPI('1/cards/', 'post', data);
 }
 
-async function addTrelloContact(contact) {
+/**
+ * Adds a contact card to Trello
+ * @param contact The contact to add
+ * @returns {Promise<void>}
+ */
+async function addContact(contact) {
     let boardId = await getTrelloBoard(process.env.TRELLO_BOARD_NAME);
     let listId = await getTrelloList(boardId, process.env.TRELLO_LIST_NAME)
     await addTrelloCard(listId, contact.name, contact.message, contact.address)
 }
 
 module.exports = {
-    addTrelloContact
+    addContact
 };

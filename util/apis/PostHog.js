@@ -1,7 +1,7 @@
 require('dotenv').config({ path: process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env' });
 const crypto = require('crypto');
-let Contact = require('./contact.js');
-const { searchPlace } = require("./apis/Google-Maps");
+let Contact = require('../contact.js');
+const { searchPlace } = require("./GoogleMaps");
 
 const fetch = require('node-fetch');
 

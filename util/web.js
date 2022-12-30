@@ -12,7 +12,7 @@ let {
     jobCreateWebhookHandle,
     paymentCreateWebhookHandle
 } = require("./apis/JobberWebHookHandler.js");
-let { jobberSetAuthorization } = require('./apis/Jobber.js');
+let Jobber = require('./apis/Jobber.js');
 
 // The app object
 const app = express();
@@ -115,7 +115,7 @@ app.get( '/jobber/authorize', ( req, res ) => {
             } else {
                 console.log('Received new Jobber authorization!');
                 // console.log('Received new Jobber authorization! Restarting now.');
-                jobberSetAuthorization(req.query.code);
+                Jobber.setAuthorization(req.query.code);
             }
         });
     });
