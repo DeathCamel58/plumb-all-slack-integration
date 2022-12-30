@@ -233,11 +233,18 @@ app.post( '/slack/EVENT', ( req, res ) => {
     // Verify that the webhook came from Slack
     if (Slack.verifyWebhook(req)) {
         // Webhook was valid.
-        // Respond with the challenge
-        res.send(req.body.challenge);
         req.body = JSON.parse(req.body);
-        // Process Request
-        Slack.event(req);
+
+        // Check if this is a request to verify the endpoint
+        if ("challenge" in req.body) {
+            // Respond with the challenge
+            res.send(req.body.challenge);
+            console.log(req);
+        } else {
+            res.sendStatus(200);
+            // Process Request
+            Slack.event(req);
+        }
     } else {
         // Webhook signature invalid. Send 401.
         res.sendStatus(401);
