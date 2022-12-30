@@ -18,7 +18,7 @@ let Slack = require('./apis/SlackBot');
 // The app object
 const app = express();
 // The port to run the webserver on.
-port = 47092;
+port = process.env.WEB_PORT;
 // Use body-parser's JSON parsing
 app.use(bodyParser.text({ type: 'application/json' }));
 
@@ -178,39 +178,32 @@ app.post( '/jobber/PAYMENT_CREATE', ( req, res ) => {
  * Handles a new Jobber Authorization Code, sets it in the config, then exits
  */
 app.get( '/jobber/authorize', ( req, res ) => {
-    // Verify that the webhook came from Jobber
-    if (Jobber.verifyWebhook(req)) {
-        // Webhook was valid.
-        res.sendStatus( 200 );
+    res.sendStatus( 200 );
 
-        req.body = JSON.parse(req.body);
-        // Process Request
-        let file = process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env';
-        res.sendStatus( 200 );
-        let oldAuthCode = process.env.JOBBER_AUTHORIZATION_CODE;
-        fs.readFile(file, 'utf8', function (err,data) {
+    req.body = JSON.parse(req.body);
+    // Process Request
+    let file = process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env';
+    res.sendStatus( 200 );
+    let oldAuthCode = process.env.JOBBER_AUTHORIZATION_CODE;
+    fs.readFile(file, 'utf8', function (err,data) {
+        if (err) {
+            return console.log(err);
+        }
+
+        let result = data.replace(oldAuthCode, req.query.code);
+
+        fs.writeFile(file, result, 'utf8', function (err) {
             if (err) {
-                return console.log(err);
+                console.log('Failed to save the Jobber Authorization Code to file.')
+                console.log(err);
+            } else {
+                console.log('Received new Jobber authorization!');
+                // console.log('Received new Jobber authorization! Restarting now.');
+                Jobber.setAuthorization(req.query.code);
             }
-
-            let result = data.replace(oldAuthCode, req.query.code);
-
-            fs.writeFile(file, result, 'utf8', function (err) {
-                if (err) {
-                    console.log('Failed to save the Jobber Authorization Code to file.')
-                    console.log(err);
-                } else {
-                    console.log('Received new Jobber authorization!');
-                    // console.log('Received new Jobber authorization! Restarting now.');
-                    Jobber.setAuthorization(req.query.code);
-                }
-            });
         });
-        process.env.JOBBER_AUTHORIZATION_CODE = req.query.code;
-    } else {
-        // Webhook signature invalid. Send 401.
-        res.sendStatus(401);
-    }
+    });
+    process.env.JOBBER_AUTHORIZATION_CODE = req.query.code;
 } );
 
 /**
