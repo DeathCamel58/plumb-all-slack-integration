@@ -1,6 +1,6 @@
 require('dotenv').config({ path: process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env' });
 const fetch = require('node-fetch');
-const { sendRawMessage } = require("../slackBot");
+let Slack = require("./SlackBot");
 const crypto = require("crypto");
 const fs = require("fs");
 
@@ -23,7 +23,7 @@ function sleep(ms) {
  * Sets the JOBBER_AUTHORIZATION_CODE
  * @param code The new authorization code
  */
-async function jobberSetAuthorization(code) {
+async function setAuthorization(code) {
     process.env.JOBBER_AUTHORIZATION_CODE = code;
     let success = false;
     let response;
@@ -61,7 +61,7 @@ async function jobberSetAuthorization(code) {
         }
         if ( response.status === 401 ) {
             console.log(`Got ${response.status} while refreshing access token. Requesting authorization!`);
-            await requestJobberAuthorization();
+            await requestAuthorization();
         }
     }
 }
@@ -70,11 +70,11 @@ async function jobberSetAuthorization(code) {
  * Sends a message to slack that the user can click on to get authorization
  * @returns {Promise<void>}
  */
-async function requestJobberAuthorization() {
+async function requestAuthorization() {
     let redirect_URI = `${process.env.WEB_URL}/jobber/authorize`;
     redirect_URI = encodeURIComponent(redirect_URI);
     let STATE = crypto.randomBytes(16).toString('hex');
-    await sendRawMessage(`Error from the call bot. *Super technical error code*: :robot_face::frowning::thumbsdown:\nI\'ve lost my access to Jobber and I need some help.\nI need an admin in Jobber to click on --><https://api.getjobber.com/api/oauth/authorize?client_id=${process.env.JOBBER_CLIENT_ID}&redirect_uri=${redirect_URI}&state=${STATE}|this link><-- and click \`ALLOW ACCESS\`.`);
+    await Slack.sendRawMessage(`Error from the call bot. *Super technical error code*: :robot_face::frowning::thumbsdown:\nI\'ve lost my access to Jobber and I need some help.\nI need an admin in Jobber to click on --><https://api.getjobber.com/api/oauth/authorize?client_id=${process.env.JOBBER_CLIENT_ID}&redirect_uri=${redirect_URI}&state=${STATE}|this link><-- and click \`ALLOW ACCESS\`.`);
     await sleep(30*1000)
 }
 
@@ -123,7 +123,7 @@ async function refreshAccessToken() {
         }
         if ( response.status === 401 ) {
             console.log(`Got ${response.status} while refreshing access token. Requesting authorization!`);
-            await requestJobberAuthorization();
+            await requestAuthorization();
         }
     }
 }
@@ -359,5 +359,5 @@ module.exports = {
     getJobData,
     getClientData,
     getPaymentData,
-    jobberSetAuthorization
+    setAuthorization
 };
