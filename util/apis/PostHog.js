@@ -342,7 +342,7 @@ async function logClient(jobberClient) {
         }
     }
 
-    let address;
+    let address = "";
     if (jobberClient.billingAddress !== null) {
         if ('street' in jobberClient.billingAddress) {
             address += `${jobberClient.billingAddress.street} `;
@@ -358,7 +358,7 @@ async function logClient(jobberClient) {
         }
     }
 
-    let contact = new Contact(null, jobberClient.name, defaultPhone, (defaultPhone !== undefined ? defaultPhone : null), (defaultEmail !== undefined ? defaultEmail : null), address);
+    let contact = new Contact(null, jobberClient.name, defaultPhone, (defaultPhone !== undefined ? defaultPhone : null), (defaultEmail !== undefined ? defaultEmail : null), (address !== "" ? address : null));
 
     return await sendClientToPostHog(contact);
 }
