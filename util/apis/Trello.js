@@ -184,6 +184,10 @@ async function moveContactCard(message, destinationList) {
         destinationListId = await getList(boardId, process.env.TRELLO_LIST_NAME_NO_GO);
     }
 
+    if (!message.includes('Caller: ') && !message.includes('\nAddress: ')) {
+        console.log('Can\'t parse the message.');
+        return;
+    }
     let caller = message.split('Caller: ')[1].split('\nAddress: ')[0];
     if (caller.includes('(')) {
         caller = caller.split('(')[0];
