@@ -60,7 +60,7 @@ async function setAuthorization(code) {
 
         if ( response.status === 200 ) {
             success = true;
-            data = await response.text();
+            let data = await response.text();
             data = JSON.parse(data);
             JOBBER_ACCESS_TOKEN = data.access_token;
             let refresh_token = data.refresh_token;

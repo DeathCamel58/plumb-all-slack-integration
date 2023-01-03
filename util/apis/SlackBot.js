@@ -87,7 +87,7 @@ async function fetchMessage(id, ts) {
         });
 
         // There should only be one result (stored in the zeroth index)
-        message = result.messages[0];
+        let message = result.messages[0];
 
         // Return the message
         return message;

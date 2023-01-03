@@ -143,7 +143,7 @@ function normalizePhoneNumber(phone) {
 }
 
 /**
- * Takes in dirty, ugly text (with newlines, duplicate spaces, etc) and returns a pretty version
+ * Takes in dirty, ugly text (with newlines, duplicate spaces, etc.) and returns a pretty version
  * @param textToClean The ugly text to clean
  * @returns {string} The pretty text
  */

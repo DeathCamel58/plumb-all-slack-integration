@@ -8,7 +8,6 @@ const _ = require('lodash');
 
 /**
  * Creates a message to send in slack, and sends it off if it is a contact email
- * @param item Raw email to process
  * @param mail email
  * @returns {Promise<void>} Promise that resolves after message sent, or ignored
  */
@@ -89,7 +88,7 @@ startProcessing()
 // app.use( express.json() );
 //
 // async function processMessage(webhookBody) {
-//     let GOOGLE_ADS_KEY = process.env.GOOGLE_ADS_KEY || "testkey";
+//     let GOOGLE_ADS_KEY = process.env.GOOGLE_ADS_KEY || "testKey";
 //     if (webhookBody.google_key === GOOGLE_ADS_KEY) {
 //         await handleMessage(null, null, webhookBody, null)
 //     } else {
