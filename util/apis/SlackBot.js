@@ -152,5 +152,10 @@ async function event(req) {
         if (event.reaction.includes("check_mark")) {
             await Trello.moveContactCard(message.text, process.env.TRELLO_LIST_NAME_DONE);
         }
+
+        // If this was an X, thumbs down, or call_me reaction
+        if (event.reaction === ":x:" || event.reaction.includes("-1") || event.reaction.includes("call_me")) {
+            await Trello.moveContactCard(message.text, process.env.TRELLO_LIST_NAME_NO_GO);
+        }
     }
 }
