@@ -179,6 +179,9 @@ async function moveContactCard(message, destinationList) {
     } else if (destinationList === process.env.TRELLO_LIST_NAME_DONE) {
         sourceListId = await getList(boardId, process.env.TRELLO_LIST_NAME_WIP);
         destinationListId = await getList(boardId, process.env.TRELLO_LIST_NAME_DONE);
+    } else if (destinationList === process.env.TRELLO_LIST_NAME_NO_GO) {
+        sourceListId = await getList(boardId, process.env.TRELLO_LIST_NAME_TODO);
+        destinationListId = await getList(boardId, process.env.TRELLO_LIST_NAME_NO_GO);
     }
 
     let caller = message.split('Caller: ')[1].split('\nAddress: ')[0];
