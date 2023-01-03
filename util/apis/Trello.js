@@ -195,7 +195,7 @@ async function moveContactCard(message, destinationList) {
     let card = await runSearch(caller, sourceListId);
 
     // If no card was found, don't move it
-    if (card === undefined) {
+    if (card === undefined || !('id' in card)) {
         return;
     }
     // Move the card to the destination list
