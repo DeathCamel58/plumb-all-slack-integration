@@ -230,7 +230,7 @@ app.post( '/slack/EVENT', ( req, res ) => {
         if ("challenge" in req.body) {
             // Respond with the challenge
             res.send(req.body.challenge);
-            console.log(req);
+            console.log(`Received verification token ${req.body.challenge} from Slack.`)
         } else {
             res.sendStatus(200);
             // Process Request
