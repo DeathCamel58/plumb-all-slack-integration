@@ -72,35 +72,12 @@ async function startProcessing() {
         try {
             await runSingle();
         } catch (err) {
-            console.log("Error thrown!");
-            console.log(err);
-            console.log("Waiting a bit, and restarting event loop.")
+            console.error("Error thrown!");
+            console.error(err);
+            console.error("Waiting a bit, and restarting event loop.")
         }
         await sleep(process.env.EMAIL_CHECK_INTERVAL || 30000)
     }
 }
 
 startProcessing()
-
-
-// TODO: Move this into `web` in `util` folder.
-// Webhook Server
-// app.use( express.json() );
-//
-// async function processMessage(webhookBody) {
-//     let GOOGLE_ADS_KEY = process.env.GOOGLE_ADS_KEY || "testKey";
-//     if (webhookBody.google_key === GOOGLE_ADS_KEY) {
-//         await handleMessage(null, null, webhookBody, null)
-//     } else {
-//         console.log('Incoming webhook was not authenticated! Incoming follows:');
-//         console.log(webhookBody)
-//     }
-// }
-//
-// app.post( '/googleAdsForm', ( req, res ) => {
-//     processMessage(req.body);
-//
-//     res.sendStatus( 200 );
-// } );
-//
-// app.listen( 47092, "0.0.0.0", () => console.log( 'Node.js server started on port 9000.' ) );

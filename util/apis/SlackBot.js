@@ -21,7 +21,7 @@ const app = new App({
     // Start your app
     await app.start(3000);
 
-    console.log('Logged into Slack!');
+    console.info('Logged into Slack!');
 })();
 
 /**
@@ -31,7 +31,7 @@ const app = new App({
  * @returns {Promise<void>} Promise that resolves after message is sent
  */
 async function sendMessage(message, username) {
-    console.log(message)
+    console.info(message)
 
     try {
         const result = await app.client.chat.postMessage({
@@ -42,7 +42,7 @@ async function sendMessage(message, username) {
             icon_url: "https://plumb-all.com/wp-content/uploads/2018/08/cropped-icon.png"
         });
 
-        console.log('    Sent Message to Slack!');
+        console.info('    Sent Message to Slack!');
     }
     catch (error) {
         console.error(error);
@@ -59,7 +59,7 @@ async function sendRawMessage(rawMessage) {
             icon_url: "https://plumb-all.com/wp-content/uploads/2018/08/cropped-icon.png"
         });
 
-        console.log('Sent Jobber authorization request to Slack!');
+        console.info('Sent Jobber authorization request to Slack!');
     }
     catch (error) {
         console.error(error);

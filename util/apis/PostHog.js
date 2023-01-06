@@ -34,13 +34,13 @@ async function usePostHogAPI(url, httpMethod, data) {
             // HTTP Bad Request
             case 400:
             default:
-                console.log(`Received status ${response.status} from PostHog. Body follows.`);
+                console.error(`Received status ${response.status} from PostHog. Body follows.`);
                 let text = await response.text();
-                console.log(text);
+                console.error(text);
         }
     } catch (e) {
-        console.log(`Failed to run a PostHog API search.`);
-        console.log(e);
+        console.error(`Failed to run a PostHog API search.`);
+        console.error(e);
     }
 }
 
@@ -58,18 +58,18 @@ async function individualSearch(searchQuery, parameter) {
         response = await fetch(url, {
             method: 'get',
             headers: {'Authorization': `Bearer ${process.env.POSTHOG_API_TOKEN}`}
-        }).catch(e => console.log(`Error when making PostHog API call ${e}`));
+        }).catch(e => console.error(`Error when making PostHog API call ${e}`));
     } catch (e) {
-        console.log(`Failed to run a PostHog API search.`);
-        console.log(e);
+        console.error(`Failed to run a PostHog API search.`);
+        console.error(e);
     }
 
     let data = [];
     try {
-        data = await response.text().catch(e => console.log(`Error when getting text from PostHog API call ${e}`));
+        data = await response.text().catch(e => console.error(`Error when getting text from PostHog API call ${e}`));
     } catch (e) {
-        console.log(`Failed to get text from PostHog API search.`);
-        console.log(e);
+        console.error(`Failed to get text from PostHog API search.`);
+        console.error(e);
     }
     data = JSON.parse(data);
     return data;
@@ -101,7 +101,7 @@ async function searchForUser(contact) {
             operator: "exact",
             type: "person"
         }];
-        let results = await individualSearch(query).catch(e => console.log(e));
+        let results = await individualSearch(query, null).catch(e => console.error(e));
         if (results.results.length !== undefined && results.results.length !== 0) {
             for (let result of results.results) {
                 potentialIDs.push(result.distinct_ids[0]);
@@ -215,7 +215,7 @@ async function sendClientToPostHog(contact) {
         if (place.data.results.length > 0) {
             place = place.data;
         } else {
-            console.log(`No place found for ${contact.address} on Google Maps.`);
+            console.error(`No place found for ${contact.address} on Google Maps.`);
         }
     }
 
@@ -250,10 +250,10 @@ async function sendClientToPostHog(contact) {
 
     // If this is a new person, add them to PostHog
     if (posthogPerson === undefined) {
-        console.log(`Adding ${contact.name} to PostHog`);
+        console.info(`Adding ${contact.name} to PostHog`);
     } else {
         id = posthogPerson;
-        console.log(`Matched ${contact.name} to PostHog ID ${id}`);
+        console.info(`Matched ${contact.name} to PostHog ID ${id}`);
 
         // Get the matched person in PostHog
         let fullPostHogPerson = await individualSearch(`${id}`, 'distinct_id');

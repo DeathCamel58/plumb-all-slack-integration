@@ -185,17 +185,17 @@ app.get( '/jobber/authorize', ( req, res ) => {
     let oldAuthCode = process.env.JOBBER_AUTHORIZATION_CODE;
     fs.readFile(file, 'utf8', function (err,data) {
         if (err) {
-            return console.log(err);
+            return console.error(err);
         }
 
         let result = data.replace(oldAuthCode, req.query.code);
 
         fs.writeFile(file, result, 'utf8', function (err) {
             if (err) {
-                console.log('Failed to save the Jobber Authorization Code to file.')
-                console.log(err);
+                console.error('Failed to save the Jobber Authorization Code to file.')
+                console.error(err);
             } else {
-                console.log('Received new Jobber authorization!');
+                console.info('Received new Jobber authorization!');
                 // console.log('Received new Jobber authorization! Restarting now.');
                 Jobber.setAuthorization(req.query.code);
             }
@@ -230,7 +230,7 @@ app.post( '/slack/EVENT', ( req, res ) => {
         if ("challenge" in req.body) {
             // Respond with the challenge
             res.send(req.body.challenge);
-            console.log(`Received verification token ${req.body.challenge} from Slack.`)
+            console.info(`Received verification token ${req.body.challenge} from Slack.`)
         } else {
             res.sendStatus(200);
             // Process Request
@@ -247,6 +247,6 @@ app.post( '/slack/EVENT', ( req, res ) => {
  */
 app.get('/', (req, res) => {
     res.send("Hey! I'm plumb-all-slack integration. Plumb-All's Bot for stuff. This is not a website you should visit manually.");
-})
+});
 
-app.listen( port, "0.0.0.0", () => console.log( `Node.js server started on port ${port}.` ) );
+app.listen( port, "0.0.0.0", () => console.info( `Node.js server started on port ${port}.` ) );

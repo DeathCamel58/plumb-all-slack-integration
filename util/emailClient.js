@@ -38,10 +38,10 @@ async function moveMarkEmail(email, fromWhere) {
     // Create a dictionary of all folders and ID's
     let folders = {}
     try {
-        response = await client.api(`/users/${(process.env.EMAIL_ADDRESS || "")}/mailFolders?$top=100`).get().catch(e => console.log(`Error when getting folders ${e}`));
+        response = await client.api(`/users/${(process.env.EMAIL_ADDRESS || "")}/mailFolders?$top=100`).get().catch(e => console.error(`Error when getting folders ${e}`));
     } catch (e) {
-        console.log(`Failed to get a list of folders from email.`);
-        console.log(e);
+        console.error(`Failed to get a list of folders from email.`);
+        console.error(e);
     }
     if (response.value.length !== 0) {
         for (const folder of response.value) {
@@ -58,8 +58,8 @@ async function moveMarkEmail(email, fromWhere) {
     } else if (fromWhere === "Jobber Request") {
         destinationFolder = folders["Jobber Request"];
     } else {
-        console.log("Not sure where to move this email:");
-        console.log(email);
+        console.error("Not sure where to move this email:");
+        console.error(email);
         return;
     }
 
@@ -68,10 +68,10 @@ async function moveMarkEmail(email, fromWhere) {
         isRead: true
     }
     try {
-        response = await client.api(`/users/${(process.env.EMAIL_ADDRESS || "")}/messages/${email.id}`).update(message).catch(e => console.log(`Error when marking as read ${e}`));
+        response = await client.api(`/users/${(process.env.EMAIL_ADDRESS || "")}/messages/${email.id}`).update(message).catch(e => console.error(`Error when marking as read ${e}`));
     } catch (e) {
-        console.log(`Failed to mark email as read: ${email.id}`);
-        console.log(e)
+        console.error(`Failed to mark email as read: ${email.id}`);
+        console.error(e)
     }
 
     // Move the email
@@ -79,10 +79,10 @@ async function moveMarkEmail(email, fromWhere) {
         destinationID: destinationFolder
     }
     try {
-        response = await client.api(`/users/${(process.env.EMAIL_ADDRESS || "")}/messages/${email.id}/move`).post(message).catch(e => console.log(`Error when moving email ${e}`));
+        response = await client.api(`/users/${(process.env.EMAIL_ADDRESS || "")}/messages/${email.id}/move`).post(message).catch(e => console.error(`Error when moving email ${e}`));
     } catch (e) {
-        console.log(`Failed to move: ${email.id}`);
-        console.log(e)
+        console.error(`Failed to move: ${email.id}`);
+        console.error(e)
     }
 }
 

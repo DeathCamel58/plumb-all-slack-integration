@@ -32,13 +32,13 @@ async function useAPI(url, httpMethod, data) {
             // HTTP Bad Request
             case 400:
             default:
-                console.log(`Received status ${response.status} from Trello. Body follows.`);
+                console.error(`Received status ${response.status} from Trello. Body follows.`);
                 let text = await response.text();
-                console.log(text);
+                console.error(text);
         }
     } catch (e) {
-        console.log(`Failed to run a Trello API request.`);
-        console.log(e);
+        console.error(`Failed to run a Trello API request.`);
+        console.error(e);
     }
 }
 
@@ -185,7 +185,7 @@ async function moveContactCard(message, destinationList) {
     }
 
     if (!message.includes('Caller: ') && !message.includes('\nAddress: ')) {
-        console.log('Can\'t parse the message.');
+        console.error('Can\'t parse the message.');
         return;
     }
     let caller = message.split('Caller: ')[1].split('\nAddress: ')[0];
@@ -199,7 +199,7 @@ async function moveContactCard(message, destinationList) {
         return;
     }
     // Move the card to the destination list
-    console.log(`Moving Trello Card for ${caller} to ${destinationList}`);
+    console.info(`Moving Trello Card for ${caller} to ${destinationList}`);
     await moveCard(card.id, destinationListId);
 }
 
