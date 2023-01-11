@@ -194,6 +194,12 @@ async function moveContactCard(message, destinationList) {
     }
     let card = await runSearch(caller, sourceListId);
 
+    // Rerun search if it is marked as bad, and no card was found. This is to allow the card to be found in multiple lists.
+    if ((card === undefined || !('id' in card)) && destinationList === process.env.TRELLO_LIST_NAME_NO_GO) {
+        sourceListId = await getList(boardId, process.env.TRELLO_LIST_NAME_WIP);
+        card = await runSearch(caller, sourceListId);
+    }
+
     // If no card was found, don't move it
     if (card === undefined || !('id' in card)) {
         return;
