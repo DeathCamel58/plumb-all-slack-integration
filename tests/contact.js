@@ -17,11 +17,11 @@ describe("Contact Class", () => {
         });
 
         it("Get Phone", () => {
-            assert.equal(contact.phone, "555-123-4567");
+            assert.equal(contact.phone, "(555) 123-4567");
         });
 
         it("Get Alternate Phone", () => {
-            assert.equal(contact.alternatePhone, "555-234-5678");
+            assert.equal(contact.alternatePhone, "(555) 234-5678");
         });
 
         it("Get Email", () => {
@@ -78,7 +78,7 @@ describe("Contact Class", () => {
             let contact = new Contact("Call", "Test Name", "555-123-4567", undefined, undefined, "240 Wallaby Way, Sydney Australia", "This is a test message.");
             assert.equal(contact.messageToSend(),
                 '=== New Call ===\n' +
-                'Caller: Test Name ( 555-123-4567 )\n' +
+                'Caller: Test Name ( (555) 123-4567 )\n' +
                 'Address: <https://www.google.com/maps?hl=en&q=240+Wallaby+Way,+Sydney+Australia|240 Wallaby Way, Sydney Australia>\n' +
                 'Message: This is a test message.');
         });
@@ -87,7 +87,7 @@ describe("Contact Class", () => {
             let contact = new Contact("Call", "Test Name", "555-123-4567", undefined, "email@address.com", "240 Wallaby Way, Sydney Australia", "This is a test message.");
             assert.equal(contact.messageToSend(),
                 '=== New Call ===\n' +
-                'Caller: Test Name ( 555-123-4567 ) ( email@address.com )\n' +
+                'Caller: Test Name ( (555) 123-4567 ) ( email@address.com )\n' +
                 'Address: <https://www.google.com/maps?hl=en&q=240+Wallaby+Way,+Sydney+Australia|240 Wallaby Way, Sydney Australia>\n' +
                 'Message: This is a test message.');
         });
@@ -96,7 +96,7 @@ describe("Contact Class", () => {
             let contact = new Contact("Call", "Test Name", "555-123-4567", "555-234-5678", "email@address.com", "240 Wallaby Way, Sydney Australia", "This is a test message.");
             assert.equal(contact.messageToSend(),
                 '=== New Call ===\n' +
-                'Caller: Test Name ( Left 555-123-4567 but called from: 555-234-5678 ) ( email@address.com )\n' +
+                'Caller: Test Name ( Left (555) 123-4567 but called from: (555) 234-5678 ) ( email@address.com )\n' +
                 'Address: <https://www.google.com/maps?hl=en&q=240+Wallaby+Way,+Sydney+Australia|240 Wallaby Way, Sydney Australia>\n' +
                 'Message: This is a test message.');
         });
@@ -105,7 +105,7 @@ describe("Contact Class", () => {
             let contact = new Contact("Call", "Test Name", "555-123-4567", "555-234-5678", undefined, "240 Wallaby Way, Sydney Australia", "This is a test message.");
             assert.equal(contact.messageToSend(),
                 '=== New Call ===\n' +
-                'Caller: Test Name ( Left 555-123-4567 but called from: 555-234-5678 )\n' +
+                'Caller: Test Name ( Left (555) 123-4567 but called from: (555) 234-5678 )\n' +
                 'Address: <https://www.google.com/maps?hl=en&q=240+Wallaby+Way,+Sydney+Australia|240 Wallaby Way, Sydney Australia>\n' +
                 'Message: This is a test message.');
         });
@@ -115,7 +115,7 @@ describe("Contact Class", () => {
             let contact = new Contact("Message from Website", "Test Name", "555-123-4567", undefined, undefined, "240 Wallaby Way, Sydney Australia", "This is a test message.");
             assert.equal(contact.messageToSend(),
                 '=== New Message from Website ===\n' +
-                'Caller: Test Name ( 555-123-4567 )\n' +
+                'Caller: Test Name ( (555) 123-4567 )\n' +
                 'Address: <https://www.google.com/maps?hl=en&q=240+Wallaby+Way,+Sydney+Australia|240 Wallaby Way, Sydney Australia>\n' +
                 'Message: This is a test message.');
         });
@@ -124,7 +124,7 @@ describe("Contact Class", () => {
             let contact = new Contact("Message from Website", "Test Name", "555-123-4567", undefined, "email@address.com", "240 Wallaby Way, Sydney Australia", "This is a test message.");
             assert.equal(contact.messageToSend(),
                 '=== New Message from Website ===\n' +
-                'Caller: Test Name ( 555-123-4567 ) ( email@address.com )\n' +
+                'Caller: Test Name ( (555) 123-4567 ) ( email@address.com )\n' +
                 'Address: <https://www.google.com/maps?hl=en&q=240+Wallaby+Way,+Sydney+Australia|240 Wallaby Way, Sydney Australia>\n' +
                 'Message: This is a test message.');
         });
