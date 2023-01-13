@@ -82,46 +82,6 @@ function parseMessageFromJobber(message) {
 }
 
 /**
- * Takes email body from Google Ads leads form, and generates an array of contact information
- * @param message Email body
- * @returns {Contact} Array of contact details
- */
-function parseMessageFromGoogleAds(message) {
-    let details = [];
-
-    message.user_column_data.forEach(function(item) {
-        if (item.column_id === "FIRST_NAME") (
-            details['name'] = item.string_value
-        )
-        else if (item.column_id === "LAST_NAME") {
-            details['name'] += " " + item.string_value
-        }
-        else if (item.column_id === "PHONE_NUMBER") {
-            details['phone'] = item.string_value
-        }
-        else if (item.column_id === "EMAIL") {
-            details['email'] = item.string_value
-        }
-        else if (item.column_id === "CITY") {
-            details['city'] = item.string_value
-        }
-        else if (item.column_id === "SERVICE") {
-            details['message'] = item.string_value
-        }
-    });
-
-    if (typeof(details['phone']) !== 'undefined'){
-        if (normalizePhoneNumber(details['phone'])!= null) {
-            details['phone'] = normalizePhoneNumber(details['phone']);
-        }
-    }
-
-    let contact = new Contact("Lead from Google Ads", details['name'], details['phone'], undefined, details['email'], details['city'], details['message']);
-    APICoordinator.contactMade(contact, message);
-    return contact;
-}
-
-/**
  * Takes in a phone number, and returns the number in the standard format: `(xxx) xxx-xxxx`
  * @param phone Unparsed phone number
  * @returns {null|*} Parsed Phone Number
