@@ -3,6 +3,11 @@ const { Client } = require("@googlemaps/google-maps-services-js");
 
 const client = new Client();
 
+/**
+ * Searches Google Maps for a location, and returns the location object
+ * @param address
+ * @returns {Promise<GeocodeResponse>}
+ */
 async function searchPlace(address) {
     let place = await client.geocode({
         params: {
