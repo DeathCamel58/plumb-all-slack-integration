@@ -2,23 +2,14 @@ require('dotenv').config({ path: process.env.ENV_LOCATION || '/root/plumb-all-sl
 let fs = require('fs');
 const express = require('express');
 const bodyParser = require("body-parser");
-const path = require("path");
-let Contact = require('./contact.js');
-let {
-    invoiceWebhookHandle,
-    clientWebhookHandle,
-    quoteCreateWebhookHandle,
-    quoteUpdateWebhookHandle,
-    jobCreateWebhookHandle,
-    paymentCreateWebhookHandle
-} = require("./apis/JobberWebHookHandler.js");
+let JobberWebHookHandler = require('./apis/JobberWebHookHandler.js');
 let Jobber = require('./apis/Jobber.js');
 let Slack = require('./apis/SlackBot');
 
 // The app object
 const app = express();
 // The port to run the webserver on.
-port = process.env.WEB_PORT;
+let port = Number(process.env.WEB_PORT);
 // Use body-parser's JSON parsing
 app.use(bodyParser.text({ type: 'application/json' }));
 
@@ -35,7 +26,7 @@ app.post( '/jobber/INVOICE_CREATE', ( req, res ) => {
 
         req.body = JSON.parse(req.body);
         // Process Request
-        invoiceWebhookHandle(req);
+        JobberWebHookHandler.invoiceHandle(req);
     } else {
         // Webhook signature invalid. Send 401.
         res.sendStatus(401);
@@ -73,7 +64,7 @@ app.post( '/jobber/CLIENT_CREATE', ( req, res ) => {
 
         req.body = JSON.parse(req.body);
         // Process Request
-        clientWebhookHandle(req);
+        JobberWebHookHandler.clientHandle(req);
     } else {
         // Webhook signature invalid. Send 401.
         res.sendStatus(401);
@@ -90,7 +81,7 @@ app.post( '/jobber/CLIENT_UPDATE', ( req, res ) => {
 
         req.body = JSON.parse(req.body);
         // Process Request
-        clientWebhookHandle(req);
+        JobberWebHookHandler.clientHandle(req);
     } else {
         // Webhook signature invalid. Send 401.
         res.sendStatus(401);
@@ -110,7 +101,7 @@ app.post( '/jobber/QUOTE_CREATE', ( req, res ) => {
 
         req.body = JSON.parse(req.body);
         // Process Request
-        quoteCreateWebhookHandle(req);
+        JobberWebHookHandler.quoteCreateHandle(req);
     } else {
         // Webhook signature invalid. Send 401.
         res.sendStatus(401);
@@ -127,7 +118,7 @@ app.post( '/jobber/QUOTE_UPDATE', ( req, res ) => {
 
         req.body = JSON.parse(req.body);
         // Process Request
-        quoteUpdateWebhookHandle(req);
+        JobberWebHookHandler.quoteUpdateHandle(req);
     } else {
         // Webhook signature invalid. Send 401.
         res.sendStatus(401);
@@ -147,7 +138,7 @@ app.post( '/jobber/JOB_CREATE', ( req, res ) => {
 
         req.body = JSON.parse(req.body);
         // Process Request
-        jobCreateWebhookHandle(req);
+        JobberWebHookHandler.jobCreateHandle(req);
     } else {
         // Webhook signature invalid. Send 401.
         res.sendStatus(401);
@@ -167,7 +158,7 @@ app.post( '/jobber/PAYMENT_CREATE', ( req, res ) => {
 
         req.body = JSON.parse(req.body);
         // Process Request
-        paymentCreateWebhookHandle(req);
+        JobberWebHookHandler.paymentCreateHandle(req);
     } else {
         // Webhook signature invalid. Send 401.
         res.sendStatus(401);
