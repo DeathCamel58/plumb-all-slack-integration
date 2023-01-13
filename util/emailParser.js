@@ -7,7 +7,6 @@ module.exports = {
     parseMessageFromAnswerphone,
     parseMessageFromWebsite,
     parseMessageFromJobber,
-    parseMessageFromGoogleAds,
     normalizePhoneNumber,
     cleanText
 }
