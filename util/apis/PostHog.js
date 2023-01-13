@@ -104,7 +104,7 @@ async function searchForUser(contact) {
         let results = await individualSearch(query, null).catch(e => console.error(e));
         if (results.results.length !== undefined && results.results.length !== 0) {
             for (let result of results.results) {
-                potentialIDs.push(result.distinct_ids[0]);
+                potentialIDs.push(result["distinct_ids"][0]);
             }
         }
     }
@@ -118,7 +118,7 @@ async function searchForUser(contact) {
         let results = await individualSearch(query);
         if (results.results.length !== undefined && results.results.length !== 0) {
             for (let result of results.results) {
-                potentialIDs.push(result.distinct_ids[0]);
+                potentialIDs.push(result["distinct_ids"][0]);
             }
         }
     }
@@ -132,7 +132,7 @@ async function searchForUser(contact) {
         let results = await individualSearch(query);
         if (results.results.length !== undefined && results.results.length !== 0) {
             for (let result of results.results) {
-                potentialIDs.push(result.distinct_ids[0]);
+                potentialIDs.push(result["distinct_ids"][0]);
             }
         }
     }
@@ -146,7 +146,7 @@ async function searchForUser(contact) {
         let results = await individualSearch(query);
         if (results.results.length !== undefined && results.results.length !== 0) {
             for (let result of results.results) {
-                potentialIDs.push(result.distinct_ids[0]);
+                potentialIDs.push(result["distinct_ids"][0]);
             }
         }
     }
@@ -160,7 +160,7 @@ async function searchForUser(contact) {
         let results = await individualSearch(query);
         if (results.results.length !== undefined && results.results.length !== 0) {
             for (let result of results.results) {
-                potentialIDs.push(result.distinct_ids[0]);
+                potentialIDs.push(result["distinct_ids"][0]);
             }
         }
     }
@@ -324,7 +324,7 @@ async function logClient(jobberClient) {
     let defaultEmail;
     if ('emails' in jobberClient) {
         for (let i = 0; i < jobberClient.emails.length; i++) {
-            if (jobberClient.emails[i].primary) {
+            if (jobberClient.emails[i]["primary"]) {
                 defaultEmail = jobberClient.emails[i].address;
             }
         }
@@ -335,7 +335,7 @@ async function logClient(jobberClient) {
         if (jobberClient.phones.length > 0) {
             defaultPhone = jobberClient.phones[0].number;
             for (let i = 0; i < jobberClient.phones.length; i++) {
-                if (jobberClient.phones[i].primary) {
+                if (jobberClient.phones[i]["primary"]) {
                     defaultPhone = jobberClient.phones[i].number;
                 }
             }
@@ -343,18 +343,18 @@ async function logClient(jobberClient) {
     }
 
     let address = "";
-    if (jobberClient.billingAddress !== null) {
-        if ('street' in jobberClient.billingAddress) {
-            address += `${jobberClient.billingAddress.street} `;
+    if (jobberClient["billingAddress"] !== null) {
+        if ('street' in jobberClient["billingAddress"]) {
+            address += `${jobberClient["billingAddress"]["street"]} `;
         }
-        if ('city' in jobberClient.billingAddress) {
-            address += `${jobberClient.billingAddress.city} `;
+        if ('city' in jobberClient["billingAddress"]) {
+            address += `${jobberClient["billingAddress"]["city"]} `;
         }
-        if ('province' in jobberClient.billingAddress) {
-            address += `${jobberClient.billingAddress.province} `;
+        if ('province' in jobberClient["billingAddress"]) {
+            address += `${jobberClient["billingAddress"]["province"]} `;
         }
-        if ('postalCode' in jobberClient.billingAddress) {
-            address += `${jobberClient.billingAddress.postalCode}`;
+        if ('postalCode' in jobberClient["billingAddress"]) {
+            address += `${jobberClient["billingAddress"]["postalCode"]}`;
         }
     }
 
@@ -377,12 +377,12 @@ async function logInvoice(jobberInvoice, clientID) {
             distinct_id: clientID,
             subject: jobberInvoice.subject,
             invoiceNumber: jobberInvoice.invoiceNumber,
-            depositAmount: jobberInvoice.amounts.depositAmount,
-            discountAmount: jobberInvoice.amounts.discountAmount,
-            invoiceBalance: jobberInvoice.amounts.invoiceBalance,
-            paymentsTotal: jobberInvoice.amounts.paymentsTotal,
-            subtotal: jobberInvoice.amounts.subtotal,
-            total: jobberInvoice.amounts.total
+            depositAmount: jobberInvoice["amounts"].depositAmount,
+            discountAmount: jobberInvoice["amounts"].discountAmount,
+            invoiceBalance: jobberInvoice["amounts"].invoiceBalance,
+            paymentsTotal: jobberInvoice["amounts"].paymentsTotal,
+            subtotal: jobberInvoice["amounts"].subtotal,
+            total: jobberInvoice["amounts"].total
         }
     };
     await useAPI('capture/', 'post', captureData);
@@ -402,11 +402,11 @@ async function logQuote(jobberQuote, clientID) {
             distinct_id: clientID,
             quoteNumber: jobberQuote.quoteNumber,
             quoteStatus: jobberQuote.quoteStatus,
-            depositAmount: jobberQuote.amounts.depositAmount,
-            discountAmount: jobberQuote.amounts.discountAmount,
-            outstandingDepositAmount: jobberQuote.amounts.outstandingDepositAmount,
-            subtotal: jobberQuote.amounts.subtotal,
-            total: jobberQuote.amounts.total
+            depositAmount: jobberQuote["amounts"].depositAmount,
+            discountAmount: jobberQuote["amounts"].discountAmount,
+            outstandingDepositAmount: jobberQuote["amounts"].outstandingDepositAmount,
+            subtotal: jobberQuote["amounts"].subtotal,
+            total: jobberQuote["amounts"].total
         }
     };
     await useAPI('capture/', 'post', captureData);
@@ -428,11 +428,11 @@ async function logQuoteUpdate(jobberQuote, clientID) {
                 distinct_id: clientID,
                 quoteNumber: jobberQuote.quoteNumber,
                 quoteStatus: jobberQuote.quoteStatus,
-                depositAmount: jobberQuote.amounts.depositAmount,
-                discountAmount: jobberQuote.amounts.discountAmount,
-                outstandingDepositAmount: jobberQuote.amounts.outstandingDepositAmount,
-                subtotal: jobberQuote.amounts.subtotal,
-                total: jobberQuote.amounts.total
+                depositAmount: jobberQuote["amounts"].depositAmount,
+                discountAmount: jobberQuote["amounts"].discountAmount,
+                outstandingDepositAmount: jobberQuote["amounts"].outstandingDepositAmount,
+                subtotal: jobberQuote["amounts"].subtotal,
+                total: jobberQuote["amounts"].total
             }
         };
         await useAPI('capture/', 'post', captureData);
