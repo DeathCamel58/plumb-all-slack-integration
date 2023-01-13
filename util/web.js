@@ -2,6 +2,7 @@ require('dotenv').config({ path: process.env.ENV_LOCATION || '/root/plumb-all-sl
 let fs = require('fs');
 const express = require('express');
 const bodyParser = require("body-parser");
+let GoogleAds = require('./apis/GoogleAds.js');
 let JobberWebHookHandler = require('./apis/JobberWebHookHandler.js');
 let Jobber = require('./apis/Jobber.js');
 let Slack = require('./apis/SlackBot');
@@ -229,6 +230,23 @@ app.post( '/slack/EVENT', ( req, res ) => {
         }
     } else {
         // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
+} );
+
+/**
+ * Google Ads Form Lead
+ */
+app.post( '/google-ads/form', ( req, res ) => {
+    let data = JSON.parse(req.body);
+
+    if (data["google_key"] === process.env.GOOGLE_ADS_KEY) {
+        console.info('Webhook: Google Ads lead form received.');
+
+        GoogleAds.LeadFormHandle(data);
+        res.sendStatus( 200 );
+    } else {
+        console.error(`Webhook for Google Ads didn't have correct key.\n\tReceived: ${data["google_key"]}\n\tExpected: ${process.env.GOOGLE_ADS_KEY}`);
         res.sendStatus(401);
     }
 } );
