@@ -12,7 +12,7 @@ const fetch = require('node-fetch');
  * @param data The data to send to the endpoint
  * @returns {Promise<void>}
  */
-async function usePostHogAPI(url, httpMethod, data) {
+async function useAPI(url, httpMethod, data) {
     let query = JSON.stringify(data);
     let response = [];
     try {
@@ -39,7 +39,7 @@ async function usePostHogAPI(url, httpMethod, data) {
                 console.error(text);
         }
     } catch (e) {
-        console.error(`Fetch: Failure in usePostHogAPI`);
+        console.error(`Fetch: Failure in PostHog.useAPI`);
         console.error(e);
     }
 }
@@ -287,7 +287,7 @@ async function sendClientToPostHog(contact) {
         $set: clientData
     }
 
-    await usePostHogAPI('capture/', 'post', identifyData);
+    await useAPI('capture/', 'post', identifyData);
 
     return id;
 }
@@ -311,7 +311,7 @@ async function logContact(contact, originalMessage) {
             originalMessage: originalMessage
         }
     };
-    await usePostHogAPI('capture/', 'post', captureData);
+    await useAPI('capture/', 'post', captureData);
 
     // Send all queued data to PostHog
 }
@@ -385,7 +385,7 @@ async function logInvoice(jobberInvoice, clientID) {
             total: jobberInvoice.amounts.total
         }
     };
-    await usePostHogAPI('capture/', 'post', captureData);
+    await useAPI('capture/', 'post', captureData);
 }
 
 /**
@@ -409,7 +409,7 @@ async function logQuote(jobberQuote, clientID) {
             total: jobberQuote.amounts.total
         }
     };
-    await usePostHogAPI('capture/', 'post', captureData);
+    await useAPI('capture/', 'post', captureData);
 }
 
 /**
@@ -435,7 +435,7 @@ async function logQuoteUpdate(jobberQuote, clientID) {
                 total: jobberQuote.amounts.total
             }
         };
-        await usePostHogAPI('capture/', 'post', captureData);
+        await useAPI('capture/', 'post', captureData);
     }
 }
 
@@ -457,7 +457,7 @@ async function logJob(jobberJob, clientID) {
             total: jobberJob.total
         }
     };
-    await usePostHogAPI('capture/', 'post', captureData);
+    await useAPI('capture/', 'post', captureData);
 }
 
 /**
@@ -479,7 +479,7 @@ async function logPayment(jobberPayment, clientID) {
             paymentType: jobberPayment.paymentType
         }
     };
-    await usePostHogAPI('capture/', 'post', captureData);
+    await useAPI('capture/', 'post', captureData);
 }
 
 module.exports = {
