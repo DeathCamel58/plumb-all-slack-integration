@@ -1,3 +1,5 @@
+const DataUtilities = require("./DataUtilities");
+
 /**
  * A contact from a client
  */
@@ -14,12 +16,12 @@ class Contact {
         /**
          * The phone of the contact
          */
-        this.contactPhone = (phone != null ? phone.replace(/^\s+|\s+$/g, ''): phone);
+        this.contactPhone = (phone != null ? DataUtilities.normalizePhoneNumber(phone) : phone);
         /**
          * The alternate phone of the contact
          * NOTE: This is usually the phone number they called from, rather than the phone number they left.
          */
-        this.contactAlternatePhone = (alternatePhone != null ? alternatePhone.replace(/^\s+|\s+$/g, ''): alternatePhone);
+        this.contactAlternatePhone = (alternatePhone != null ? DataUtilities.normalizePhoneNumber(alternatePhone) : alternatePhone);
         /**
          * The email of the contact
          */

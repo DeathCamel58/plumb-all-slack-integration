@@ -7,7 +7,6 @@ module.exports = {
     parseMessageFromAnswerphone,
     parseMessageFromWebsite,
     parseMessageFromJobber,
-    normalizePhoneNumber,
     cleanText
 }
 
@@ -18,9 +17,6 @@ module.exports = {
  */
 function parseMessageFromAnswerphone(message) {
     let phone = message.split("<D: ")[1].split(" > ")[0];
-    if (normalizePhoneNumber(phone)!= null) {
-        phone = normalizePhoneNumber(phone);
-    }
     let name = cleanText(message.split("CALLER:  ")[1].split("\n")[0]);
     let address = cleanText(message.split("ADDRESS:  ")[1].split("\n")[0]);
     let city = cleanText(message.split("CITY:  ")[1].split(" ST  ")[0]);
@@ -29,9 +25,6 @@ function parseMessageFromAnswerphone(message) {
     let fullAddress = address + ", " + city + " " + state + ", " + zip;
     let contactMessage = cleanText(message.split("RE: ")[1].split("~ CALLERID:")[0]);
     let callerid = cleanText(message.split("CALLERID:  ")[1].split("MSGID: ")[0]);
-    if (normalizePhoneNumber(callerid)!= null) {
-        callerid = normalizePhoneNumber(callerid);
-    }
 
     let contact = new Contact("Call", name, phone, callerid, undefined, fullAddress, contactMessage);
     APICoordinator.contactMade(contact, message);
@@ -46,9 +39,6 @@ function parseMessageFromAnswerphone(message) {
 function parseMessageFromWebsite(message) {
     let parts = message.split("________________________________");
     let phone = cleanText(parts[2].split("phone:")[1]);
-    if (normalizePhoneNumber(phone)!= null) {
-        phone = normalizePhoneNumber(phone);
-    }
     let name = cleanText(parts[0].split("name:")[1]);
     let email = cleanText(parts[1].split("email:")[1]);
     let address = cleanText(parts[3].split("address:")[1]);
@@ -66,9 +56,6 @@ function parseMessageFromWebsite(message) {
  */
 function parseMessageFromJobber(message) {
     let phone = cleanText(message.split("Phone")[1].split("Address")[0]);
-    if (normalizePhoneNumber(phone)!= null) {
-        phone = normalizePhoneNumber(phone);
-    }
     let name = cleanText(message.split("Contact name")[1].split("Email")[0]);
     let email = cleanText(message.split("Email")[1].split("Phone")[0]);
     let address = cleanText(message.split("\nAddress")[1].split("View Request")[0]);
@@ -78,27 +65,6 @@ function parseMessageFromJobber(message) {
     let contact = new Contact("Message From Jobber Request", name, phone, undefined, email, address, contactMessage);
     APICoordinator.contactMade(contact, message);
     return contact;
-}
-
-/**
- * Takes in a phone number, and returns the number in the standard format: `(xxx) xxx-xxxx`
- * @param phone Unparsed phone number
- * @returns {null|*} Parsed Phone Number
- */
-function normalizePhoneNumber(phone) {
-    //normalize string and remove all unnecessary characters
-    phone = phone.replace(/\D/g, "");
-
-    //check if number length equals to 10
-    if (phone.length === 11) {
-        phone = phone.slice(1)
-    }
-    if (phone.length === 10) {
-        //reformat and return phone number
-        return phone.replace(/(\d{3})(\d{3})(\d{4})/, "($1) $2-$3");
-    }
-
-    return null;
 }
 
 /**

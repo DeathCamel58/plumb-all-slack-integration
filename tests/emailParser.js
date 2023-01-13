@@ -1,13 +1,12 @@
 const assert = require('assert');
-const Contact = require('../util/emailParser.js');
-const {parseMessageFromAnswerphone, parseMessageFromWebsite, parseMessageFromJobber, normalizePhoneNumber, cleanText} = require("../util/emailParser");
+const EmailParser = require("../util/emailParser");
 
 // We can group similar tests inside a `describe` block
 describe("Email Parser", () => {
     // We can add nested blocks for different tests
     describe( "Answerphone No Alternate", () => {
         // Create contact for use during testing
-        let contact = parseMessageFromAnswerphone(
+        let contact = EmailParser.parseMessageFromAnswerphone(
             "Message for 3646    PLUMB-ALL\n" +
             " \n" +
             "Message For: OFFICE          \n" +
@@ -59,7 +58,7 @@ describe("Email Parser", () => {
 
     describe( "Answerphone With Alternate", () => {
         // Create contact for use during testing
-        let contact = parseMessageFromAnswerphone(
+        let contact = EmailParser.parseMessageFromAnswerphone(
             "Message for 3646    PLUMB-ALL\n" +
             " \n" +
             "Message For: OFFICE          \n" +
@@ -111,7 +110,7 @@ describe("Email Parser", () => {
 
     describe( "Website Contact", () => {
         // Create contact for use during testing
-        let contact = parseMessageFromWebsite(
+        let contact = EmailParser.parseMessageFromWebsite(
             "Someone just submitted your form on https://plumb-all.com/.\n" +
             "\n" +
             "Here's what they had to say:\n" +
@@ -189,7 +188,7 @@ describe("Email Parser", () => {
 
     describe( "Jobber Request", () => {
         // Create contact for use during testing
-        let contact = parseMessageFromJobber(
+        let contact = EmailParser.parseMessageFromJobber(
             "\n" +
             "        [Jobber] <https://a.url.com/ls/click?upn=no-doxxing>\n" +
             "\n" +
@@ -267,56 +266,44 @@ describe("Email Parser", () => {
     });
 
     describe( "Data Cleaning", () => {
-        it("Normalize Phone Number (spaces)", () => {
-            let normalized = normalizePhoneNumber("1 2 3 4 5 6 7 8 9 0");
-            assert.equal(normalized, "(123) 456-7890");
-        });
-        it("Normalize Phone Number (leading and trailing spaces)", () => {
-            let normalized = normalizePhoneNumber(" 1234567890 ");
-            assert.equal(normalized, "(123) 456-7890");
-        });
-        it("Normalize Phone Number (hyphens)", () => {
-            let normalized = normalizePhoneNumber("123-456-7890");
-            assert.equal(normalized, "(123) 456-7890");
-        });
         it("Clean Text (undefined)", () => {
-            let normalized = cleanText();
+            let normalized = EmailParser.cleanText(undefined);
             assert.equal(normalized, "");
         });
         it("Clean Text (\\n)", () => {
-            let normalized = cleanText("This is\nsome test\ntext!");
+            let normalized = EmailParser.cleanText("This is\nsome test\ntext!");
             assert.equal(normalized, "This is some test text!");
         });
         it("Clean Text (\\r)", () => {
-            let normalized = cleanText("This is\nsome test\ntext!");
+            let normalized = EmailParser.cleanText("This is\nsome test\ntext!");
             assert.equal(normalized, "This is some test text!");
         });
         it("Clean Text (\\n + \\r)", () => {
-            let normalized = cleanText("This is\n\r\n\rsome test\n\r\n\rtext!");
+            let normalized = EmailParser.cleanText("This is\n\r\n\rsome test\n\r\n\rtext!");
             assert.equal(normalized, "This is some test text!");
         });
         it("Clean Text (duplicate spaces)", () => {
-            let normalized = cleanText("This         is   some    test       text!");
+            let normalized = EmailParser.cleanText("This         is   some    test       text!");
             assert.equal(normalized, "This is some test text!");
         });
         it("Clean Text (leading and trailing spaces)", () => {
-            let normalized = cleanText("  This is some test text!  ");
+            let normalized = EmailParser.cleanText("  This is some test text!  ");
             assert.equal(normalized, "This is some test text!");
         });
         it("Clean Text (~)", () => {
-            let normalized = cleanText("This is~some~test text!");
+            let normalized = EmailParser.cleanText("This is~some~test text!");
             assert.equal(normalized, "This is some test text!");
         });
         it("Clean Text (~s)", () => {
-            let normalized = cleanText("This is~~some~~~~~~~test text!");
+            let normalized = EmailParser.cleanText("This is~~some~~~~~~~test text!");
             assert.equal(normalized, "This is some test text!");
         });
         it("Clean Text (-)", () => {
-            let normalized = cleanText("This is - some test text!");
+            let normalized = EmailParser.cleanText("This is - some test text!");
             assert.equal(normalized, "This is - some test text!");
         });
         it("Clean Text (-s)", () => {
-            let normalized = cleanText("This is ------------ some test text!");
+            let normalized = EmailParser.cleanText("This is ------------ some test text!");
             assert.equal(normalized, "This is some test text!");
         });
     });
