@@ -39,7 +39,7 @@ async function usePostHogAPI(url, httpMethod, data) {
                 console.error(text);
         }
     } catch (e) {
-        console.error(`Failed to run a PostHog API search.`);
+        console.error(`Fetch: Failure in usePostHogAPI`);
         console.error(e);
     }
 }
@@ -68,7 +68,7 @@ async function individualSearch(searchQuery, parameter) {
     try {
         data = await response.text().catch(e => console.error(`Error when getting text from PostHog API call ${e}`));
     } catch (e) {
-        console.error(`Failed to get text from PostHog API search.`);
+        console.error(`Fetch: Failure in individualSearch`);
         console.error(e);
     }
     data = JSON.parse(data);

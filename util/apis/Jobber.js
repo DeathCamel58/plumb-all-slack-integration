@@ -54,40 +54,45 @@ async function setAuthorization(code) {
     let success = false;
     let response;
     while (!success) {
-        let response = await fetch(`https://api.getjobber.com/api/oauth/token?client_id=${process.env.JOBBER_CLIENT_ID}&client_secret=${process.env.JOBBER_APP_SECRET}&grant_type=authorization_code&code=${process.env.JOBBER_AUTHORIZATION_CODE}`, {
-            method: 'post'
-        });
-
-        if ( response.status === 200 ) {
-            success = true;
-            let data = await response.text();
-            data = JSON.parse(data);
-            JOBBER_ACCESS_TOKEN = data.access_token;
-            let refresh_token = data.refresh_token;
-
-            // Save the refresh token to file
-            let file = process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env';
-            fs.readFile(file, 'utf8', function (err,data) {
-                if (err) {
-                    return console.error(err);
-                }
-
-                let result = data.replace(process.env.JOBBER_REFRESH_TOKEN, refresh_token);
-                process.env.JOBBER_REFRESH_TOKEN = refresh_token;
-
-                fs.writeFile(file, result, 'utf8', function (err) {
-                    if (err) {
-                        console.error('Failed to save the Jobber Refresh Token to file.')
-                        console.error(err);
-                    } else {
-                        console.info('Received new Jobber Refresh Token!');
-                    }
-                });
+        try {
+            let response = await fetch(`https://api.getjobber.com/api/oauth/token?client_id=${process.env.JOBBER_CLIENT_ID}&client_secret=${process.env.JOBBER_APP_SECRET}&grant_type=authorization_code&code=${process.env.JOBBER_AUTHORIZATION_CODE}`, {
+                method: 'post'
             });
-        }
-        if ( response.status === 401 ) {
-            console.error(`Got ${response.status} while refreshing access token. Requesting authorization!`);
-            await requestAuthorization();
+
+            if (response.status === 200) {
+                success = true;
+                let data = await response.text();
+                data = JSON.parse(data);
+                JOBBER_ACCESS_TOKEN = data.access_token;
+                let refresh_token = data.refresh_token;
+
+                // Save the refresh token to file
+                let file = process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env';
+                fs.readFile(file, 'utf8', function (err, data) {
+                    if (err) {
+                        return console.error(err);
+                    }
+
+                    let result = data.replace(process.env.JOBBER_REFRESH_TOKEN, refresh_token);
+                    process.env.JOBBER_REFRESH_TOKEN = refresh_token;
+
+                    fs.writeFile(file, result, 'utf8', function (err) {
+                        if (err) {
+                            console.error('Failed to save the Jobber Refresh Token to file.')
+                            console.error(err);
+                        } else {
+                            console.info('Received new Jobber Refresh Token!');
+                        }
+                    });
+                });
+            }
+            if (response.status === 401) {
+                console.error(`Got ${response.status} while refreshing access token. Requesting authorization!`);
+                await requestAuthorization();
+            }
+        } catch (e) {
+            console.error(`Fetch: Failure in setAuthorization`);
+            console.error(e);
         }
     }
 }
@@ -112,44 +117,49 @@ async function refreshAccessToken() {
     let success = false;
     let response;
     while (!success) {
-        let response = await fetch(`https://api.getjobber.com/api/oauth/token`, {
-            method: 'post',
-            headers: {
-                "content-type": "application/x-www-form-urlencoded"
-            },
-            body: `client_id=${process.env.JOBBER_CLIENT_ID}&client_secret=${process.env.JOBBER_APP_SECRET}&grant_type=refresh_token&refresh_token=${process.env.JOBBER_REFRESH_TOKEN}`
-        });
-
-        if ( response.status === 200 ) {
-            success = true;
-            data = await response.text();
-            data = JSON.parse(data);
-            JOBBER_ACCESS_TOKEN = data.access_token;
-            let refresh_token = data.refresh_token;
-
-            // Save the refresh token to file
-            let file = process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env';
-            fs.readFile(file, 'utf8', function (err,data) {
-                if (err) {
-                    return console.error(err);
-                }
-
-                let result = data.replace(process.env.JOBBER_REFRESH_TOKEN, refresh_token);
-                process.env.JOBBER_REFRESH_TOKEN = refresh_token;
-
-                fs.writeFile(file, result, 'utf8', function (err) {
-                    if (err) {
-                        console.error('Failed to save the Jobber Refresh Token to file.')
-                        console.error(err);
-                    } else {
-                        console.info('Received new Jobber Refresh Token!');
-                    }
-                });
+        try {
+            let response = await fetch(`https://api.getjobber.com/api/oauth/token`, {
+                method: 'post',
+                headers: {
+                    "content-type": "application/x-www-form-urlencoded"
+                },
+                body: `client_id=${process.env.JOBBER_CLIENT_ID}&client_secret=${process.env.JOBBER_APP_SECRET}&grant_type=refresh_token&refresh_token=${process.env.JOBBER_REFRESH_TOKEN}`
             });
-        }
-        if ( response.status === 401 ) {
-            console.error(`Got ${response.status} while refreshing access token. Requesting authorization!`);
-            await requestAuthorization();
+
+            if (response.status === 200) {
+                success = true;
+                data = await response.text();
+                data = JSON.parse(data);
+                JOBBER_ACCESS_TOKEN = data.access_token;
+                let refresh_token = data.refresh_token;
+
+                // Save the refresh token to file
+                let file = process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env';
+                fs.readFile(file, 'utf8', function (err, data) {
+                    if (err) {
+                        return console.error(err);
+                    }
+
+                    let result = data.replace(process.env.JOBBER_REFRESH_TOKEN, refresh_token);
+                    process.env.JOBBER_REFRESH_TOKEN = refresh_token;
+
+                    fs.writeFile(file, result, 'utf8', function (err) {
+                        if (err) {
+                            console.error('Failed to save the Jobber Refresh Token to file.')
+                            console.error(err);
+                        } else {
+                            console.info('Received new Jobber Refresh Token!');
+                        }
+                    });
+                });
+            }
+            if (response.status === 401) {
+                console.error(`Got ${response.status} while refreshing access token. Requesting authorization!`);
+                await requestAuthorization();
+            }
+        }  catch (e) {
+            console.error(`Fetch: Failure in refreshAccessToken`);
+            console.error(e);
         }
     }
 }
@@ -163,32 +173,37 @@ async function makeRequest(query) {
     let success = false;
     let response;
     while (!success) {
-        response = await fetch(JOBBER_BASE_URL, {
-            method: 'post',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${JOBBER_ACCESS_TOKEN}`,
-                'X-JOBBER-GRAPHQL-VERSION': '2022-12-07'
-            },
-            body: `{"query":${JSON.stringify(query)}}`
-        });
+        try {
+            response = await fetch(JOBBER_BASE_URL, {
+                method: 'post',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${JOBBER_ACCESS_TOKEN}`,
+                    'X-JOBBER-GRAPHQL-VERSION': '2022-12-07'
+                },
+                body: `{"query":${JSON.stringify(query)}}`
+            });
 
-        switch (response.status) {
-            // HTTP: OK
-            case 200:
-                success = true;
-                break;
-            // HTTP: Unauthorized
-            case 401:
-                console.error(`Got ${response.status} from the Jobber API. Refreshing access token and trying again!`)
-                await refreshAccessToken();
-                break;
-            // HTTP: All Others
-            default:
-                console.error(`Got ${response.status} while running query. Body follows.`);
-                let text = await response.text();
-                console.error(text);
-                break;
+            switch (response.status) {
+                // HTTP: OK
+                case 200:
+                    success = true;
+                    break;
+                // HTTP: Unauthorized
+                case 401:
+                    console.error(`Got ${response.status} from the Jobber API. Refreshing access token and trying again!`)
+                    await refreshAccessToken();
+                    break;
+                // HTTP: All Others
+                default:
+                    console.error(`Got ${response.status} while running query. Body follows.`);
+                    let text = await response.text();
+                    console.error(text);
+                    break;
+            }
+        } catch (e) {
+            console.error(`Fetch: Failure in makeRequest`);
+            console.error(e);
         }
     }
 

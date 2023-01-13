@@ -37,7 +37,7 @@ async function useAPI(url, httpMethod, data) {
                 console.error(text);
         }
     } catch (e) {
-        console.error(`Failed to run a Trello API request.`);
+        console.error(`Fetch: Failure in useAPI`);
         console.error(e);
     }
 }
