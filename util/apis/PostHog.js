@@ -115,7 +115,7 @@ async function searchForUser(contact) {
             operator: "exact",
             type: "person"
         }];
-        let results = await individualSearch(query);
+        let results = await individualSearch(query, null);
         if (results.results.length !== undefined && results.results.length !== 0) {
             for (let result of results.results) {
                 potentialIDs.push(result["distinct_ids"][0]);
@@ -129,7 +129,7 @@ async function searchForUser(contact) {
             operator: "exact",
             type: "person"
         }];
-        let results = await individualSearch(query);
+        let results = await individualSearch(query, null);
         if (results.results.length !== undefined && results.results.length !== 0) {
             for (let result of results.results) {
                 potentialIDs.push(result["distinct_ids"][0]);
@@ -143,7 +143,7 @@ async function searchForUser(contact) {
             operator: "exact",
             type: "person"
         }];
-        let results = await individualSearch(query);
+        let results = await individualSearch(query, null);
         if (results.results.length !== undefined && results.results.length !== 0) {
             for (let result of results.results) {
                 potentialIDs.push(result["distinct_ids"][0]);
@@ -157,7 +157,7 @@ async function searchForUser(contact) {
             operator: "exact",
             type: "person"
         }];
-        let results = await individualSearch(query);
+        let results = await individualSearch(query, null);
         if (results.results.length !== undefined && results.results.length !== 0) {
             for (let result of results.results) {
                 potentialIDs.push(result["distinct_ids"][0]);
@@ -209,7 +209,7 @@ function getPlaceLocationPart(place, addressComponentIndex, key) {
 async function sendClientToPostHog(contact) {
     // If the contact has an address, resolve it to a place object using Google Maps
     let place;
-    if (contact.address !== '' && contact.address !== undefined) {
+    if (contact.address !== '' && contact.address !== undefined && contact.address !== null) {
         place = await searchPlace(contact.address);
 
         if (place.data.results.length > 0) {
@@ -483,6 +483,9 @@ async function logPayment(jobberPayment, clientID) {
 }
 
 module.exports = {
+    individualSearch,
+    searchForUser,
+    sendClientToPostHog,
     logContact,
     logClient,
     logQuote,

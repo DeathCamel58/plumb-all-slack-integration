@@ -23,6 +23,10 @@ jobs:
           TRELLO_API_KEY: ${{ secrets.TRELLO_API_KEY }}
           TRELLO_TOKEN: ${{ secrets.TRELLO_TOKEN }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
+          POSTHOG_TOKEN: ${{ secrets.POSTHOG_TOKEN }}
+          POSTHOG_API_TOKEN: ${{ secrets.POSTHOG_API_TOKEN }}
+          POSTHOG_PROJECT_ID: ${{ secrets.POSTHOG_PROJECT_ID }}
         run: npm run test:ci
 
       - name: Tests ✅
