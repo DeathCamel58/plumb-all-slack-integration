@@ -1,5 +1,4 @@
 const assert = require('assert');
-const Contact = require('../util/contact.js');
 const DataUtilities = require("../util/DataUtilities");
 
 // We can group similar tests inside a `describe` block
@@ -17,6 +16,14 @@ describe("Data Utilities", () => {
         it("Normalize Phone Number (hyphens)", () => {
             let normalized = DataUtilities.normalizePhoneNumber("123-456-7890");
             assert.equal(normalized, "(123) 456-7890");
+        });
+        it("Normalize Phone Number (+1 prefix)", () => {
+            let normalized = DataUtilities.normalizePhoneNumber("+1 123-456-7890");
+            assert.equal(normalized, "(123) 456-7890");
+        });
+        it("Normalize Phone Number (bad number)", () => {
+            let normalized = DataUtilities.normalizePhoneNumber("TEST STRING");
+            assert.equal(normalized, null);
         });
     });
 });
