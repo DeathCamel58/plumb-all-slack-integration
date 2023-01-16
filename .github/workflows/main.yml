@@ -22,3 +22,33 @@ jobs:
 
       - name: Deploy
         run: pm2 deploy ecosystem.config.js production
+      # The NPM Tests
+      - name: Run Tests
+        run: npm test:ci
+      - name: Tests ✅
+        if: ${{ success() }}
+        run: |
+          curl --request POST \
+          --url https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }} \
+          --header 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
+          --header 'content-type: application/json' \
+          --data '{
+          "context": "tests",
+          "state": "success",
+          "description": "Tests passed",
+          "target_url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          }'
+
+      - name: Tests 🚨
+        if: ${{ failure() }}
+        run: |
+          curl --request POST \
+          --url https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }} \
+          --header 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
+          --header 'content-type: application/json' \
+          --data '{
+          "context": "tests",
+          "state": "failure",
+          "description": "Tests failed",
+          "target_url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          }'

@@ -69,6 +69,9 @@ async function getBoard(boardName) {
  */
 async function getList(boardId, listName) {
     let listResponse = await useAPI(`1/boards/${boardId}/lists?key=${process.env.TRELLO_API_KEY}&token=${process.env.TRELLO_TOKEN}`, 'get', null);
+    if (!listResponse) {
+        return null;
+    }
     listResponse = JSON.parse(listResponse);
 
     for (let i = 0; i < listResponse.length; i++) {
@@ -210,6 +213,12 @@ async function moveContactCard(message, destinationList) {
 }
 
 module.exports = {
+    useAPI,
+    getBoard,
+    getList,
+    runSearch,
+    addCard,
+    moveCard,
     addContact,
     moveContactCard
 };

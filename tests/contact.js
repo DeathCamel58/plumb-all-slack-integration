@@ -83,6 +83,15 @@ describe("Contact Class", () => {
                 'Message: This is a test message.');
         });
 
+        it("Answerphone Message (Phone, Bad Address)", () => {
+            let contact = new Contact("Call", "Test Name", "555-123-4567", undefined, undefined, "NA, NA NA, NA", "This is a test message.");
+            assert.equal(contact.messageToSend(),
+                '=== New Call ===\n' +
+                'Caller: Test Name ( (555) 123-4567 )\n' +
+                'Address: Didn\'t leave one\n' +
+                'Message: This is a test message.');
+        });
+
         it("Answerphone Message (Phone and Email)", () => {
             let contact = new Contact("Call", "Test Name", "555-123-4567", undefined, "email@address.com", "240 Wallaby Way, Sydney Australia", "This is a test message.");
             assert.equal(contact.messageToSend(),

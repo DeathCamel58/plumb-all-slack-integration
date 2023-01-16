@@ -4,3 +4,4 @@ node_modules
 deploy.pem
 deploy.pem.pub
 data/*.db
+coverage
