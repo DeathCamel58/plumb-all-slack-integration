@@ -4,6 +4,7 @@ jobs:
   preview-server-deploy:
     name: 🎉 Deploy to PM2 Server!
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
     steps:
       - uses: actions/checkout@v2
       - name: Set up SSH
@@ -16,6 +17,11 @@ jobs:
         env:
           SSH_PRIVATE_KEY: ${{secrets.SSH_PRIVATE_KEY}}
           SSH_KNOWN_HOSTS: ${{secrets.SSH_KNOWN_HOSTS}}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v1
+        with:
+          node-version: "18"
 
       - name: Install PM2
         run: npm i -g pm2
