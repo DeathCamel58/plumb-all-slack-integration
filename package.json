@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node index.js",
     "test": "jest",
-    "test:ci": "jest --ci --reporters='default' --reporters='./util/github-actions-reporter'"
+    "test:ci": "DOTENV_CONFIG_PATH=$GITHUB_WORKSPACE/.env jest --ci --reporters='default' --reporters='./util/github-actions-reporter' --setupFiles=dotenv/config"
   },
   "dependencies": {
     "@azure/identity": "^3.1.3",
