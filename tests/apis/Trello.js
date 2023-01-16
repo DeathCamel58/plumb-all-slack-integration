@@ -15,8 +15,18 @@ fs.readdir(fullPath, function (err, files) {
 });
 
 console.log(`ENV_LOCATION: ${process.env.ENV_LOCATION}`);
-console.log(`TRELLO_TOKEN length: ${process.env.TRELLO_TOKEN.length}`);
-console.log(`TRELLO_API_KEY length: ${process.env.TRELLO_API_KEY.length}`);
+let TRELLO_TOKEN_type = typeof process.env.TRELLO_TOKEN;
+if (TRELLO_TOKEN_type === 'string') {
+    console.log(`TRELLO_TOKEN length: ${process.env.TRELLO_TOKEN.length}`);
+} else {
+    console.log(`TRELLO_TOKEN type: ${TRELLO_TOKEN_type}`);
+}
+let TRELLO_API_KEY_type = typeof process.env.TRELLO_TOKEN;
+if (TRELLO_API_KEY_type === 'string') {
+    console.log(`TRELLO_API_KEY length: ${process.env.TRELLO_API_KEY.length}`);
+} else {
+    console.log(`TRELLO_API_KEY type: ${TRELLO_API_KEY_type}`);
+}
 // /TEST
 
 // We can group similar tests inside a `describe` block
