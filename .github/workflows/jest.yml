@@ -22,6 +22,7 @@ jobs:
         env:
           TRELLO_API_KEY: ${{ secrets.TRELLO_API_KEY }}
           TRELLO_TOKEN: ${{ secrets.TRELLO_TOKEN }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: npm run test:ci
 
       - name: Tests ✅
