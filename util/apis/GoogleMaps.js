@@ -16,6 +16,8 @@ async function searchPlace(address) {
         }
     });
 
+    console.log(`GOOGLE_API_KEY is default: ${process.env.GOOGLE_API_KEY === "GOOGLE_API_KEY"}`);
+
     return place;
 }
 
