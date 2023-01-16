@@ -1,5 +1,9 @@
 const assert = require('assert');
 const EmailParser = require("../util/emailParser");
+const APICoordinator = require("../util/APICoordinator");
+
+// Disable `APICoordinator.contactMade` to keep it from sending data to APIs
+APICoordinator.contactMade = jest.fn().mockReturnValue({});
 
 // We can group similar tests inside a `describe` block
 describe("Email Parser", () => {
