@@ -7,6 +7,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v1
+        with:
+          node-version: "18"
+
       - name: Run Tests
         run: npm run test:ci
       - name: Tests ✅
