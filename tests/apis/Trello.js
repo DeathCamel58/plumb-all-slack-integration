@@ -4,6 +4,21 @@ const Trello = require('../../util/apis/Trello.js');
 const APICoordinator = require("../../util/APICoordinator");
 require('dotenv').config({ path: process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env' });
 
+// TEST
+const path = require('path');
+const fs = require('fs');
+const fullPath = path.join(__dirname, '../../')
+fs.readdir(fullPath, function (err, files) {
+    files.forEach(function (file) {
+        console.log(`File found: ${file}`);
+    });
+});
+
+console.log(`ENV_LOCATION: ${process.env.ENV_LOCATION}`);
+console.log(`TRELLO_TOKEN length: ${process.env.TRELLO_TOKEN.length}`);
+console.log(`TRELLO_API_KEY length: ${process.env.TRELLO_API_KEY.length}`);
+// /TEST
+
 // We can group similar tests inside a `describe` block
 describe("Trello", () => {
     // Test Low Level API
