@@ -14,8 +14,8 @@ describe("Email Parser", () => {
             "------------------------------------------------------------\n" +
             " PH: <D: 123-456-7890 >                              \n" +
             " CALLER:  JOHN DOE                                   \n" +
-            " ADDRESS:  123 SOME STREET                           \n" +
-            " CITY:  CITY NAME                 ST  GA  ZIP  12345 \n" +
+            " ADDRESS:  206 Washington St SW                      \n" +
+            " CITY:  Atlanta                   ST  GA  ZIP  30334 \n" +
             " RE:  THIS IS A TEST MESSAGE TO ENSURE THAT THE UNIT \n" +
             " TEST WORKS.                                        ~\n" +
             "                                                     \n" +
@@ -48,7 +48,7 @@ describe("Email Parser", () => {
         });
 
         it("Get Address", () => {
-            assert.equal(contact.address, "123 SOME STREET, CITY NAME GA, 12345");
+            assert.equal(contact.address, "206 Washington St SW, Atlanta GA, 30334");
         });
 
         it("Get Message", () => {
@@ -66,8 +66,8 @@ describe("Email Parser", () => {
             "------------------------------------------------------------\n" +
             " PH: <D: 123-456-7890 >                              \n" +
             " CALLER:  JOHN DOE                                   \n" +
-            " ADDRESS:  123 SOME STREET                           \n" +
-            " CITY:  CITY NAME                 ST  GA  ZIP  12345 \n" +
+            " ADDRESS:  206 WASHINGTON St SW                      \n" +
+            " CITY:  ATLANTA                   ST  GA  ZIP  30334 \n" +
             " RE:  THIS IS A TEST MESSAGE TO ENSURE THAT THE UNIT \n" +
             " TEST WORKS.                                        ~\n" +
             "                                                     \n" +
@@ -100,7 +100,7 @@ describe("Email Parser", () => {
         });
 
         it("Get Address", () => {
-            assert.equal(contact.address, "123 SOME STREET, CITY NAME GA, 12345");
+            assert.equal(contact.address, "206 WASHINGTON St SW, ATLANTA GA, 30334");
         });
 
         it("Get Message", () => {
@@ -132,7 +132,7 @@ describe("Email Parser", () => {
             "________________________________\n" +
             "address:\n" +
             "\n" +
-            "123 Some Street, City Name GA, 12345\n" +
+            "206 Washington St SW, Atlanta, GA 30334\n" +
             "\n" +
             "________________________________\n" +
             "website:\n" +
@@ -178,7 +178,7 @@ describe("Email Parser", () => {
         });
 
         it("Get Address", () => {
-            assert.equal(contact.address, "123 Some Street, City Name GA, 12345");
+            assert.equal(contact.address, "206 Washington St SW, Atlanta, GA 30334");
         });
 
         it("Get Message", () => {
@@ -209,8 +209,8 @@ describe("Email Parser", () => {
             "\n" +
             "Address\n" +
             "\n" +
-            "123 Some Street,\n" +
-            "City Name GA, 12345\n" +
+            "206 Washington St SW,\n" +
+            "Atlanta GA, 30334\n" +
             "\n" +
             "View Request<https://a.url.com/ls/click?upn=no-doxxing>\n" +
             "\n" +
@@ -257,7 +257,7 @@ describe("Email Parser", () => {
         });
 
         it("Get Address", () => {
-            assert.equal(contact.address, "123 Some Street, City Name GA, 12345");
+            assert.equal(contact.address, "206 Washington St SW, Atlanta GA, 30334");
         });
 
         it("Get Message", () => {
