@@ -4,24 +4,6 @@ const Trello = require('../../util/apis/Trello.js');
 const APICoordinator = require("../../util/APICoordinator");
 require('dotenv').config();
 
-// TEST
-console.log(process.env.DOTENV_CONFIG_PATH);
-// console.log(process.env);
-
-let TRELLO_TOKEN_type = typeof process.env.TRELLO_TOKEN;
-if (TRELLO_TOKEN_type === 'string') {
-    console.log(`TRELLO_TOKEN length: ${process.env.TRELLO_TOKEN.length}`);
-} else {
-    console.log(`TRELLO_TOKEN type: ${TRELLO_TOKEN_type}`);
-}
-let TRELLO_API_KEY_type = typeof process.env.TRELLO_TOKEN;
-if (TRELLO_API_KEY_type === 'string') {
-    console.log(`TRELLO_API_KEY length: ${process.env.TRELLO_API_KEY.length}`);
-} else {
-    console.log(`TRELLO_API_KEY type: ${TRELLO_API_KEY_type}`);
-}
-// /TEST
-
 // We can group similar tests inside a `describe` block
 describe("Trello", () => {
     // Test Low Level API
