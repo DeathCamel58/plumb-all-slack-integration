@@ -6,6 +6,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+      - name: Set up .env file
+        run: echo "$ENVFILE" > ./.env
 
       - name: Setup Node.js
         uses: actions/setup-node@v1
