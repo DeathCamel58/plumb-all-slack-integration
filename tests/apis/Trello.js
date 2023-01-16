@@ -2,19 +2,12 @@ const assert = require('assert');
 const {expect, test} = require('@jest/globals');
 const Trello = require('../../util/apis/Trello.js');
 const APICoordinator = require("../../util/APICoordinator");
-require('dotenv').config({ path: process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env' });
+require('dotenv').config();
 
 // TEST
-const path = require('path');
-const fs = require('fs');
-const fullPath = path.join(__dirname, '../../')
-fs.readdir(fullPath, function (err, files) {
-    files.forEach(function (file) {
-        console.log(`File found: ${file}`);
-    });
-});
+console.log(process.env.DOTENV_CONFIG_PATH);
+// console.log(process.env);
 
-console.log(`ENV_LOCATION: ${process.env.ENV_LOCATION}`);
 let TRELLO_TOKEN_type = typeof process.env.TRELLO_TOKEN;
 if (TRELLO_TOKEN_type === 'string') {
     console.log(`TRELLO_TOKEN length: ${process.env.TRELLO_TOKEN.length}`);
