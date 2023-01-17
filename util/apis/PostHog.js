@@ -499,6 +499,28 @@ async function logPayment(jobberPayment, clientID) {
     await useAPI('capture/', 'post', captureData);
 }
 
+/**
+ * Logs a created payment in Jobber to PostHog
+ * @param jobberPayment The payment that was parsed
+ * @param clientID The client ID to use for the event
+ */
+async function logPaymentUpdate(jobberPayment, clientID) {
+    // Create an event for quote in PostHog
+    let captureData = {
+        api_key: process.env.POSTHOG_TOKEN,
+        event: 'payment updated',
+        properties: {
+            distinct_id: clientID,
+            adjustmentType: jobberPayment.adjustmentType,
+            amount: jobberPayment.amount,
+            details: jobberPayment.details,
+            paymentOrigin: jobberPayment.paymentOrigin,
+            paymentType: jobberPayment.paymentType
+        }
+    };
+    await useAPI('capture/', 'post', captureData);
+}
+
 module.exports = {
     individualSearch,
     searchForUser,
@@ -510,5 +532,6 @@ module.exports = {
     logJob,
     logJobUpdate,
     logPayment,
+    logPaymentUpdate,
     logInvoice
 };

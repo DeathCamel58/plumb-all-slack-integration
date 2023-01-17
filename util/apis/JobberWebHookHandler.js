@@ -135,7 +135,7 @@ async function jobUpdateHandle(req) {
 }
 
 /**
- * Adds payment event in PostHog
+ * Adds new payment event in PostHog
  * @param req The incoming web data
  * @returns {Promise<void>}
  */
@@ -153,6 +153,25 @@ async function paymentCreateHandle(req) {
     }
 }
 
+/**
+ * Adds payment update event in PostHog
+ * @param req The incoming web data
+ * @returns {Promise<void>}
+ */
+async function paymentUpdateHandle(req) {
+    let body = req.body;
+
+    // Verify authenticity of webhook, then process
+    if (jobberVerify(body, req.header('X-Jobber-Hmac-SHA256'))) {
+        // Get quote data
+        let payment = await Jobber.getPaymentData(body.data["webHookEvent"]["itemId"]);
+        // Insert/Update client in PostHog
+        let clientID = await PostHog.logClient(payment.client);
+        // Insert quote in PostHog
+        await PostHog.logPaymentUpdate(payment, clientID);
+    }
+}
+
 
 module.exports = {
     clientHandle,
@@ -161,5 +180,6 @@ module.exports = {
     quoteUpdateHandle,
     jobCreateHandle,
     jobUpdateHandle,
-    paymentCreateHandle
+    paymentCreateHandle,
+    paymentUpdateHandle
 };
