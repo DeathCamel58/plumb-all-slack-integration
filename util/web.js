@@ -54,6 +54,8 @@ app.post( '/jobber/INVOICE_UPDATE', ( req, res ) => {
     }
 } );
 
+//  TODO: Handle { WEBHOOK_TYPE: 'INVOICE_DESTROY' }
+
 /**
  * Handle Client Webhooks
  */
@@ -90,6 +92,8 @@ app.post( '/jobber/CLIENT_UPDATE', ( req, res ) => {
         res.sendStatus(401);
     }
 } );
+
+// TODO: Handle { WEBHOOK_TYPE: 'CLIENT_DESTROY' }
 
 /**
  * Handle Quote Webhooks
@@ -128,6 +132,8 @@ app.post( '/jobber/QUOTE_UPDATE', ( req, res ) => {
     }
 } );
 
+//  TODO: Handle { WEBHOOK_TYPE: 'QUOTE_DESTROY' }
+
 /**
  * Handle Job Webhooks
  */
@@ -165,6 +171,8 @@ app.post( '/jobber/JOB_UPDATE', ( req, res ) => {
     }
 } );
 
+//  TODO: Handle { WEBHOOK_TYPE: 'JOB_DESTROY' }
+
 /**
  * Handle Payment Webhooks
  */
@@ -201,6 +209,8 @@ app.post( '/jobber/PAYMENT_UPDATE', ( req, res ) => {
         res.sendStatus(401);
     }
 } );
+
+//  TODO: Handle { WEBHOOK_TYPE: 'PAYMENT_DESTROY' }
 
 /**
  * Handle Payout Webhooks
@@ -331,6 +341,8 @@ app.post( '/jobber/VISIT_COMPLETE', ( req, res ) => {
         res.sendStatus(401);
     }
 } );
+
+//  TODO: Handle { WEBHOOK_TYPE: 'VISIT_DESTROY' }
 
 /**
  * Handles a new Jobber Authorization Code, sets it in the config, then exits
