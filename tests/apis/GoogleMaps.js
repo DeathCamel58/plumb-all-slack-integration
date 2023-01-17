@@ -8,15 +8,12 @@ describe("Google Maps", () => {
     describe("Search for Location", () => {
         test("Valid Location (good request)", async () => {
             let response = await GoogleMaps.searchPlace('206 Washington St SW, Atlanta GA, 30334');
-            expect(response.status).toBe(200);
-            expect(response.data.status).toBe("OK");
-            expect(response.data.results.length).toBeGreaterThan(0);
+            expect(response.length).toBeGreaterThan(0);
         });
 
         test("Valid Location (bad request)", async () => {
             let response = await GoogleMaps.searchPlace('-, - -, -');
-            expect(response.status).toBe(200);
-            expect(response.data.status).toBe("ZERO_RESULTS");
+            expect(response).toBeNull();
         });
     });
 });

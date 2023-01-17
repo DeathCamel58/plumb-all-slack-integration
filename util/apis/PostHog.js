@@ -1,7 +1,7 @@
 require('dotenv').config({ path: process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env' });
 const crypto = require('crypto');
 let Contact = require('../contact.js');
-const { searchPlace } = require("./GoogleMaps");
+const GoogleMaps = require("./GoogleMaps");
 
 const fetch = require('node-fetch');
 
@@ -190,10 +190,10 @@ async function searchForUser(contact) {
  */
 function getPlaceLocationPart(place, addressComponentIndex, key) {
     // Check that the index exists in address_components
-    if (place.results[0].address_components.length > addressComponentIndex) {
+    if (place[0].address_components.length > addressComponentIndex) {
         // Check if we should return long_name or short_name
-        if (key in place.results[0].address_components[addressComponentIndex]) {
-            return place.results[0].address_components[addressComponentIndex][key];
+        if (key in place[0].address_components[addressComponentIndex]) {
+            return place[0].address_components[addressComponentIndex][key];
         } else {
             // Neither short_name nor long_name exist at index. Return empty string
             return "";
@@ -210,11 +210,9 @@ async function sendClientToPostHog(contact) {
     // If the contact has an address, resolve it to a place object using Google Maps
     let place;
     if (contact.address !== '' && contact.address !== undefined && contact.address !== null) {
-        place = await searchPlace(contact.address);
+        place = await GoogleMaps.searchPlace(contact.address);
 
-        if (place.data.results.length > 0) {
-            place = place.data;
-        } else {
+        if (place.length <= 0) {
             console.error(`No place found for ${contact.address} on Google Maps.`);
         }
     }
@@ -222,25 +220,23 @@ async function sendClientToPostHog(contact) {
     // Set the location data for the user if a place is resolved
     let clientData = {};
     if (place !== undefined) {
-        if (place.results !== undefined) {
-            if (place.results.length > 0) {
-                clientData = {
-                    $geoip_city_name: getPlaceLocationPart(place, 2, 'long_name'),
-                    $geoip_country_code: getPlaceLocationPart(place, 5, 'short_name'),
-                    $geoip_country_name: getPlaceLocationPart(place, 5, 'long_name'),
-                    // $geoip_latitude: ADD THE LATITUDE,
-                    // $geoip_longitude: ADD THE LONGITUDE,
-                    $geoip_postal_code: getPlaceLocationPart(place, 6, 'long_name'),
-                    $geoip_subdivision_1_name: getPlaceLocationPart(place, 3, 'long_name'),
-                    $initial_geoip_city_name: getPlaceLocationPart(place, 2, 'long_name'),
-                    $initial_geoip_country_code: getPlaceLocationPart(place, 5, 'short_name'),
-                    $initial_geoip_country_name: getPlaceLocationPart(place, 5, 'long_name'),
-                    // $initial_geoip_latitude: ADD THE LATITUDE,
-                    // $initial_geoip_longitude: ADD THE LONGITUDE,
-                    $initial_geoip_postal_code: getPlaceLocationPart(place, 6, 'long_name'),
-                    $initial_geoip_subdivision_1_name: getPlaceLocationPart(place, 3, 'long_name'),
-                };
-            }
+        if (place.length > 0) {
+            clientData = {
+                $geoip_city_name: getPlaceLocationPart(place, 2, 'long_name'),
+                $geoip_country_code: getPlaceLocationPart(place, 5, 'short_name'),
+                $geoip_country_name: getPlaceLocationPart(place, 5, 'long_name'),
+                // $geoip_latitude: ADD THE LATITUDE,
+                // $geoip_longitude: ADD THE LONGITUDE,
+                $geoip_postal_code: getPlaceLocationPart(place, 6, 'long_name'),
+                $geoip_subdivision_1_name: getPlaceLocationPart(place, 3, 'long_name'),
+                $initial_geoip_city_name: getPlaceLocationPart(place, 2, 'long_name'),
+                $initial_geoip_country_code: getPlaceLocationPart(place, 5, 'short_name'),
+                $initial_geoip_country_name: getPlaceLocationPart(place, 5, 'long_name'),
+                // $initial_geoip_latitude: ADD THE LATITUDE,
+                // $initial_geoip_longitude: ADD THE LONGITUDE,
+                $initial_geoip_postal_code: getPlaceLocationPart(place, 6, 'long_name'),
+                $initial_geoip_subdivision_1_name: getPlaceLocationPart(place, 3, 'long_name'),
+            };
         }
     }
 

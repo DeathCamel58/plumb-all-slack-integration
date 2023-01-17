@@ -20,9 +20,9 @@ async function LeadFormHandle(data) {
         (userData["CITY"] ? userData["CITY"] + ' ' : '') +
         (userData["POSTAL_CODE"] ? userData["POSTAL_CODE"] : '');
     location = await GoogleMaps.searchPlace(location);
-    if (location.status === 200) {
-        if (location.data.results.length > 0) {
-            location = location.data.results[0].formatted_address;
+    if (location !== null) {
+        if (location.length > 0) {
+            location = location[0].formatted_address;
         } else {
             location = undefined;
         }

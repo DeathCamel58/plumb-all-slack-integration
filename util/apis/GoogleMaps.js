@@ -6,7 +6,7 @@ const client = new Client();
 /**
  * Searches Google Maps for a location, and returns the location object
  * @param address
- * @returns {Promise<GeocodeResponse>}
+ * @returns {Promise<GeocodeResult[]>}
  */
 async function searchPlace(address) {
     let place = await client.geocode({
@@ -16,7 +16,11 @@ async function searchPlace(address) {
         }
     });
 
-    return place;
+    if (place.data.results.length === 0) {
+        return null;
+    }
+
+    return place.data.results;
 }
 
 module.exports = {
