@@ -577,7 +577,7 @@ async function logPayoutUpdate(jobberPayout) {
 
 /**
  * Logs a property create in Jobber to PostHog
- * @param jobberProperty The payment that was parsed
+ * @param jobberProperty The property that was parsed
  * @param clientID The client ID to use for the event
  */
 async function logProperty(jobberProperty, clientID) {
@@ -598,7 +598,7 @@ async function logProperty(jobberProperty, clientID) {
 
 /**
  * Logs a property update in Jobber to PostHog
- * @param jobberProperty The payment that was parsed
+ * @param jobberProperty The property that was parsed
  * @param clientID The client ID to use for the event
  */
 async function logPropertyUpdate(jobberProperty, clientID) {
@@ -612,6 +612,37 @@ async function logPropertyUpdate(jobberProperty, clientID) {
             jobberWebUri: jobberProperty.jobberWebUri,
             routingOrder: jobberProperty.routingOrder,
             taxRate: jobberProperty.taxRate,
+        }
+    };
+    await useAPI('capture/', 'post', captureData);
+}
+
+/**
+ * Logs a visit create in Jobber to PostHog
+ * @param jobberVisit The visit that was parsed
+ * @param clientID The client ID to use for the event
+ */
+async function logVisit(jobberVisit, clientID) {
+    // Create an event for quote in PostHog
+    let captureData = {
+        api_key: process.env.POSTHOG_TOKEN,
+        event: 'visit made',
+        properties: {
+            distinct_id: clientID,
+            allDay: jobberVisit.allDay,
+            completedAt: jobberVisit.completedAt,
+            createdAt: jobberVisit.createdAt,
+            createdBy: jobberVisit.createdBy.name.full,
+            duration: jobberVisit.duration,
+            endAt: jobberVisit.endAt,
+            instructions: jobberVisit.instructions,
+            isComplete: jobberVisit.isComplete,
+            isDefaultTitle: jobberVisit.isDefaultTitle,
+            isLastScheduledVisit: jobberVisit.isLastScheduledVisit,
+            overrideOrder: jobberVisit.overrideOrder,
+            startAt: jobberVisit.startAt,
+            title: jobberVisit.title,
+            visitStatus: jobberVisit.visitStatus,
         }
     };
     await useAPI('capture/', 'post', captureData);
@@ -633,5 +664,6 @@ module.exports = {
     logPayout,
     logPayoutUpdate,
     logProperty,
-    logPropertyUpdate
+    logPropertyUpdate,
+    logVisit
 };

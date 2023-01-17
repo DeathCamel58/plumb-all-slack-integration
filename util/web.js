@@ -242,7 +242,6 @@ app.post( '/jobber/PAYOUT_UPDATE', ( req, res ) => {
 /**
  * Handle Property Webhooks
  */
-
 app.post( '/jobber/PROPERTY_CREATE', ( req, res ) => {
     console.info('Got an PROPERTY_CREATE event from Jobber!');
 
@@ -278,6 +277,26 @@ app.post( '/jobber/PROPERTY_UPDATE', ( req, res ) => {
 } );
 
 //  TODO: Handle { WEBHOOK_TYPE: 'PROPERTY_DESTROY' }
+
+/**
+ * Handle Visit Webhooks
+ */
+app.post( '/jobber/VISIT_CREATE', ( req, res ) => {
+    console.info('Got an VISIT_CREATE event from Jobber!');
+
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus( 200 );
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        JobberWebHookHandler.visitCreateHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
+} );
 
 /**
  * Handles a new Jobber Authorization Code, sets it in the config, then exits
