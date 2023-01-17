@@ -254,7 +254,7 @@ query InvoiceQuery {
 /**
  * Runs Jobber Invoice query for given itemID, and returns the data
  * @param itemID The itemID in the webhook
- * @returns {Promise<*>} The data for the invoice
+ * @returns {Promise<*>} The data for the quote
  */
 async function getQuoteData(itemID) {
     let query =
@@ -291,9 +291,9 @@ query QuoteQuery {
 }
 
 /**
- * Runs Jobber Invoice query for given itemID, and returns the data
+ * Runs Jobber job query for given itemID, and returns the data
  * @param itemID The itemID in the webhook
- * @returns {Promise<*>} The data for the invoice
+ * @returns {Promise<*>} The data for the job
  */
 async function getJobData(itemID) {
     let query =
@@ -324,7 +324,7 @@ query JobQuery {
 /**
  * Runs Jobber Client query for given itemID, and returns the data
  * @param itemID The itemID in the webhook
- * @returns {Promise<*>} The data for the invoice
+ * @returns {Promise<*>} The data for the client
  */
 async function getClientData(itemID) {
     let query =
@@ -367,7 +367,7 @@ query ClientQuery {
 /**
  * Runs Jobber payment query for given itemID, and returns the data
  * @param itemID The itemID in the webhook
- * @returns {Promise<*>} The data for the invoice
+ * @returns {Promise<*>} The data for the payment
  */
 async function getPaymentData(itemID) {
     let query =
@@ -395,12 +395,124 @@ query PaymentQuery {
     return paymentResponse["paymentRecord"];
 }
 
+/**
+ * Runs Jobber payment query for given itemID, and returns the data
+ * @param itemID The itemID in the webhook
+ * @returns {Promise<*>} The data for the payment
+ */
+async function getPayoutData(itemID) {
+    let query =
+        `
+query PayoutQuery {
+    paymentRecord (id: "${itemID}") {
+        arrivalDate
+        created
+        currency
+        feeAmount
+        grossAmount
+        id
+        identifier
+        netAmount
+        payoutMethod
+        status
+        type
+    }
+}
+        `;
+
+    let paymentResponse = await makeRequest(query);
+
+    return paymentResponse["paymentRecord"];
+}
+
+/**
+ * Runs Jobber property query for given itemID, and returns the data
+ * @param itemID The itemID in the webhook
+ * @returns {Promise<*>} The data for the property
+ */
+async function getPropertyData(itemID) {
+    let query =
+        `
+query PropertyQuery {
+    property (id: "${itemID}") {
+        address {
+            id
+        }
+        client {
+            id
+        }
+        isBillingAddress
+        jobberWebUri
+        routingOrder
+        taxRate {
+            id
+        }
+    }
+}
+        `;
+
+    let propertyResponse = await makeRequest(query);
+
+    let client = await getClientData(propertyResponse["property"].client.id);
+
+    propertyResponse["property"].client = client;
+
+    return propertyResponse["property"];
+}
+
+/**
+ * Runs Jobber visit query for given itemID, and returns the data
+ * @param itemID The itemID in the webhook
+ * @returns {Promise<*>} The data for the visit
+ */
+async function getVisitData(itemID) {
+    let query =
+        `
+query VisitQuery {
+    visit (id: "${itemID}") {
+        allDay
+        client {
+            id
+        }
+        completedAt
+        createdAt
+        createdBy {
+            name {
+                full
+            }
+        }
+        duration
+        endAt
+        instructions
+        isComplete
+        isDefaultTitle
+        isLastScheduledVisit
+        overrideOrder
+        startAt
+        title
+        visitStatus
+    }
+}
+        `;
+
+    let propertyResponse = await makeRequest(query);
+
+    let client = await getClientData(propertyResponse["visit"].client.id);
+
+    propertyResponse["visit"].client = client;
+
+    return propertyResponse["visit"];
+}
+
 module.exports = {
     verifyWebhook,
+    setAuthorization,
     getInvoiceData,
     getQuoteData,
     getJobData,
     getClientData,
     getPaymentData,
-    setAuthorization
+    getPayoutData,
+    getPropertyData,
+    getVisitData
 };

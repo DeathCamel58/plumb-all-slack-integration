@@ -457,6 +457,27 @@ async function logJob(jobberJob, clientID) {
 }
 
 /**
+ * Logs an edited job in Jobber to PostHog
+ * @param jobberJob The job that was parsed
+ * @param clientID The client ID to use for the event
+ */
+async function logJobUpdate(jobberJob, clientID) {
+    // Create an event for quote in PostHog
+    let captureData = {
+        api_key: process.env.POSTHOG_TOKEN,
+        event: 'job updated',
+        properties: {
+            distinct_id: clientID,
+            jobNumber: jobberJob.jobNumber,
+            jobStatus: jobberJob.jobStatus,
+            title: jobberJob.title,
+            total: jobberJob.total
+        }
+    };
+    await useAPI('capture/', 'post', captureData);
+}
+
+/**
  * Logs a created payment in Jobber to PostHog
  * @param jobberPayment The payment that was parsed
  * @param clientID The client ID to use for the event
@@ -478,15 +499,235 @@ async function logPayment(jobberPayment, clientID) {
     await useAPI('capture/', 'post', captureData);
 }
 
+/**
+ * Logs a created payment in Jobber to PostHog
+ * @param jobberPayment The payment that was parsed
+ * @param clientID The client ID to use for the event
+ */
+async function logPaymentUpdate(jobberPayment, clientID) {
+    // Create an event for quote in PostHog
+    let captureData = {
+        api_key: process.env.POSTHOG_TOKEN,
+        event: 'payment updated',
+        properties: {
+            distinct_id: clientID,
+            adjustmentType: jobberPayment.adjustmentType,
+            amount: jobberPayment.amount,
+            details: jobberPayment.details,
+            paymentOrigin: jobberPayment.paymentOrigin,
+            paymentType: jobberPayment.paymentType
+        }
+    };
+    await useAPI('capture/', 'post', captureData);
+}
+
+/**
+ * Logs a created payout in Jobber to PostHog
+ * @param jobberPayout The payout that was parsed
+ */
+async function logPayout(jobberPayout) {
+    // Create an event for quote in PostHog
+    let captureData = {
+        api_key: process.env.POSTHOG_TOKEN,
+        event: 'payout made',
+        properties: {
+            distinct_id: 'jobber-service',
+            arrivalDate: jobberPayout.arrivalDate,
+            created: jobberPayout.created,
+            currency: jobberPayout.currency,
+            feeAmount: jobberPayout.feeAmount,
+            grossAmount: jobberPayout.grossAmount,
+            id: jobberPayout.id,
+            identifier: jobberPayout.identifier,
+            netAmount: jobberPayout.netAmount,
+            payoutMethod: jobberPayout.payoutMethod,
+            status: jobberPayout.status,
+            type: jobberPayout.type
+        }
+    };
+    await useAPI('capture/', 'post', captureData);
+}
+
+/**
+ * Logs a payout update in Jobber to PostHog
+ * @param jobberPayout The payout that was parsed
+ */
+async function logPayoutUpdate(jobberPayout) {
+    // Create an event for quote in PostHog
+    let captureData = {
+        api_key: process.env.POSTHOG_TOKEN,
+        event: 'payout updated',
+        properties: {
+            distinct_id: 'jobber-service',
+            arrivalDate: jobberPayout.arrivalDate,
+            created: jobberPayout.created,
+            currency: jobberPayout.currency,
+            feeAmount: jobberPayout.feeAmount,
+            grossAmount: jobberPayout.grossAmount,
+            id: jobberPayout.id,
+            identifier: jobberPayout.identifier,
+            netAmount: jobberPayout.netAmount,
+            payoutMethod: jobberPayout.payoutMethod,
+            status: jobberPayout.status,
+            type: jobberPayout.type
+        }
+    };
+    await useAPI('capture/', 'post', captureData);
+}
+
+/**
+ * Logs a property create in Jobber to PostHog
+ * @param jobberProperty The property that was parsed
+ * @param clientID The client ID to use for the event
+ */
+async function logProperty(jobberProperty, clientID) {
+    // Create an event for quote in PostHog
+    let captureData = {
+        api_key: process.env.POSTHOG_TOKEN,
+        event: 'property made',
+        properties: {
+            distinct_id: clientID,
+            isBillingAddress: jobberProperty.isBillingAddress,
+            jobberWebUri: jobberProperty.jobberWebUri,
+            routingOrder: jobberProperty.routingOrder,
+            taxRate: jobberProperty.taxRate,
+        }
+    };
+    await useAPI('capture/', 'post', captureData);
+}
+
+/**
+ * Logs a property update in Jobber to PostHog
+ * @param jobberProperty The property that was parsed
+ * @param clientID The client ID to use for the event
+ */
+async function logPropertyUpdate(jobberProperty, clientID) {
+    // Create an event for quote in PostHog
+    let captureData = {
+        api_key: process.env.POSTHOG_TOKEN,
+        event: 'property updated',
+        properties: {
+            distinct_id: clientID,
+            isBillingAddress: jobberProperty.isBillingAddress,
+            jobberWebUri: jobberProperty.jobberWebUri,
+            routingOrder: jobberProperty.routingOrder,
+            taxRate: jobberProperty.taxRate,
+        }
+    };
+    await useAPI('capture/', 'post', captureData);
+}
+
+/**
+ * Logs a visit create in Jobber to PostHog
+ * @param jobberVisit The visit that was parsed
+ * @param clientID The client ID to use for the event
+ */
+async function logVisit(jobberVisit, clientID) {
+    // Create an event for quote in PostHog
+    let captureData = {
+        api_key: process.env.POSTHOG_TOKEN,
+        event: 'visit made',
+        properties: {
+            distinct_id: clientID,
+            allDay: jobberVisit.allDay,
+            completedAt: jobberVisit.completedAt,
+            createdAt: jobberVisit.createdAt,
+            createdBy: jobberVisit.createdBy.name.full,
+            duration: jobberVisit.duration,
+            endAt: jobberVisit.endAt,
+            instructions: jobberVisit.instructions,
+            isComplete: jobberVisit.isComplete,
+            isDefaultTitle: jobberVisit.isDefaultTitle,
+            isLastScheduledVisit: jobberVisit.isLastScheduledVisit,
+            overrideOrder: jobberVisit.overrideOrder,
+            startAt: jobberVisit.startAt,
+            title: jobberVisit.title,
+            visitStatus: jobberVisit.visitStatus,
+        }
+    };
+    await useAPI('capture/', 'post', captureData);
+}
+
+/**
+ * Logs a visit update in Jobber to PostHog
+ * @param jobberVisit The visit that was parsed
+ * @param clientID The client ID to use for the event
+ */
+async function logVisitUpdate(jobberVisit, clientID) {
+    // Create an event for quote in PostHog
+    let captureData = {
+        api_key: process.env.POSTHOG_TOKEN,
+        event: 'visit updated',
+        properties: {
+            distinct_id: clientID,
+            allDay: jobberVisit.allDay,
+            completedAt: jobberVisit.completedAt,
+            createdAt: jobberVisit.createdAt,
+            createdBy: jobberVisit.createdBy.name.full,
+            duration: jobberVisit.duration,
+            endAt: jobberVisit.endAt,
+            instructions: jobberVisit.instructions,
+            isComplete: jobberVisit.isComplete,
+            isDefaultTitle: jobberVisit.isDefaultTitle,
+            isLastScheduledVisit: jobberVisit.isLastScheduledVisit,
+            overrideOrder: jobberVisit.overrideOrder,
+            startAt: jobberVisit.startAt,
+            title: jobberVisit.title,
+            visitStatus: jobberVisit.visitStatus,
+        }
+    };
+    await useAPI('capture/', 'post', captureData);
+}
+
+/**
+ * Logs a visit update in Jobber to PostHog
+ * @param jobberVisit The visit that was parsed
+ * @param clientID The client ID to use for the event
+ */
+async function logVisitComplete(jobberVisit, clientID) {
+    // Create an event for quote in PostHog
+    let captureData = {
+        api_key: process.env.POSTHOG_TOKEN,
+        event: 'visit completed',
+        properties: {
+            distinct_id: clientID,
+            allDay: jobberVisit.allDay,
+            completedAt: jobberVisit.completedAt,
+            createdAt: jobberVisit.createdAt,
+            createdBy: jobberVisit.createdBy.name.full,
+            duration: jobberVisit.duration,
+            endAt: jobberVisit.endAt,
+            instructions: jobberVisit.instructions,
+            isComplete: jobberVisit.isComplete,
+            isDefaultTitle: jobberVisit.isDefaultTitle,
+            isLastScheduledVisit: jobberVisit.isLastScheduledVisit,
+            overrideOrder: jobberVisit.overrideOrder,
+            startAt: jobberVisit.startAt,
+            title: jobberVisit.title,
+            visitStatus: jobberVisit.visitStatus,
+        }
+    };
+    await useAPI('capture/', 'post', captureData);
+}
+
 module.exports = {
     individualSearch,
     searchForUser,
     sendClientToPostHog,
     logContact,
     logClient,
+    logInvoice,
     logQuote,
     logQuoteUpdate,
     logJob,
+    logJobUpdate,
     logPayment,
-    logInvoice
+    logPaymentUpdate,
+    logPayout,
+    logPayoutUpdate,
+    logProperty,
+    logPropertyUpdate,
+    logVisit,
+    logVisitUpdate,
+    logVisitComplete
 };
