@@ -457,6 +457,27 @@ async function logJob(jobberJob, clientID) {
 }
 
 /**
+ * Logs an edited job in Jobber to PostHog
+ * @param jobberJob The job that was parsed
+ * @param clientID The client ID to use for the event
+ */
+async function logJobUpdate(jobberJob, clientID) {
+    // Create an event for quote in PostHog
+    let captureData = {
+        api_key: process.env.POSTHOG_TOKEN,
+        event: 'job updated',
+        properties: {
+            distinct_id: clientID,
+            jobNumber: jobberJob.jobNumber,
+            jobStatus: jobberJob.jobStatus,
+            title: jobberJob.title,
+            total: jobberJob.total
+        }
+    };
+    await useAPI('capture/', 'post', captureData);
+}
+
+/**
  * Logs a created payment in Jobber to PostHog
  * @param jobberPayment The payment that was parsed
  * @param clientID The client ID to use for the event
@@ -487,6 +508,7 @@ module.exports = {
     logQuote,
     logQuoteUpdate,
     logJob,
+    logJobUpdate,
     logPayment,
     logInvoice
 };

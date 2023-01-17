@@ -148,6 +148,23 @@ app.post( '/jobber/JOB_CREATE', ( req, res ) => {
     }
 } );
 
+app.post( '/jobber/JOB_UPDATE', ( req, res ) => {
+    console.info('Got an JOB_UPDATE event from Jobber!');
+
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus( 200 );
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        JobberWebHookHandler.jobUpdateHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
+} );
+
 /**
  * Handle Payment Webhooks
  */

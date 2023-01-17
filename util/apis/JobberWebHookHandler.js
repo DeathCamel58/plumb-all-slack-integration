@@ -97,7 +97,7 @@ async function quoteUpdateHandle(req) {
 }
 
 /**
- * Adds job event in PostHog
+ * Adds job create event in PostHog
  * @param req The incoming web data
  * @returns {Promise<void>}
  */
@@ -112,6 +112,25 @@ async function jobCreateHandle(req) {
         let clientID = await PostHog.logClient(quote.client);
         // Insert quote in PostHog
         await PostHog.logJob(quote, clientID);
+    }
+}
+
+/**
+ * Adds job update event in PostHog
+ * @param req The incoming web data
+ * @returns {Promise<void>}
+ */
+async function jobUpdateHandle(req) {
+    let body = req.body;
+
+    // Verify authenticity of webhook, then process
+    if (jobberVerify(body, req.header('X-Jobber-Hmac-SHA256'))) {
+        // Get quote data
+        let quote = await Jobber.getJobData(body.data["webHookEvent"]["itemId"]);
+        // Insert/Update client in PostHog
+        let clientID = await PostHog.logClient(quote.client);
+        // Insert quote in PostHog
+        await PostHog.logJobUpdate(quote, clientID);
     }
 }
 
@@ -141,5 +160,6 @@ module.exports = {
     quoteCreateHandle,
     quoteUpdateHandle,
     jobCreateHandle,
+    jobUpdateHandle,
     paymentCreateHandle
 };
