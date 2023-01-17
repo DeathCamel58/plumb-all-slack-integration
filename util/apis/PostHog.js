@@ -596,6 +596,27 @@ async function logProperty(jobberProperty, clientID) {
     await useAPI('capture/', 'post', captureData);
 }
 
+/**
+ * Logs a property update in Jobber to PostHog
+ * @param jobberProperty The payment that was parsed
+ * @param clientID The client ID to use for the event
+ */
+async function logPropertyUpdate(jobberProperty, clientID) {
+    // Create an event for quote in PostHog
+    let captureData = {
+        api_key: process.env.POSTHOG_TOKEN,
+        event: 'property updated',
+        properties: {
+            distinct_id: clientID,
+            isBillingAddress: jobberProperty.isBillingAddress,
+            jobberWebUri: jobberProperty.jobberWebUri,
+            routingOrder: jobberProperty.routingOrder,
+            taxRate: jobberProperty.taxRate,
+        }
+    };
+    await useAPI('capture/', 'post', captureData);
+}
+
 module.exports = {
     individualSearch,
     searchForUser,
@@ -611,5 +632,6 @@ module.exports = {
     logPaymentUpdate,
     logPayout,
     logPayoutUpdate,
-    logProperty
+    logProperty,
+    logPropertyUpdate
 };

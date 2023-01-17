@@ -225,6 +225,25 @@ async function propertyCreateHandle(req) {
     }
 }
 
+/**
+ * Adds property update event in PostHog
+ * @param req The incoming web data
+ * @returns {Promise<void>}
+ */
+async function propertyUpdateHandle(req) {
+    let body = req.body;
+
+    // Verify authenticity of webhook, then process
+    if (jobberVerify(body, req.header('X-Jobber-Hmac-SHA256'))) {
+        // Get property data
+        let property = await Jobber.getPropertyData(body.data["webHookEvent"]["itemId"]);
+        // Insert/Update client in PostHog
+        let clientID = await PostHog.logClient(property.client);
+        // Insert property in PostHog
+        await PostHog.logPropertyUpdate(property, clientID);
+    }
+}
+
 module.exports = {
     clientHandle,
     invoiceHandle,
@@ -236,5 +255,6 @@ module.exports = {
     paymentUpdateHandle,
     payoutCreateHandle,
     payoutUpdateHandle,
-    propertyCreateHandle
+    propertyCreateHandle,
+    propertyUpdateHandle
 };
