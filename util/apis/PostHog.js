@@ -679,6 +679,37 @@ async function logVisitUpdate(jobberVisit, clientID) {
     await useAPI('capture/', 'post', captureData);
 }
 
+/**
+ * Logs a visit update in Jobber to PostHog
+ * @param jobberVisit The visit that was parsed
+ * @param clientID The client ID to use for the event
+ */
+async function logVisitComplete(jobberVisit, clientID) {
+    // Create an event for quote in PostHog
+    let captureData = {
+        api_key: process.env.POSTHOG_TOKEN,
+        event: 'visit completed',
+        properties: {
+            distinct_id: clientID,
+            allDay: jobberVisit.allDay,
+            completedAt: jobberVisit.completedAt,
+            createdAt: jobberVisit.createdAt,
+            createdBy: jobberVisit.createdBy.name.full,
+            duration: jobberVisit.duration,
+            endAt: jobberVisit.endAt,
+            instructions: jobberVisit.instructions,
+            isComplete: jobberVisit.isComplete,
+            isDefaultTitle: jobberVisit.isDefaultTitle,
+            isLastScheduledVisit: jobberVisit.isLastScheduledVisit,
+            overrideOrder: jobberVisit.overrideOrder,
+            startAt: jobberVisit.startAt,
+            title: jobberVisit.title,
+            visitStatus: jobberVisit.visitStatus,
+        }
+    };
+    await useAPI('capture/', 'post', captureData);
+}
+
 module.exports = {
     individualSearch,
     searchForUser,
@@ -697,5 +728,6 @@ module.exports = {
     logProperty,
     logPropertyUpdate,
     logVisit,
-    logVisitUpdate
+    logVisitUpdate,
+    logVisitComplete
 };

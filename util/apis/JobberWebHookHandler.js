@@ -282,6 +282,25 @@ async function visitUpdateHandle(req) {
     }
 }
 
+/**
+ * Adds visit complete event in PostHog
+ * @param req The incoming web data
+ * @returns {Promise<void>}
+ */
+async function visitCompleteHandle(req) {
+    let body = req.body;
+
+    // Verify authenticity of webhook, then process
+    if (jobberVerify(body, req.header('X-Jobber-Hmac-SHA256'))) {
+        // Get visit data
+        let visit = await Jobber.getVisitData(body.data["webHookEvent"]["itemId"]);
+        // Insert/Update client in PostHog
+        let clientID = await PostHog.logClient(visit.client);
+        // Insert visit in PostHog
+        await PostHog.logVisitComplete(visit, clientID);
+    }
+}
+
 module.exports = {
     clientHandle,
     invoiceHandle,
@@ -296,5 +315,6 @@ module.exports = {
     propertyCreateHandle,
     propertyUpdateHandle,
     visitCreateHandle,
-    visitUpdateHandle
+    visitUpdateHandle,
+    visitCompleteHandle
 };
