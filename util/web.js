@@ -1,3 +1,5 @@
+// noinspection JSIgnoredPromiseFromCall
+
 require('dotenv').config({ path: process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env' });
 let fs = require('fs');
 const express = require('express');

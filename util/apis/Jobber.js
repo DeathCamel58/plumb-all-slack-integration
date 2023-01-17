@@ -116,6 +116,7 @@ async function requestAuthorization() {
 async function refreshAccessToken() {
     let success = false;
     let response;
+    let data;
     while (!success) {
         try {
             let response = await fetch(`https://api.getjobber.com/api/oauth/token`, {
@@ -157,7 +158,7 @@ async function refreshAccessToken() {
                 console.error(`Got ${response.status} while refreshing access token. Requesting authorization!`);
                 await requestAuthorization();
             }
-        }  catch (e) {
+        } catch (e) {
             console.error(`Fetch: Failure in refreshAccessToken`);
             console.error(e);
         }
@@ -243,11 +244,11 @@ query InvoiceQuery {
 
     let invoiceResponse = await makeRequest(query);
 
-    let client = await getClientData(invoiceResponse.invoice.client.id);
+    let client = await getClientData(invoiceResponse["invoice"].client.id);
 
-    invoiceResponse.invoice.client = client;
+    invoiceResponse["invoice"].client = client;
 
-    return invoiceResponse.invoice;
+    return invoiceResponse["invoice"];
 }
 
 /**
@@ -282,11 +283,11 @@ query QuoteQuery {
 
     let quoteResponse = await makeRequest(query);
 
-    let client = await getClientData(quoteResponse.quote.client.id);
+    let client = await getClientData(quoteResponse["quote"].client.id);
 
-    quoteResponse.quote.client = client;
+    quoteResponse["quote"].client = client;
 
-    return quoteResponse.quote;
+    return quoteResponse["quote"];
 }
 
 /**
@@ -313,11 +314,11 @@ query JobQuery {
 
     let jobResponse = await makeRequest(query);
 
-    let client = await getClientData(jobResponse.job.client.id);
+    let client = await getClientData(jobResponse["job"].client.id);
 
-    jobResponse.job.client = client;
+    jobResponse["job"].client = client;
 
-    return jobResponse.job;
+    return jobResponse["job"];
 }
 
 /**
@@ -387,11 +388,11 @@ query PaymentQuery {
 
     let paymentResponse = await makeRequest(query);
 
-    let client = await getClientData(paymentResponse.paymentRecord.client.id);
+    let client = await getClientData(paymentResponse["paymentRecord"].client.id);
 
-    paymentResponse.paymentRecord.client = client;
+    paymentResponse["paymentRecord"].client = client;
 
-    return paymentResponse.paymentRecord;
+    return paymentResponse["paymentRecord"];
 }
 
 module.exports = {

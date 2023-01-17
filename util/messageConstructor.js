@@ -23,9 +23,4 @@ function createMessage(mail) {
         }
         return [null, null]
     }
-    // Process Webhooks
-    else {
-        let parsed = emailParser.parseMessageFromGoogleAds(mail);
-        return [parsed.messageToSend(), "Google Ads"]
-    }
 }

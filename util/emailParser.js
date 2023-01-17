@@ -1,6 +1,6 @@
+// noinspection JSIgnoredPromiseFromCall
+
 let Contact = require('./contact.js');
-let PostHog = require('./apis/PostHog.js');
-let Trello = require("./apis/Trello");
 let APICoordinator = require("./APICoordinator");
 
 module.exports = {

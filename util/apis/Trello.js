@@ -95,10 +95,10 @@ async function runSearch(query, listId) {
     let searchResponse = await useAPI(`1/search?query=${searchQuery}&key=${process.env.TRELLO_API_KEY}&token=${process.env.TRELLO_TOKEN}`, 'get', null);
     searchResponse = JSON.parse(searchResponse);
 
-    if (searchResponse.cards.length > 0) {
+    if (searchResponse["cards"].length > 0) {
         if (listId !== null && listId !== undefined) {
-            for (let i = 0; i < searchResponse.cards.length; i++) {
-                let card = searchResponse.cards[i];
+            for (let i = 0; i < searchResponse["cards"].length; i++) {
+                let card = searchResponse["cards"][i];
                 let listResponse = await useAPI(`1/cards/${card.id}/list?key=${process.env.TRELLO_API_KEY}&token=${process.env.TRELLO_TOKEN}`, 'get', null);
                 listResponse = JSON.parse(listResponse);
                 if (card.idList === listId) {
@@ -106,7 +106,7 @@ async function runSearch(query, listId) {
                 }
             }
         } else {
-            return searchResponse.cards[0];
+            return searchResponse["cards"][0];
         }
     } else {
         return null;
