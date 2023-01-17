@@ -106,12 +106,12 @@ async function jobCreateHandle(req) {
 
     // Verify authenticity of webhook, then process
     if (jobberVerify(body, req.header('X-Jobber-Hmac-SHA256'))) {
-        // Get quote data
-        let quote = await Jobber.getJobData(body.data["webHookEvent"]["itemId"]);
+        // Get job data
+        let job = await Jobber.getJobData(body.data["webHookEvent"]["itemId"]);
         // Insert/Update client in PostHog
-        let clientID = await PostHog.logClient(quote.client);
-        // Insert quote in PostHog
-        await PostHog.logJob(quote, clientID);
+        let clientID = await PostHog.logClient(job.client);
+        // Insert job in PostHog
+        await PostHog.logJob(job, clientID);
     }
 }
 
@@ -125,12 +125,12 @@ async function jobUpdateHandle(req) {
 
     // Verify authenticity of webhook, then process
     if (jobberVerify(body, req.header('X-Jobber-Hmac-SHA256'))) {
-        // Get quote data
-        let quote = await Jobber.getJobData(body.data["webHookEvent"]["itemId"]);
+        // Get job data
+        let job = await Jobber.getJobData(body.data["webHookEvent"]["itemId"]);
         // Insert/Update client in PostHog
-        let clientID = await PostHog.logClient(quote.client);
-        // Insert quote in PostHog
-        await PostHog.logJobUpdate(quote, clientID);
+        let clientID = await PostHog.logClient(job.client);
+        // Insert job in PostHog
+        await PostHog.logJobUpdate(job, clientID);
     }
 }
 
