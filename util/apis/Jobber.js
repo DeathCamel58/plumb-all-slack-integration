@@ -422,11 +422,42 @@ query PayoutQuery {
 
     let paymentResponse = await makeRequest(query);
 
-    let client = await getClientData(paymentResponse["paymentRecord"].client.id);
-
-    paymentResponse["paymentRecord"].client = client;
-
     return paymentResponse["paymentRecord"];
+}
+
+/**
+ * Runs Jobber property query for given itemID, and returns the data
+ * @param itemID The itemID in the webhook
+ * @returns {Promise<*>} The data for the invoice
+ */
+async function getPropertyData(itemID) {
+    let query =
+        `
+query PropertyQuery {
+    property (id: "${itemID}") {
+        address {
+            id
+        }
+        client {
+            id
+        }
+        isBillingAddress
+        jobberWebUri
+        routingOrder
+        taxRate {
+            id
+        }
+    }
+}
+        `;
+
+    let propertyResponse = await makeRequest(query);
+
+    let client = await getClientData(propertyResponse["property"].client.id);
+
+    propertyResponse["property"].client = client;
+
+    return propertyResponse["property"];
 }
 
 module.exports = {
@@ -437,5 +468,6 @@ module.exports = {
     getJobData,
     getClientData,
     getPaymentData,
-    getPayoutData
+    getPayoutData,
+    getPropertyData
 };

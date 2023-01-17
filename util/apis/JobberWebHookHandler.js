@@ -144,11 +144,11 @@ async function paymentCreateHandle(req) {
 
     // Verify authenticity of webhook, then process
     if (jobberVerify(body, req.header('X-Jobber-Hmac-SHA256'))) {
-        // Get quote data
+        // Get payment data
         let payment = await Jobber.getPaymentData(body.data["webHookEvent"]["itemId"]);
         // Insert/Update client in PostHog
         let clientID = await PostHog.logClient(payment.client);
-        // Insert quote in PostHog
+        // Insert payment in PostHog
         await PostHog.logPayment(payment, clientID);
     }
 }
@@ -163,11 +163,11 @@ async function paymentUpdateHandle(req) {
 
     // Verify authenticity of webhook, then process
     if (jobberVerify(body, req.header('X-Jobber-Hmac-SHA256'))) {
-        // Get quote data
+        // Get payment data
         let payment = await Jobber.getPaymentData(body.data["webHookEvent"]["itemId"]);
         // Insert/Update client in PostHog
         let clientID = await PostHog.logClient(payment.client);
-        // Insert quote in PostHog
+        // Insert payment in PostHog
         await PostHog.logPaymentUpdate(payment, clientID);
     }
 }
@@ -182,9 +182,9 @@ async function payoutCreateHandle(req) {
 
     // Verify authenticity of webhook, then process
     if (jobberVerify(body, req.header('X-Jobber-Hmac-SHA256'))) {
-        // Get quote data
+        // Get payout data
         let payout = await Jobber.getPayoutData(body.data["webHookEvent"]["itemId"]);
-        // Insert quote in PostHog
+        // Insert payout in PostHog
         await PostHog.logPayout(payout);
     }
 }
@@ -199,10 +199,29 @@ async function payoutUpdateHandle(req) {
 
     // Verify authenticity of webhook, then process
     if (jobberVerify(body, req.header('X-Jobber-Hmac-SHA256'))) {
-        // Get quote data
+        // Get payout data
         let payout = await Jobber.getPayoutData(body.data["webHookEvent"]["itemId"]);
-        // Insert quote in PostHog
+        // Insert payout in PostHog
         await PostHog.logPayoutUpdate(payout);
+    }
+}
+
+/**
+ * Adds new property event in PostHog
+ * @param req The incoming web data
+ * @returns {Promise<void>}
+ */
+async function propertyCreateHandle(req) {
+    let body = req.body;
+
+    // Verify authenticity of webhook, then process
+    if (jobberVerify(body, req.header('X-Jobber-Hmac-SHA256'))) {
+        // Get property data
+        let property = await Jobber.getPropertyData(body.data["webHookEvent"]["itemId"]);
+        // Insert/Update client in PostHog
+        let clientID = await PostHog.logClient(property.client);
+        // Insert property in PostHog
+        await PostHog.logProperty(property, clientID);
     }
 }
 
@@ -216,5 +235,6 @@ module.exports = {
     paymentCreateHandle,
     paymentUpdateHandle,
     payoutCreateHandle,
-    payoutUpdateHandle
+    payoutUpdateHandle,
+    propertyCreateHandle
 };

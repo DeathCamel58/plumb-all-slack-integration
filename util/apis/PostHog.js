@@ -523,7 +523,7 @@ async function logPaymentUpdate(jobberPayment, clientID) {
 
 /**
  * Logs a created payout in Jobber to PostHog
- * @param jobberPayout The payment that was parsed
+ * @param jobberPayout The payout that was parsed
  */
 async function logPayout(jobberPayout) {
     // Create an event for quote in PostHog
@@ -550,7 +550,7 @@ async function logPayout(jobberPayout) {
 
 /**
  * Logs a payout update in Jobber to PostHog
- * @param jobberPayout The payment that was parsed
+ * @param jobberPayout The payout that was parsed
  */
 async function logPayoutUpdate(jobberPayout) {
     // Create an event for quote in PostHog
@@ -575,6 +575,27 @@ async function logPayoutUpdate(jobberPayout) {
     await useAPI('capture/', 'post', captureData);
 }
 
+/**
+ * Logs a property create in Jobber to PostHog
+ * @param jobberProperty The payment that was parsed
+ * @param clientID The client ID to use for the event
+ */
+async function logProperty(jobberProperty, clientID) {
+    // Create an event for quote in PostHog
+    let captureData = {
+        api_key: process.env.POSTHOG_TOKEN,
+        event: 'property made',
+        properties: {
+            distinct_id: clientID,
+            isBillingAddress: jobberProperty.isBillingAddress,
+            jobberWebUri: jobberProperty.jobberWebUri,
+            routingOrder: jobberProperty.routingOrder,
+            taxRate: jobberProperty.taxRate,
+        }
+    };
+    await useAPI('capture/', 'post', captureData);
+}
+
 module.exports = {
     individualSearch,
     searchForUser,
@@ -589,5 +610,6 @@ module.exports = {
     logPayment,
     logPaymentUpdate,
     logPayout,
-    logPayoutUpdate
+    logPayoutUpdate,
+    logProperty
 };
