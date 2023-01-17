@@ -203,6 +203,26 @@ app.post( '/jobber/PAYMENT_UPDATE', ( req, res ) => {
 } );
 
 /**
+ * Handle Payout Webhooks
+ */
+app.post( '/jobber/PAYOUT_CREATE', ( req, res ) => {
+    console.info('Got an PAYOUT_CREATE event from Jobber!');
+
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus( 200 );
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        JobberWebHookHandler.payoutCreateHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
+} );
+
+/**
  * Handles a new Jobber Authorization Code, sets it in the config, then exits
  */
 app.get( '/jobber/authorize', ( req, res ) => {

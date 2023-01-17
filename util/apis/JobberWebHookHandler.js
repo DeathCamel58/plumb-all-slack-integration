@@ -172,6 +172,22 @@ async function paymentUpdateHandle(req) {
     }
 }
 
+/**
+ * Adds payout create event in PostHog
+ * @param req The incoming web data
+ * @returns {Promise<void>}
+ */
+async function payoutCreateHandle(req) {
+    let body = req.body;
+
+    // Verify authenticity of webhook, then process
+    if (jobberVerify(body, req.header('X-Jobber-Hmac-SHA256'))) {
+        // Get quote data
+        let payout = await Jobber.getPayoutData(body.data["webHookEvent"]["itemId"]);
+        // Insert quote in PostHog
+        await PostHog.logPayout(payout);
+    }
+}
 
 module.exports = {
     clientHandle,

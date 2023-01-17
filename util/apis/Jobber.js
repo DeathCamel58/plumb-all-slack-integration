@@ -395,12 +395,47 @@ query PaymentQuery {
     return paymentResponse["paymentRecord"];
 }
 
+/**
+ * Runs Jobber payment query for given itemID, and returns the data
+ * @param itemID The itemID in the webhook
+ * @returns {Promise<*>} The data for the invoice
+ */
+async function getPayoutData(itemID) {
+    let query =
+        `
+query PayoutQuery {
+    paymentRecord (id: "${itemID}") {
+        arrivalDate
+        created
+        currency
+        feeAmount
+        grossAmount
+        id
+        identifier
+        netAmount
+        payoutMethod
+        status
+        type
+    }
+}
+        `;
+
+    let paymentResponse = await makeRequest(query);
+
+    let client = await getClientData(paymentResponse["paymentRecord"].client.id);
+
+    paymentResponse["paymentRecord"].client = client;
+
+    return paymentResponse["paymentRecord"];
+}
+
 module.exports = {
     verifyWebhook,
+    setAuthorization,
     getInvoiceData,
     getQuoteData,
     getJobData,
     getClientData,
     getPaymentData,
-    setAuthorization
+    getPayoutData
 };
