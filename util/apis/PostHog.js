@@ -702,6 +702,14 @@ async function logVisitUpdate(jobberVisit, clientID) {
  */
 async function logVisitComplete(jobberVisit, clientID) {
     // Create an event for quote in PostHog
+
+    let name;
+    if (jobberVisit.createdBy !== null && jobberVisit.createdBy !== undefined) {
+        if (jobberVisit.createdBy.name !== null && jobberVisit.createdBy.name !== undefined) {
+            name = jobberVisit.createdBy.name.full;
+        }
+    }
+
     let captureData = {
         api_key: process.env.POSTHOG_TOKEN,
         event: 'visit completed',
@@ -710,7 +718,7 @@ async function logVisitComplete(jobberVisit, clientID) {
             allDay: jobberVisit.allDay,
             completedAt: jobberVisit.completedAt,
             createdAt: jobberVisit.createdAt,
-            createdBy: jobberVisit.createdBy.name.full,
+            createdBy: name,
             duration: jobberVisit.duration,
             endAt: jobberVisit.endAt,
             instructions: jobberVisit.instructions,
