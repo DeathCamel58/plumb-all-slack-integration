@@ -404,7 +404,7 @@ async function getPayoutData(itemID) {
     let query =
         `
 query PayoutQuery {
-    paymentRecord (id: "${itemID}") {
+    payoutRecord (id: "${itemID}") {
         arrivalDate
         created
         currency
@@ -422,7 +422,7 @@ query PayoutQuery {
 
     let paymentResponse = await makeRequest(query);
 
-    return paymentResponse["paymentRecord"];
+    return paymentResponse["payoutRecord"];
 }
 
 /**
