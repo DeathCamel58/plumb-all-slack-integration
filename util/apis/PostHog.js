@@ -212,7 +212,7 @@ async function sendClientToPostHog(contact) {
     if (contact.address !== '' && contact.address !== undefined && contact.address !== null) {
         place = await GoogleMaps.searchPlace(contact.address);
 
-        if (place.length <= 0) {
+        if (place === null) {
             console.error(`No place found for ${contact.address} on Google Maps.`);
         }
     }
