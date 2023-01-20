@@ -125,7 +125,21 @@ class Contact {
         message += `Caller: ${this.contactName} ${parenthesisContactInfo}\n`;
 
         // If there's an address, use it.
-        if (this.contactAddress !== "-, - -, -" && this.contactAddress !== "NA, NA NA, NA" && this.contactAddress !== "") {
+        let tmp = this.contactAddress;
+        let isAddress = true;
+        tmp = tmp.replace(/ /g, '');
+        tmp = tmp.replace(/,/g, '');
+        tmp = tmp.replace(/-/g, '');
+        tmp = tmp.replace(/\//g, '');
+        tmp = tmp.replace(/NA/g, '');
+        tmp = tmp.replace(/na/g, '');
+        tmp = tmp.replace(/Na/g, '');
+        tmp = tmp.replace(/nA/g, '');
+        if (tmp === '') {
+            isAddress = false;
+        }
+
+        if (isAddress) {
             message += `Address: <https://www.google.com/maps?hl=en&q=${fullAddressForLink}|${this.contactAddress}>\n`;
         } else {
             message += `Address: Didn't leave one\n`;
