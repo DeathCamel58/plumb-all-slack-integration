@@ -2,6 +2,7 @@ const Contact = require("../contact");
 const GoogleMaps = require("./GoogleMaps");
 const SlackBot = require("./SlackBot");
 const PostHog = require("./PostHog");
+const APICoordinator = require("../APICoordinator");
 
 /**
  * Processes a Google Ads Lead form webhook
@@ -37,8 +38,7 @@ async function LeadFormHandle(data) {
     // Create a contact object
     let contact = new Contact("Google Ads", name, userData["PHONE_NUMBER"], undefined, undefined, location, userData['can_you_describe_your_plumbing_issue?']);
 
-    SlackBot.sendMessage(contact.messageToSend(), 'Google Ads Contact');
-    PostHog.logContact(contact, JSON.stringify(data));
+    await APICoordinator.contactMade(contact, JSON.stringify(data));
 }
 
 module.exports = {

@@ -219,7 +219,7 @@ async function sendClientToPostHog(contact) {
 
     // Set the location data for the user if a place is resolved
     let clientData = {};
-    if (place !== undefined) {
+    if (place !== undefined && place !== null) {
         if (place.length !== null) {
             clientData = {
                 $geoip_city_name: getPlaceLocationPart(place, 2, 'long_name'),

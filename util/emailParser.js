@@ -26,7 +26,6 @@ function parseMessageFromAnswerphone(message) {
     let callerid = cleanText(message.split("CALLERID:  ")[1].split("MSGID: ")[0]);
 
     let contact = new Contact("Call", name, phone, callerid, undefined, fullAddress, contactMessage);
-    APICoordinator.contactMade(contact, message);
     return contact;
 }
 
@@ -44,7 +43,6 @@ function parseMessageFromWebsite(message) {
     let contactMessage = cleanText(parts[5].split("message:")[1]);
 
     let contact = new Contact("Message From Website", name, phone, undefined, email, address, contactMessage);
-    APICoordinator.contactMade(contact, message);
     return contact;
 }
 

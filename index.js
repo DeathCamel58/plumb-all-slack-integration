@@ -5,6 +5,7 @@ let emailClient = require('./util/emailClient.js');
 require('./util/web.js');
 
 const _ = require('lodash');
+const APICoordinator = require("./util/APICoordinator");
 
 /**
  * Creates a message to send in slack, and sends it off if it is a contact email
@@ -12,9 +13,9 @@ const _ = require('lodash');
  * @returns {Promise<void>} Promise that resolves after message sent, or ignored
  */
 async function handleMessage(mail) {
-    let [message, fromWhere] = messageConstructor.createMessage(mail);
+    let [contact, fromWhere] = messageConstructor.createMessage(mail);
     if (fromWhere != null) {
-        await slack.sendMessage(message, fromWhere + " Contact");
+        await APICoordinator.contactMade(contact, mail.body.content);
         if (fromWhere !== "Google Ads"){
             await emailClient.moveMarkEmail(mail, fromWhere);
         }

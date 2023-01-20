@@ -325,7 +325,6 @@ async function requestCreateHandle(req) {
         }
         // Send the request to Slack
         let contact = new Contact("Jobber Request", request.client.name, request.client.phones[0].number, null, request.client.emails[0].address, address, `<${request.jobberWebUri}|Details in Jobber> (You may have to hold on that link, copy it, and paste it into your web browser to access it)`);
-        await SlackBot.sendMessage(contact.messageToSend(), `${contact.type} Contact`);
         await APICoordinator.contactMade(contact, JSON.stringify(body));
     }
 }
