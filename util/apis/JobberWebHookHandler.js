@@ -330,6 +330,25 @@ async function requestCreateHandle(req) {
     }
 }
 
+/**
+ * Adds request update event in PostHog
+ * @param req The incoming web data
+ * @returns {Promise<void>}
+ */
+async function requestUpdateHandle(req) {
+    let body = req.body;
+
+    // Verify authenticity of webhook, then process
+    if (jobberVerify(body, req.header('X-Jobber-Hmac-SHA256'))) {
+        // Get request data
+        let request = await Jobber.getRequestData(body.data["webHookEvent"]["itemId"]);
+        // Insert/Update client in PostHog
+        let clientID = await PostHog.logClient(request.client);
+        // Insert request in PostHog
+        await PostHog.logRequestUpdate(request, clientID);
+    }
+}
+
 module.exports = {
     clientHandle,
     invoiceHandle,
@@ -346,5 +365,6 @@ module.exports = {
     visitCreateHandle,
     visitUpdateHandle,
     visitCompleteHandle,
-    requestCreateHandle
+    requestCreateHandle,
+    requestUpdateHandle
 };

@@ -364,6 +364,25 @@ app.post( '/jobber/REQUEST_CREATE', ( req, res ) => {
     }
 } );
 
+app.post( '/jobber/REQUEST_UPDATE', ( req, res ) => {
+    console.info('Got an REQUEST_UPDATE event from Jobber!');
+
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus( 200 );
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        JobberWebHookHandler.requestUpdateHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
+} );
+
+//  TODO: Handle { WEBHOOK_TYPE: 'REQUEST_DESTROY' }
+
 /**
  * Handles a new Jobber Authorization Code, sets it in the config, then exits
  */
