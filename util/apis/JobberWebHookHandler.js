@@ -1,6 +1,9 @@
 const crypto = require('crypto');
 let Jobber = require("./Jobber.js");
 let PostHog = require('./PostHog.js');
+const SlackBot = require("./SlackBot");
+const Contact = require("../contact");
+const APICoordinator = require("../APICoordinator");
 
 
 /**
@@ -301,6 +304,51 @@ async function visitCompleteHandle(req) {
     }
 }
 
+/**
+ * Adds new visit event in PostHog
+ * @param req The incoming web data
+ * @returns {Promise<void>}
+ */
+async function requestCreateHandle(req) {
+    let body = req.body;
+
+    // Verify authenticity of webhook, then process
+    if (jobberVerify(body, req.header('X-Jobber-Hmac-SHA256'))) {
+        // Get request data
+        let request = await Jobber.getRequestData(body.data["webHookEvent"]["itemId"]);
+        // Determine which address to use. Use billing address as a fallback
+        let address = `${request.client.billingAddress.street}, ${request.client.billingAddress.city} ${request.client.billingAddress.province}, ${request.client.billingAddress.postalCode}`;
+        if (request.property !== null && request.property !== undefined) {
+            if (request.property.address !== null && request.property.address !== undefined) {
+                address = `${request.property.address.street}, ${request.property.address.city} ${request.property.address.province}, ${request.property.address.postalCode}`;
+            }
+        }
+        // Send the request to Slack
+        let contact = new Contact("Jobber Request", request.client.name, request.client.phones[0].number, null, request.client.emails[0].address, address, `<${request.jobberWebUri}|Details in Jobber> (You may have to hold on that link, copy it, and paste it into your web browser to access it)`);
+        await SlackBot.sendMessage(contact.messageToSend(), `${contact.type} Contact`);
+        await APICoordinator.contactMade(contact, JSON.stringify(body));
+    }
+}
+
+/**
+ * Adds request update event in PostHog
+ * @param req The incoming web data
+ * @returns {Promise<void>}
+ */
+async function requestUpdateHandle(req) {
+    let body = req.body;
+
+    // Verify authenticity of webhook, then process
+    if (jobberVerify(body, req.header('X-Jobber-Hmac-SHA256'))) {
+        // Get request data
+        let request = await Jobber.getRequestData(body.data["webHookEvent"]["itemId"]);
+        // Insert/Update client in PostHog
+        let clientID = await PostHog.logClient(request.client);
+        // Insert request in PostHog
+        await PostHog.logRequestUpdate(request, clientID);
+    }
+}
+
 module.exports = {
     clientHandle,
     invoiceHandle,
@@ -316,5 +364,7 @@ module.exports = {
     propertyUpdateHandle,
     visitCreateHandle,
     visitUpdateHandle,
-    visitCompleteHandle
+    visitCompleteHandle,
+    requestCreateHandle,
+    requestUpdateHandle
 };

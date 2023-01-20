@@ -441,7 +441,7 @@ async function logQuoteUpdate(jobberQuote, clientID) {
  * @param clientID The client ID to use for the event
  */
 async function logJob(jobberJob, clientID) {
-    // Create an event for quote in PostHog
+    // Create an event for job in PostHog
     let captureData = {
         api_key: process.env.POSTHOG_TOKEN,
         event: 'job made',
@@ -462,7 +462,7 @@ async function logJob(jobberJob, clientID) {
  * @param clientID The client ID to use for the event
  */
 async function logJobUpdate(jobberJob, clientID) {
-    // Create an event for quote in PostHog
+    // Create an event for job in PostHog
     let captureData = {
         api_key: process.env.POSTHOG_TOKEN,
         event: 'job updated',
@@ -483,7 +483,7 @@ async function logJobUpdate(jobberJob, clientID) {
  * @param clientID The client ID to use for the event
  */
 async function logPayment(jobberPayment, clientID) {
-    // Create an event for quote in PostHog
+    // Create an event for payment in PostHog
     let captureData = {
         api_key: process.env.POSTHOG_TOKEN,
         event: 'payment made',
@@ -505,7 +505,7 @@ async function logPayment(jobberPayment, clientID) {
  * @param clientID The client ID to use for the event
  */
 async function logPaymentUpdate(jobberPayment, clientID) {
-    // Create an event for quote in PostHog
+    // Create an event for payment in PostHog
     let captureData = {
         api_key: process.env.POSTHOG_TOKEN,
         event: 'payment updated',
@@ -526,7 +526,7 @@ async function logPaymentUpdate(jobberPayment, clientID) {
  * @param jobberPayout The payout that was parsed
  */
 async function logPayout(jobberPayout) {
-    // Create an event for quote in PostHog
+    // Create an event for payout in PostHog
     let captureData = {
         api_key: process.env.POSTHOG_TOKEN,
         event: 'payout made',
@@ -553,7 +553,7 @@ async function logPayout(jobberPayout) {
  * @param jobberPayout The payout that was parsed
  */
 async function logPayoutUpdate(jobberPayout) {
-    // Create an event for quote in PostHog
+    // Create an event for payout in PostHog
     let captureData = {
         api_key: process.env.POSTHOG_TOKEN,
         event: 'payout updated',
@@ -581,7 +581,7 @@ async function logPayoutUpdate(jobberPayout) {
  * @param clientID The client ID to use for the event
  */
 async function logProperty(jobberProperty, clientID) {
-    // Create an event for quote in PostHog
+    // Create an event for property in PostHog
     let captureData = {
         api_key: process.env.POSTHOG_TOKEN,
         event: 'property made',
@@ -602,7 +602,7 @@ async function logProperty(jobberProperty, clientID) {
  * @param clientID The client ID to use for the event
  */
 async function logPropertyUpdate(jobberProperty, clientID) {
-    // Create an event for quote in PostHog
+    // Create an event for property in PostHog
     let captureData = {
         api_key: process.env.POSTHOG_TOKEN,
         event: 'property updated',
@@ -623,7 +623,7 @@ async function logPropertyUpdate(jobberProperty, clientID) {
  * @param clientID The client ID to use for the event
  */
 async function logVisit(jobberVisit, clientID) {
-    // Create an event for quote in PostHog
+    // Create an event for visit in PostHog
 
     let name;
     if (jobberVisit.createdBy !== null && jobberVisit.createdBy !== undefined) {
@@ -662,7 +662,7 @@ async function logVisit(jobberVisit, clientID) {
  * @param clientID The client ID to use for the event
  */
 async function logVisitUpdate(jobberVisit, clientID) {
-    // Create an event for quote in PostHog
+    // Create an event for visit in PostHog
 
     let name;
     if (jobberVisit.createdBy !== null && jobberVisit.createdBy !== undefined) {
@@ -701,7 +701,7 @@ async function logVisitUpdate(jobberVisit, clientID) {
  * @param clientID The client ID to use for the event
  */
 async function logVisitComplete(jobberVisit, clientID) {
-    // Create an event for quote in PostHog
+    // Create an event for visit in PostHog
 
     let name;
     if (jobberVisit.createdBy !== null && jobberVisit.createdBy !== undefined) {
@@ -734,6 +734,50 @@ async function logVisitComplete(jobberVisit, clientID) {
     await useAPI('capture/', 'post', captureData);
 }
 
+/**
+ * Logs a request update in Jobber to PostHog
+ * @param jobberRequest The request that was parsed
+ * @param clientID The client ID to use for the event
+ */
+async function logRequestUpdate(jobberRequest, clientID) {
+    // Create an event for request in PostHog
+
+    let name;
+    if (jobberRequest.createdBy !== null && jobberRequest.createdBy !== undefined) {
+        if (jobberRequest.createdBy.name !== null && jobberRequest.createdBy.name !== undefined) {
+            name = jobberRequest.createdBy.name.full;
+        }
+    }
+
+    let address = `${jobberRequest.client.billingAddress.street}, ${jobberRequest.client.billingAddress.city} ${jobberRequest.client.billingAddress.province}, ${jobberRequest.client.billingAddress.postalCode}`;
+    if (jobberRequest.property !== null && jobberRequest.property !== undefined) {
+        if (jobberRequest.property.address !== null && jobberRequest.property.address !== undefined) {
+            address = `${jobberRequest.property.address.street}, ${jobberRequest.property.address.city} ${jobberRequest.property.address.province}, ${jobberRequest.property.address.postalCode}`;
+        }
+    }
+
+    let captureData = {
+        api_key: process.env.POSTHOG_TOKEN,
+        event: 'request updated',
+        properties: {
+            distinct_id: clientID,
+            companyName: jobberRequest.companyName,
+            contactName: jobberRequest.contactName,
+            createdAt: jobberRequest.createdAt,
+            email: jobberRequest.email,
+            jobberWebUri: jobberRequest.jobberWebUri,
+            phone: jobberRequest.phone,
+            address: jobberRequest.address,
+            referringClient: (jobberRequest.referringClient ? jobberRequest.referringClient.name : null),
+            requestStatus: jobberRequest.requestStatus,
+            source: jobberRequest.source,
+            title: jobberRequest.title,
+            updatedAt: jobberRequest.updatedAt,
+        }
+    };
+    await useAPI('capture/', 'post', captureData);
+}
+
 module.exports = {
     individualSearch,
     searchForUser,
@@ -753,5 +797,6 @@ module.exports = {
     logPropertyUpdate,
     logVisit,
     logVisitUpdate,
-    logVisitComplete
+    logVisitComplete,
+    logRequestUpdate
 };

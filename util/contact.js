@@ -101,7 +101,7 @@ class Contact {
         let message = `=== New ${this.contactType} ===\n`;
 
         // If there is an alternate phone number, use it.
-        if (this.contactAlternatePhone !== undefined && this.contactAlternatePhone !== "" && this.contactAlternatePhone !== this.contactPhone) {
+        if (this.contactAlternatePhone !== undefined && this.contactAlternatePhone !== null && this.contactAlternatePhone !== "" && this.contactAlternatePhone !== this.contactPhone) {
             contactInfoParts.push(`( Left ${this.contactPhone} but called from: ${this.contactAlternatePhone} )`);
         } else {
             if (this.contactPhone !== undefined && this.contactPhone !== "") {

@@ -359,9 +359,9 @@ query ClientQuery {
 }
         `;
 
-    let response = await makeRequest(query);
+    let clientResponse = await makeRequest(query);
 
-    return response.client;
+    return clientResponse.client;
 }
 
 /**
@@ -420,9 +420,9 @@ query PayoutQuery {
 }
         `;
 
-    let paymentResponse = await makeRequest(query);
+    let payoutResponse = await makeRequest(query);
 
-    return paymentResponse["payoutRecord"];
+    return payoutResponse["payoutRecord"];
 }
 
 /**
@@ -495,13 +495,62 @@ query VisitQuery {
 }
         `;
 
-    let propertyResponse = await makeRequest(query);
+    let visitResponse = await makeRequest(query);
 
-    let client = await getClientData(propertyResponse["visit"].client.id);
+    let client = await getClientData(visitResponse["visit"].client.id);
 
-    propertyResponse["visit"].client = client;
+    visitResponse["visit"].client = client;
 
-    return propertyResponse["visit"];
+    return visitResponse["visit"];
+}
+
+/**
+ * Runs Jobber request query for given itemID, and returns the data
+ * @param itemID The itemID in the webhook
+ * @returns {Promise<*>} The data for the visit
+ */
+async function getRequestData(itemID) {
+    let query =
+        `
+query RequestQuery {
+    request (id: "${itemID}") {
+        client {
+            id
+        }
+        companyName
+        contactName
+        createdAt
+        email
+        jobberWebUri
+        phone
+        property {
+            id
+            address {
+                street
+                city
+                province
+                postalCode
+            }
+        }
+        referringClient {
+            id
+            name
+        }
+        requestStatus
+        source
+        title
+        updatedAt
+    }
+}
+        `;
+
+    let requestResponse = await makeRequest(query);
+
+    let client = await getClientData(requestResponse["request"].client.id);
+
+    requestResponse["request"].client = client;
+
+    return requestResponse["request"];
 }
 
 module.exports = {
@@ -514,5 +563,6 @@ module.exports = {
     getPaymentData,
     getPayoutData,
     getPropertyData,
-    getVisitData
+    getVisitData,
+    getRequestData
 };

@@ -31,7 +31,7 @@ async function handleMessage(mail) {
 async function handleMessages(email) {
     let all = _.find(email.parts, { "which": "" })
 
-    if (["notification@getjobber.com", "submissions@formsubmit.co", "operator@youransweringservices.com", "answerphoneoperator@dixie-net.com"].includes(email.from.emailAddress.address)) {
+    if (["submissions@formsubmit.co", "operator@youransweringservices.com", "answerphoneoperator@dixie-net.com"].includes(email.from["emailAddress"].address)) {
         if (!email.body.content.includes("Email of All Messages to 3646 PLUMB-ALL")) {
             await handleMessage(email);
         } else {
