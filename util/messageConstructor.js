@@ -17,9 +17,6 @@ function createMessage(mail) {
         } else if (mail.subject.includes("New submission from")) {
             let parsed = emailParser.parseMessageFromWebsite(mail.body.content);
             return [parsed.messageToSend(), "Website"]
-        } else if (mail.subject.includes("You received a new request from")) {
-            let parsed = emailParser.parseMessageFromJobber(mail.body.content);
-            return [parsed.messageToSend(), "Jobber Request"]
         }
         return [null, null]
     }

@@ -6,7 +6,6 @@ let APICoordinator = require("./APICoordinator");
 module.exports = {
     parseMessageFromAnswerphone,
     parseMessageFromWebsite,
-    parseMessageFromJobber,
     cleanText
 }
 
@@ -45,24 +44,6 @@ function parseMessageFromWebsite(message) {
     let contactMessage = cleanText(parts[5].split("message:")[1]);
 
     let contact = new Contact("Message From Website", name, phone, undefined, email, address, contactMessage);
-    APICoordinator.contactMade(contact, message);
-    return contact;
-}
-
-/**
- * Takes email body from Jobber, and generates an array of contact information
- * @param message Email body
- * @returns {Contact} Array of contact details
- */
-function parseMessageFromJobber(message) {
-    let phone = cleanText(message.split("Phone")[1].split("Address")[0]);
-    let name = cleanText(message.split("Contact name")[1].split("Email")[0]);
-    let email = cleanText(message.split("Email")[1].split("Phone")[0]);
-    let address = cleanText(message.split("\nAddress")[1].split("View Request")[0]);
-    let contactMessage = cleanText(message.split("View Request")[1].split("\n")[0].split(">")[0]);
-    contactMessage = contactMessage + "|Details in Jobber> (You may have to hold on that link, copy it, and paste it into your web browser to access it)";
-
-    let contact = new Contact("Message From Jobber Request", name, phone, undefined, email, address, contactMessage);
     APICoordinator.contactMade(contact, message);
     return contact;
 }
