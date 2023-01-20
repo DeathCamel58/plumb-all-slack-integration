@@ -420,11 +420,11 @@ app.post( '/google-ads/form', ( req, res ) => {
 
     if (data["google_key"] === process.env.GOOGLE_ADS_KEY) {
         console.info('Webhook: Google Ads lead form received.');
+        res.sendStatus( 200 );
 
         GoogleAds.LeadFormHandle(data);
-        res.sendStatus( 200 );
     } else {
-        console.error(`Webhook for Google Ads didn't have correct key.\n\tReceived: ${data["google_key"]}\n\tExpected: ${process.env.GOOGLE_ADS_KEY}`);
+        console.error(`Webhook for Google Ads didn't have correct key.\n\tReceived: "${data["google_key"]}"\n\tExpected: "${process.env.GOOGLE_ADS_KEY}"`);
         res.sendStatus(401);
     }
 } );

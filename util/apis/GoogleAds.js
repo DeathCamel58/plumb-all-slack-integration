@@ -1,6 +1,7 @@
 const Contact = require("../contact");
 const GoogleMaps = require("./GoogleMaps");
 const SlackBot = require("./SlackBot");
+const PostHog = require("./PostHog");
 
 /**
  * Processes a Google Ads Lead form webhook
@@ -31,12 +32,13 @@ async function LeadFormHandle(data) {
     }
 
     // Format the name properly
-    let name = (userData["FIRST_NAME"] ? userData["FIRST_NAME"] + ' ' : '') + (userData["LAST_NAME"] ? userData["LAST_NAME"] : '');
+    let name = (userData["FULL_NAME"] ? userData["FULL_NAME"] : '');
 
     // Create a contact object
     let contact = new Contact("Google Ads", name, userData["PHONE_NUMBER"], undefined, undefined, location, userData['can_you_describe_your_plumbing_issue?']);
 
     SlackBot.sendMessage(contact.messageToSend(), 'Google Ads Contact');
+    PostHog.logContact(contact, JSON.stringify(data));
 }
 
 module.exports = {
