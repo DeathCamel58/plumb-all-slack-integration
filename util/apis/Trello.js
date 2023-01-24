@@ -199,7 +199,7 @@ async function moveContactCard(message, destinationList) {
 
     // Determine if the card was found
     let cardExists = false;
-    if (card !== undefined) {
+    if (card !== undefined && card !== null) {
         if ('id' in card) {
             cardExists = true;
         }
