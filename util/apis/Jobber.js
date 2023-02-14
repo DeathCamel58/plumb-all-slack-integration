@@ -38,6 +38,8 @@ function verifyWebhook(req) {
 
         if (crypto.timingSafeEqual(Buffer.from(mySignature, 'utf8'), Buffer.from(jobberSignature, 'utf8'))) {
             return true;
+        } else {
+            console.warn(`Jobber webhook signature invalid.\n\tExpecting: ${mySignature}\n\tReceived: ${jobberSignature}`);
         }
     }
 
