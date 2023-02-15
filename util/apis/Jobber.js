@@ -229,6 +229,7 @@ query InvoiceQuery {
             tipsTotal
             total
         }
+        createdAt
     }
 }
         `;
@@ -241,7 +242,36 @@ query InvoiceQuery {
 }
 
 /**
- * Runs Jobber Invoice query for given itemID, and returns the data
+ * Runs Jobber Invoice query and returns the data
+ * @param filterType The filter attribute name
+ * @param filterValue The filter attribute value
+ * @returns {Promise<*>} The data for the invoice
+ */
+async function getInvoiceSearchData(filterType, filterValue) {
+    let query =
+        `
+query InvoiceQuery {
+  invoices (filter: {${filterType}: {eq: ${filterValue}}}, first: 1) {
+    nodes {
+      id
+    }
+  }
+}
+        `;
+
+    let invoiceResponse = await makeRequest(query);
+
+    if (invoiceResponse.invoices.nodes.length > 0) {
+        invoiceResponse = await getInvoiceData(invoiceResponse.invoices.nodes[0].id);
+    } else {
+        return null
+    }
+
+    return invoiceResponse;
+}
+
+/**
+ * Runs Jobber Quote query for given itemID, and returns the data
  * @param itemID The itemID in the webhook
  * @returns {Promise<*>} The data for the quote
  */
@@ -266,6 +296,7 @@ query QuoteQuery {
           taxAmount
           total
         }
+        createdAt
     }
 }
         `;
@@ -275,6 +306,35 @@ query QuoteQuery {
     quoteResponse["quote"].client = await getClientData(quoteResponse["quote"].client.id);
 
     return quoteResponse["quote"];
+}
+
+/**
+ * Runs Jobber Quote query and returns the data
+ * @param filterType The filter attribute name
+ * @param filterValue The filter attribute value
+ * @returns {Promise<*>} The data for the quote
+ */
+async function getQuoteSearchData(filterType, filterValue) {
+    let query =
+        `
+query QuoteQuery {
+  quotes (filter: {${filterType}: {eq: ${filterValue}}}, first: 1) {
+    nodes {
+      id
+    }
+  }
+}
+        `;
+
+    let quoteResponse = await makeRequest(query);
+
+    if (quoteResponse.quotes.nodes.length > 0) {
+        quoteResponse = await getQuoteData(quoteResponse.quotes.nodes[0].id);
+    } else {
+        return null
+    }
+
+    return quoteResponse;
 }
 
 /**
@@ -295,6 +355,7 @@ query JobQuery {
         jobStatus
         title
         total
+        createdAt
     }
 }
         `;
@@ -304,6 +365,35 @@ query JobQuery {
     jobResponse["job"].client = await getClientData(jobResponse["job"].client.id);
 
     return jobResponse["job"];
+}
+
+/**
+ * Runs Jobber Invoice query and returns the data
+ * @param filterType The filter attribute name
+ * @param filterValue The filter attribute value
+ * @returns {Promise<*>} The data for the job
+ */
+async function getJobSearchData(filterType, filterValue) {
+    let query =
+        `
+query JobQuery {
+  jobs (filter: {${filterType}: {eq: ${filterValue}}}, first: 1) {
+    nodes {
+      id
+    }
+  }
+}
+        `;
+
+    let jobResponse = await makeRequest(query);
+
+    if (jobResponse.jobs.nodes.length > 0) {
+        jobResponse = await getInvoiceData(jobResponse.jobs.nodes[0].id);
+    } else {
+        return null
+    }
+
+    return jobResponse;
 }
 
 /**
@@ -534,8 +624,11 @@ module.exports = {
     verifyWebhook,
     setAuthorization,
     getInvoiceData,
+    getInvoiceSearchData,
     getQuoteData,
+    getQuoteSearchData,
     getJobData,
+    getJobSearchData,
     getClientData,
     getPaymentData,
     getPayoutData,
