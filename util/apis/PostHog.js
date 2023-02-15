@@ -71,7 +71,12 @@ async function individualSearch(searchQuery, parameter) {
         console.error(`Fetch: Failure in individualSearch`);
         console.error(e);
     }
-    data = JSON.parse(data);
+    try {
+        data = JSON.parse(data);
+    } catch (e) {
+        console.error(`Failed to parse the JSON data with\n${e}`);
+    }
+
     return data;
 }
 
