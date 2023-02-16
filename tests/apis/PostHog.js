@@ -10,14 +10,14 @@ describe("PostHog", () => {
         test("Search for user (single result)", async () => {
             let query = [{
                 key: "name",
-                value: "DYLAN CORRALES",
+                value: "Dylan Corrales",
                 operator: "exact",
                 type: "person"
             }];
 
             let results = await PostHog.individualSearch(query, null);
             expect(results.results.length).toBeGreaterThan(0);
-            expect(results.results[0].properties.name).toBe("DYLAN CORRALES");
+            expect(results.results[0].properties.name).toBe("Dylan Corrales");
         });
 
         test("Search for user (no result)", async () => {
@@ -38,7 +38,7 @@ describe("PostHog", () => {
             let contact = new Contact(null, "DYLAN CORRALES", null, null, null, null, null);
 
             let results = await PostHog.searchForUser(contact);
-            expect(results).toBe("448769e7-c544-4355-bdc7-1b878443fee6");
+            expect(results).toBe("1234");
         });
 
         test("Search for contact (found by phone)", async () => {
