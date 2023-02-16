@@ -324,6 +324,12 @@ async function event(req) {
                     break;
             }
             break;
+        case "link_shared":
+            // Although Slack's API is set up to notify us about links being shared that point to Jobber, Jobber's API
+            // doesn't support searching for items via the URI of the item. This will (hopefully) be added by Jobber.
+            // Ref: https://github.com/DeathCamel58/plumb-all-slack-integration/issues/3#issuecomment-1433056300
+            console.warn(`Link was shared in message. Can't unfurl due to Jobber API lacking search functionality.`);
+            break;
         default:
             console.info(`Slack sent an unhandled event type: ${event.type}`);
             break;
