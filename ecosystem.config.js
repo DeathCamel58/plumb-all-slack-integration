@@ -8,14 +8,14 @@ module.exports = {
         interpreter: `node`,
         env_production: {
             NODE_ENV : "production",
-            ENV_LOCATION : "$HOME/plumb-all-slack-integration/.env"
+            ENV_LOCATION : "../.env"
         },
         // TODO: PM2 does not see a defined development environment
         // > pm2 deploy development
         // development environment is not defined in ecosystem.config.js file
         env_development: {
             NODE_ENV : "development",
-            ENV_LOCATION : "$HOME/plumb-all-slack-integration/.env",
+            ENV_LOCATION : "../.env",
             DEBUGGING: true
         },
         autorestart: true,
@@ -23,7 +23,7 @@ module.exports = {
         ignore_path: [
             "node_modules"
         ],
-        log_file: '$HOME/plumb-all-slack-integration/runtime.log'
+        log_file: '../runtime.log'
     }],
 
     // Deployment to server configuration
