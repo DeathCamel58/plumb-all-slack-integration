@@ -5,7 +5,7 @@ module.exports = {
         name   : "plumb-all-slack-integration",
         script : `npm`,
         args : "start",
-        interpreter: `/home/ubuntu/versions/node/v${NODE_VERSION}/bin/node`,
+        interpreter: `/home/ubuntu/.nvm/versions/node/v${NODE_VERSION}/bin/node`,
         env_production: {
             NODE_ENV : "production",
             ENV_LOCATION : "$HOME/plumb-all-slack-integration/.env"
