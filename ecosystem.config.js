@@ -8,7 +8,7 @@ module.exports = {
         interpreter: `/home/ubuntu/.nvm/versions/node/v${NODE_VERSION}/bin/node`,
         env_production: {
             NODE_ENV : "production",
-            ENV_LOCATION : "$HOME/plumb-all-slack-integration/.env"
+            ENV_LOCATION : "/home/ubuntu/plumb-all-slack-integration/.env"
         },
         // TODO: PM2 does not see a defined development environment
         // > pm2 deploy development
