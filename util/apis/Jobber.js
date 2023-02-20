@@ -129,36 +129,39 @@ async function refreshAccessToken() {
                 body: `client_id=${process.env.JOBBER_CLIENT_ID}&client_secret=${process.env.JOBBER_APP_SECRET}&grant_type=refresh_token&refresh_token=${process.env.JOBBER_REFRESH_TOKEN}`
             });
 
-            if (response.status === 200) {
-                success = true;
-                data = await response.text();
-                data = JSON.parse(data);
-                JOBBER_ACCESS_TOKEN = data.access_token;
-                let refresh_token = data.refresh_token;
+            switch (response.status) {
+                case 200:
+                    success = true;
+                    data = await response.text();
+                    data = JSON.parse(data);
+                    JOBBER_ACCESS_TOKEN = data.access_token;
+                    let refresh_token = data.refresh_token;
 
-                // Save the refresh token to file
-                let file = process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env';
-                fs.readFile(file, 'utf8', function (err, data) {
-                    if (err) {
-                        return console.error(err);
-                    }
-
-                    let result = data.replace(process.env.JOBBER_REFRESH_TOKEN, refresh_token);
-                    process.env.JOBBER_REFRESH_TOKEN = refresh_token;
-
-                    fs.writeFile(file, result, 'utf8', function (err) {
+                    // Save the refresh token to file
+                    let file = process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env';
+                    fs.readFile(file, 'utf8', function (err, data) {
                         if (err) {
-                            console.error('Failed to save the Jobber Refresh Token to file.')
-                            console.error(err);
-                        } else {
-                            console.info('Received new Jobber Refresh Token!');
+                            return console.error(err);
                         }
+
+                        let result = data.replace(process.env.JOBBER_REFRESH_TOKEN, refresh_token);
+                        process.env.JOBBER_REFRESH_TOKEN = refresh_token;
+
+                        fs.writeFile(file, result, 'utf8', function (err) {
+                            if (err) {
+                                console.error('Failed to save the Jobber Refresh Token to file.')
+                                console.error(err);
+                            } else {
+                                console.info('Received new Jobber Refresh Token!');
+                            }
+                        });
                     });
-                });
-            }
-            if (response.status === 401) {
-                console.error(`Got ${response.status} while refreshing access token. Requesting authorization!`);
-                await requestAuthorization();
+                    break;
+                case 401:
+                default:
+                    console.error(`Got ${response.status} while refreshing access token. Requesting authorization!`);
+                    await requestAuthorization();
+                    break;
             }
         } catch (e) {
             console.error(`Fetch: Failure in refreshAccessToken`);
