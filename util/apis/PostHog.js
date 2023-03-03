@@ -107,7 +107,7 @@ async function searchForUser(contact) {
             type: "person"
         }];
         let results = await individualSearch(query, null).catch(e => console.error(e));
-        if (results.results.length !== undefined && results.results.length !== 0) {
+        if (typeof results.results !== "undefined" && results.results && results.results.length !== undefined && results.results.length !== 0) {
             for (let result of results.results) {
                 potentialIDs.push(result["distinct_ids"][0]);
             }
@@ -121,7 +121,7 @@ async function searchForUser(contact) {
             type: "person"
         }];
         let results = await individualSearch(query, null);
-        if (results.results.length !== undefined && results.results.length !== 0) {
+        if (typeof results.results !== "undefined" && results.results && results.results.length !== undefined && results.results.length !== 0) {
             for (let result of results.results) {
                 potentialIDs.push(result["distinct_ids"][0]);
             }
@@ -135,7 +135,7 @@ async function searchForUser(contact) {
             type: "person"
         }];
         let results = await individualSearch(query, null);
-        if (results.results.length !== undefined && results.results.length !== 0) {
+        if (typeof results.results !== "undefined" && results.results && results.results.length !== undefined && results.results.length !== 0) {
             for (let result of results.results) {
                 potentialIDs.push(result["distinct_ids"][0]);
             }
@@ -149,7 +149,7 @@ async function searchForUser(contact) {
             type: "person"
         }];
         let results = await individualSearch(query, null);
-        if (results.results.length !== undefined && results.results.length !== 0) {
+        if (typeof results.results !== "undefined" && results.results && results.results.length !== undefined && results.results.length !== 0) {
             for (let result of results.results) {
                 potentialIDs.push(result["distinct_ids"][0]);
             }
@@ -163,7 +163,7 @@ async function searchForUser(contact) {
             type: "person"
         }];
         let results = await individualSearch(query, null);
-        if (results.results.length !== undefined && results.results.length !== 0) {
+        if (typeof results.results !== "undefined" && results.results && results.results.length !== undefined && results.results.length !== 0) {
             for (let result of results.results) {
                 potentialIDs.push(result["distinct_ids"][0]);
             }
