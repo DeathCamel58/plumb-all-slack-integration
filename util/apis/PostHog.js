@@ -81,6 +81,31 @@ async function individualSearch(searchQuery, parameter) {
 }
 
 /**
+ * Searches for a user based on a value and key.
+ * @param key The key to search within
+ * @param value The value to search for
+ * @returns {Promise<*|null>} Matched users, null if none
+ */
+async function searchByKey(key, value) {
+    if (value !== null && value !== undefined) {
+        let query = [{
+            key: key,
+            value: value,
+            operator: "exact",
+            type: "person"
+        }];
+        let results = await individualSearch(query, null).catch(e => console.error(e));
+        if (typeof results.results === "undefined" || results.results.length === undefined || results.results.length == 0) {
+            return null
+        } else {
+            return results;
+        }
+    } else {
+        return null;
+    }
+}
+
+/**
  * Searches PostHog for a Contact
  * @param contact The contact to search for
  * @returns {undefined|string} The id of the first matching PostHog Person, or `undefined` if none
@@ -99,74 +124,34 @@ async function searchForUser(contact) {
     let potentialIDs = []
 
     // Search all contact parts
-    if (contact.name !== undefined) {
-        let query = [{
-            key: "name",
-            value: contact.name,
-            operator: "exact",
-            type: "person"
-        }];
-        let results = await individualSearch(query, null).catch(e => console.error(e));
-        if (typeof results.results !== "undefined" && results.results && results.results.length !== undefined && results.results.length !== 0) {
-            for (let result of results.results) {
-                potentialIDs.push(result["distinct_ids"][0]);
-            }
+    let results = await searchByKey("name", contact.name);
+    if (results !== null) {
+        for (let result of results.results) {
+            potentialIDs.push(result["distinct_ids"][0]);
         }
     }
-    if (contact.email !== undefined) {
-        let query = [{
-            key: "email",
-            value: contact.email,
-            operator: "exact",
-            type: "person"
-        }];
-        let results = await individualSearch(query, null);
-        if (typeof results.results !== "undefined" && results.results && results.results.length !== undefined && results.results.length !== 0) {
-            for (let result of results.results) {
-                potentialIDs.push(result["distinct_ids"][0]);
-            }
+    results = await searchByKey("email", contact.email);
+    if (results !== null) {
+        for (let result of results.results) {
+            potentialIDs.push(result["distinct_ids"][0]);
         }
     }
-    if (contact.phone !== undefined) {
-        let query = [{
-            key: "phone",
-            value: contact.phone,
-            operator: "exact",
-            type: "person"
-        }];
-        let results = await individualSearch(query, null);
-        if (typeof results.results !== "undefined" && results.results && results.results.length !== undefined && results.results.length !== 0) {
-            for (let result of results.results) {
-                potentialIDs.push(result["distinct_ids"][0]);
-            }
+    results = await searchByKey("phone", contact.phone);
+    if (results !== null) {
+        for (let result of results.results) {
+            potentialIDs.push(result["distinct_ids"][0]);
         }
     }
-    if (contact.alternatePhone !== undefined) {
-        let query = [{
-            key: "alternatePhone",
-            value: contact.alternatePhone,
-            operator: "exact",
-            type: "person"
-        }];
-        let results = await individualSearch(query, null);
-        if (typeof results.results !== "undefined" && results.results && results.results.length !== undefined && results.results.length !== 0) {
-            for (let result of results.results) {
-                potentialIDs.push(result["distinct_ids"][0]);
-            }
+    results = await searchByKey("alternatePhone", contact.alternatePhone);
+    if (results !== null) {
+        for (let result of results.results) {
+            potentialIDs.push(result["distinct_ids"][0]);
         }
     }
-    if (contact.address !== undefined) {
-        let query = [{
-            key: "address",
-            value: contact.address,
-            operator: "exact",
-            type: "person"
-        }];
-        let results = await individualSearch(query, null);
-        if (typeof results.results !== "undefined" && results.results && results.results.length !== undefined && results.results.length !== 0) {
-            for (let result of results.results) {
-                potentialIDs.push(result["distinct_ids"][0]);
-            }
+    results = await searchByKey("address", contact.address);
+    if (results !== null) {
+        for (let result of results.results) {
+            potentialIDs.push(result["distinct_ids"][0]);
         }
     }
 
