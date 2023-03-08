@@ -1,5 +1,4 @@
-require('dotenv').config({ path: process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env' });
-let slack = require('./util/apis/SlackBot.js');
+require('dotenv').config({path: process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env'});
 let messageConstructor = require('./util/messageConstructor.js');
 let emailClient = require('./util/emailClient.js');
 require('./util/web.js');
@@ -16,7 +15,7 @@ async function handleMessage(mail) {
     let [contact, fromWhere] = messageConstructor.createMessage(mail);
     if (fromWhere != null) {
         await APICoordinator.contactMade(contact, mail.body.content);
-        if (fromWhere !== "Google Ads"){
+        if (fromWhere !== "Google Ads") {
             await emailClient.moveMarkEmail(mail, fromWhere);
         }
     }
@@ -30,14 +29,14 @@ async function handleMessage(mail) {
  * @returns {Promise<void>} Promise that resolves after completion
  */
 async function handleMessages(email) {
-    let all = _.find(email.parts, { "which": "" })
+    let all = _.find(email.parts, {"which": ""});
 
     if (["submissions@formsubmit.co", "operator@youransweringservices.com", "answerphoneoperator@dixie-net.com"].includes(email.from["emailAddress"].address)) {
         if (!email.body.content.includes("Email of All Messages to 3646 PLUMB-ALL")) {
             await handleMessage(email);
         } else {
             console.log("Moving email (it's a concatenation of all previous day's emails)...");
-            await emailClient.moveMarkEmail(email, "Call")
+            await emailClient.moveMarkEmail(email, "Call");
         }
     }
 }
@@ -50,7 +49,7 @@ async function handleMessages(email) {
 async function sleep(ms) {
     return new Promise((resolve) => {
         setTimeout(resolve, ms);
-    })
+    });
 }
 
 /**
@@ -61,7 +60,7 @@ async function runSingle() {
     let messages = await emailClient.getMail();
     await Promise.all(messages.map(async (item) => {
         await handleMessages(item);
-    }))
+    }));
 }
 
 /**
@@ -75,10 +74,10 @@ async function startProcessing() {
         } catch (err) {
             console.error("Error thrown!");
             console.error(err);
-            console.error("Waiting a bit, and restarting event loop.")
+            console.error("Waiting a bit, and restarting event loop.");
         }
-        await sleep(process.env.EMAIL_CHECK_INTERVAL || 30000)
+        await sleep(process.env.EMAIL_CHECK_INTERVAL || 30000);
     }
 }
 
-startProcessing()
+startProcessing();

@@ -1,4 +1,4 @@
-const { App } = require('@slack/bolt');
+const {App} = require('@slack/bolt');
 let Trello = require('./Trello');
 const crypto = require('crypto');
 
@@ -7,7 +7,7 @@ module.exports = {
     sendRawMessage,
     verifyWebhook,
     event
-}
+};
 
 const slackCallChannelName = (process.env.SLACK_CHANNEL || "calls");
 
@@ -31,7 +31,7 @@ const app = new App({
  * @returns {Promise<void>} Promise that resolves after message is sent
  */
 async function sendMessage(message, username) {
-    console.info(message)
+    console.info(message);
 
     try {
         const result = await app.client.chat.postMessage({
@@ -43,8 +43,7 @@ async function sendMessage(message, username) {
         });
 
         console.info('    Sent Message to Slack!');
-    }
-    catch (error) {
+    } catch (error) {
         console.error(error);
     }
 }
@@ -60,8 +59,7 @@ async function sendRawMessage(rawMessage) {
         });
 
         console.info('Sent Jobber authorization request to Slack!');
-    }
-    catch (error) {
+    } catch (error) {
         console.error(error);
     }
 }
@@ -87,12 +85,9 @@ async function fetchMessage(id, ts) {
         });
 
         // There should only be one result (stored in the zeroth index)
-        let message = result.messages[0];
-
         // Return the message
-        return message;
-    }
-    catch (error) {
+        return result.messages[0];
+    } catch (error) {
         console.error(error);
     }
 }
@@ -111,7 +106,7 @@ function verifyWebhook(req) {
         let timestamp = req.headers['x-slack-request-timestamp'];
 
         // Verify that this request was signed within the past 5 minutes
-        let time = Math.floor(new Date().getTime()/1000);
+        let time = Math.floor(new Date().getTime() / 1000);
         if (Math.abs(time - timestamp) > 300) {
             return false;
         }

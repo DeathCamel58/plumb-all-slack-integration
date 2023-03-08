@@ -1,4 +1,4 @@
-require('dotenv').config({ path: process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env' });
+require('dotenv').config({path: process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env'});
 const fetch = require("node-fetch");
 
 const trelloHost = 'https://api.trello.com';
@@ -19,11 +19,11 @@ async function useAPI(url, httpMethod, data) {
             headers: {
                 'Content-Type': 'application/json'
             }
-        }
+        };
         if (data !== null && data !== undefined) {
             options.body = query;
         }
-        response = await fetch(`${trelloHost}/${url}`, options)
+        response = await fetch(`${trelloHost}/${url}`, options);
         switch (response.status) {
             // HTTP: OK
             case 200:

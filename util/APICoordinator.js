@@ -1,7 +1,6 @@
 const PostHog = require("./apis/PostHog");
 const Trello = require("./apis/Trello");
 const SlackBot = require("./apis/SlackBot");
-const Contact = require("./contact");
 
 /**
  * When a contact is made, this will tell all APIs.
@@ -17,4 +16,4 @@ async function contactMade(contact, originalMessage) {
 
 module.exports = {
     contactMade
-}
+};

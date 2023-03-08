@@ -1,13 +1,12 @@
 // noinspection JSIgnoredPromiseFromCall
 
 let Contact = require('./contact.js');
-let APICoordinator = require("./APICoordinator");
 
 module.exports = {
     parseMessageFromAnswerphone,
     parseMessageFromWebsite,
     cleanText
-}
+};
 
 /**
  * Takes email body from Answerphone service, and generates an array of contact information
@@ -25,8 +24,7 @@ function parseMessageFromAnswerphone(message) {
     let contactMessage = cleanText(message.split("RE: ")[1].split("~ CALLERID:")[0]);
     let callerid = cleanText(message.split("CALLERID:  ")[1].split("MSGID: ")[0]);
 
-    let contact = new Contact("Call", name, phone, callerid, undefined, fullAddress, contactMessage);
-    return contact;
+    return new Contact("Call", name, phone, callerid, undefined, fullAddress, contactMessage);
 }
 
 /**
@@ -42,8 +40,7 @@ function parseMessageFromWebsite(message) {
     let address = cleanText(parts[3].split("address:")[1]);
     let contactMessage = cleanText(parts[5].split("message:")[1]);
 
-    let contact = new Contact("Message From Website", name, phone, undefined, email, address, contactMessage);
-    return contact;
+    return new Contact("Message From Website", name, phone, undefined, email, address, contactMessage);
 }
 
 /**

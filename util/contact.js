@@ -8,11 +8,11 @@ class Contact {
         /**
          * The type of contact
          */
-        this.contactType = (type != null ? type.replace(/^\s+|\s+$/g, ''): type);
+        this.contactType = (type != null ? type.replace(/^\s+|\s+$/g, '') : type);
         /**
          * The name of the contact
          */
-        this.contactName = (name != null ? name.replace(/^\s+|\s+$/g, ''): name);
+        this.contactName = (name != null ? name.replace(/^\s+|\s+$/g, '') : name);
         /**
          * The phone of the contact
          */
@@ -25,15 +25,15 @@ class Contact {
         /**
          * The email of the contact
          */
-        this.contactEmail = (email != null ? email.replace(/^\s+|\s+$/g, ''): email);
+        this.contactEmail = (email != null ? email.replace(/^\s+|\s+$/g, '') : email);
         /**
          * The address of the contact
          */
-        this.contactAddress = (address != null ? address.replace(/^\s+|\s+$/g, ''): address);
+        this.contactAddress = (address != null ? address.replace(/^\s+|\s+$/g, '') : address);
         /**
          * The message from the contact
          */
-        this.contactMessage = (message != null ? message.replace(/^\s+|\s+$/g, ''): message);
+        this.contactMessage = (message != null ? message.replace(/^\s+|\s+$/g, '') : message);
     }
 
     get type() {
@@ -152,7 +152,7 @@ class Contact {
 
         message += `Message: ${this.contactMessage}`;
 
-        return message
+        return message;
     }
 }
 

@@ -1,4 +1,4 @@
-require('dotenv').config({ path: process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env' });
+require('dotenv').config({path: process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env'});
 const fetch = require('node-fetch');
 let Slack = require("./SlackBot");
 const crypto = require("crypto");
@@ -16,6 +16,32 @@ let JOBBER_ACCESS_TOKEN;
 function sleep(ms) {
     return new Promise((resolve) => {
         setTimeout(resolve, ms);
+    });
+}
+
+/**
+ * Saves the new refresh token to file
+ * @param refresh_token The new refresh token
+ */
+function saveNewToken(refresh_token) {
+    // Save the refresh token to file
+    let file = process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env';
+    fs.readFile(file, 'utf8', function (err, data) {
+        if (err) {
+            return console.error(err);
+        }
+
+        let result = data.replace(process.env.JOBBER_REFRESH_TOKEN, refresh_token);
+        process.env.JOBBER_REFRESH_TOKEN = refresh_token;
+
+        fs.writeFile(file, result, 'utf8', function (err) {
+            if (err) {
+                console.error('Failed to save the Jobber Refresh Token to file.');
+                console.error(err);
+            } else {
+                console.info('Received new Jobber Refresh Token!');
+            }
+        });
     });
 }
 
@@ -54,7 +80,6 @@ function verifyWebhook(req) {
 async function setAuthorization(code) {
     process.env.JOBBER_AUTHORIZATION_CODE = code;
     let success = false;
-    let response;
     while (!success) {
         try {
             let response = await fetch(`https://api.getjobber.com/api/oauth/token?client_id=${process.env.JOBBER_CLIENT_ID}&client_secret=${process.env.JOBBER_APP_SECRET}&grant_type=authorization_code&code=${process.env.JOBBER_AUTHORIZATION_CODE}`, {
@@ -66,27 +91,8 @@ async function setAuthorization(code) {
                 let data = await response.text();
                 data = JSON.parse(data);
                 JOBBER_ACCESS_TOKEN = data.access_token;
-                let refresh_token = data.refresh_token;
 
-                // Save the refresh token to file
-                let file = process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env';
-                fs.readFile(file, 'utf8', function (err, data) {
-                    if (err) {
-                        return console.error(err);
-                    }
-
-                    let result = data.replace(process.env.JOBBER_REFRESH_TOKEN, refresh_token);
-                    process.env.JOBBER_REFRESH_TOKEN = refresh_token;
-
-                    fs.writeFile(file, result, 'utf8', function (err) {
-                        if (err) {
-                            console.error('Failed to save the Jobber Refresh Token to file.')
-                            console.error(err);
-                        } else {
-                            console.info('Received new Jobber Refresh Token!');
-                        }
-                    });
-                });
+                saveNewToken(data.refresh_token);
             }
             if (response.status === 401) {
                 console.error(`Got ${response.status} while refreshing access token. Requesting authorization!`);
@@ -108,7 +114,7 @@ async function requestAuthorization() {
     redirect_URI = encodeURIComponent(redirect_URI);
     let STATE = crypto.randomBytes(16).toString('hex');
     await Slack.sendRawMessage(`Error from the call bot. *Super technical error code*: :robot_face::frowning::thumbsdown:\nI\'ve lost my access to Jobber and I need some help.\nI need an admin in Jobber to click on --><https://api.getjobber.com/api/oauth/authorize?client_id=${process.env.JOBBER_CLIENT_ID}&redirect_uri=${redirect_URI}&state=${STATE}|this link><-- and click \`ALLOW ACCESS\`.`);
-    await sleep(30*1000)
+    await sleep(30 * 1000);
 }
 
 /**
@@ -117,7 +123,6 @@ async function requestAuthorization() {
  */
 async function refreshAccessToken() {
     let success = false;
-    let response;
     let data;
     while (!success) {
         try {
@@ -135,27 +140,8 @@ async function refreshAccessToken() {
                     data = await response.text();
                     data = JSON.parse(data);
                     JOBBER_ACCESS_TOKEN = data.access_token;
-                    let refresh_token = data.refresh_token;
 
-                    // Save the refresh token to file
-                    let file = process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env';
-                    fs.readFile(file, 'utf8', function (err, data) {
-                        if (err) {
-                            return console.error(err);
-                        }
-
-                        let result = data.replace(process.env.JOBBER_REFRESH_TOKEN, refresh_token);
-                        process.env.JOBBER_REFRESH_TOKEN = refresh_token;
-
-                        fs.writeFile(file, result, 'utf8', function (err) {
-                            if (err) {
-                                console.error('Failed to save the Jobber Refresh Token to file.')
-                                console.error(err);
-                            } else {
-                                console.info('Received new Jobber Refresh Token!');
-                            }
-                        });
-                    });
+                    saveNewToken(data.refresh_token);
                     break;
                 case 401:
                 default:
@@ -197,7 +183,7 @@ async function makeRequest(query) {
                     break;
                 // HTTP: Unauthorized
                 case 401:
-                    console.error(`Got ${response.status} from the Jobber API. Refreshing access token and trying again!`)
+                    console.error(`Got ${response.status} from the Jobber API. Refreshing access token and trying again!`);
                     await refreshAccessToken();
                     break;
                 // HTTP: All Others
@@ -249,9 +235,7 @@ query InvoiceQuery {
 
     let invoiceResponse = await makeRequest(query);
 
-    let client = await getClientData(invoiceResponse["invoice"].client.id);
-
-    invoiceResponse["invoice"].client = client;
+    invoiceResponse["invoice"].client = await getClientData(invoiceResponse["invoice"].client.id);
 
     return invoiceResponse["invoice"];
 }
@@ -288,9 +272,7 @@ query QuoteQuery {
 
     let quoteResponse = await makeRequest(query);
 
-    let client = await getClientData(quoteResponse["quote"].client.id);
-
-    quoteResponse["quote"].client = client;
+    quoteResponse["quote"].client = await getClientData(quoteResponse["quote"].client.id);
 
     return quoteResponse["quote"];
 }
@@ -319,9 +301,7 @@ query JobQuery {
 
     let jobResponse = await makeRequest(query);
 
-    let client = await getClientData(jobResponse["job"].client.id);
-
-    jobResponse["job"].client = client;
+    jobResponse["job"].client = await getClientData(jobResponse["job"].client.id);
 
     return jobResponse["job"];
 }
@@ -393,9 +373,7 @@ query PaymentQuery {
 
     let paymentResponse = await makeRequest(query);
 
-    let client = await getClientData(paymentResponse["paymentRecord"].client.id);
-
-    paymentResponse["paymentRecord"].client = client;
+    paymentResponse["paymentRecord"].client = await getClientData(paymentResponse["paymentRecord"].client.id);
 
     return paymentResponse["paymentRecord"];
 }
@@ -458,9 +436,7 @@ query PropertyQuery {
 
     let propertyResponse = await makeRequest(query);
 
-    let client = await getClientData(propertyResponse["property"].client.id);
-
-    propertyResponse["property"].client = client;
+    propertyResponse["property"].client = await getClientData(propertyResponse["property"].client.id);
 
     return propertyResponse["property"];
 }
@@ -502,9 +478,7 @@ query VisitQuery {
 
     let visitResponse = await makeRequest(query);
 
-    let client = await getClientData(visitResponse["visit"].client.id);
-
-    visitResponse["visit"].client = client;
+    visitResponse["visit"].client = await getClientData(visitResponse["visit"].client.id);
 
     return visitResponse["visit"];
 }
@@ -551,9 +525,7 @@ query RequestQuery {
 
     let requestResponse = await makeRequest(query);
 
-    let client = await getClientData(requestResponse["request"].client.id);
-
-    requestResponse["request"].client = client;
+    requestResponse["request"].client = await getClientData(requestResponse["request"].client.id);
 
     return requestResponse["request"];
 }

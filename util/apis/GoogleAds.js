@@ -1,7 +1,5 @@
 const Contact = require("../contact");
 const GoogleMaps = require("./GoogleMaps");
-const SlackBot = require("./SlackBot");
-const PostHog = require("./PostHog");
 const APICoordinator = require("../APICoordinator");
 
 /**

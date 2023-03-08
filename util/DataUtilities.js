@@ -9,7 +9,7 @@ function normalizePhoneNumber(phone) {
 
     //check if number length equals to 10
     if (phone.length === 11) {
-        phone = phone.slice(1)
+        phone = phone.slice(1);
     }
     if (phone.length === 10) {
         //reformat and return phone number

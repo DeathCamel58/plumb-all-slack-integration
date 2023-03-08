@@ -1,4 +1,4 @@
-require('dotenv').config({ path: process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env' });
+require('dotenv').config({path: process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env'});
 const crypto = require('crypto');
 let Contact = require('../contact.js');
 const GoogleMaps = require("./GoogleMaps");
@@ -21,11 +21,11 @@ async function useAPI(url, httpMethod, data) {
             headers: {
                 'Content-Type': 'application/json'
             }
-        }
+        };
         if (data !== null && data !== undefined) {
             options.body = query;
         }
-        response = await fetch(`${process.env.POSTHOG_HOST}/${url}`, options)
+        response = await fetch(`${process.env.POSTHOG_HOST}/${url}`, options);
         switch (response.status) {
             // HTTP: OK
             case 200:
@@ -95,8 +95,8 @@ async function searchByKey(key, value) {
             type: "person"
         }];
         let results = await individualSearch(query, null).catch(e => console.error(e));
-        if (typeof results.results === "undefined" || results.results.length === undefined || results.results.length == 0) {
-            return null
+        if (typeof results.results === "undefined" || results.results.length === undefined || results.results.length === 0) {
+            return null;
         } else {
             return results;
         }
@@ -121,7 +121,7 @@ async function searchForUser(contact) {
     }
 
     // This will store all found IDs that match (can store the same one multiple times)
-    let potentialIDs = []
+    let potentialIDs = [];
 
     // Search all contact parts
     let results = await searchByKey("name", contact.name);
@@ -271,7 +271,7 @@ async function sendClientToPostHog(contact) {
         distinct_id: id,
         event: '$identify',
         $set: clientData
-    }
+    };
 
     await useAPI('capture/', 'post', identifyData);
 
