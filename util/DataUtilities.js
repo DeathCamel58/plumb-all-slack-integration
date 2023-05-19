@@ -19,6 +19,27 @@ function normalizePhoneNumber(phone) {
     return null;
 }
 
+/**
+ * Takes in an array, and adds an element in between each item
+ * @param arr The array to add elements to
+ * @param value The item to add in between elements
+ * @returns {*} The array with the additional elements
+ */
+const interleave = (arr, value) => {
+    return arr.reduce((result, element, index, array) => {
+        // Push the current element from the original array into the new one
+        result.push(element);
+
+        // Only push the additional element if we're not at the end of the original array
+        if (index < array.length - 1) {
+            result.push(value);
+        }
+
+        return result;
+    }, []);
+}
+
 module.exports = {
-    normalizePhoneNumber
+    normalizePhoneNumber,
+    interleave
 };

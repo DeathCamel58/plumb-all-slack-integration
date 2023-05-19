@@ -452,6 +452,18 @@ app.post('/slack/EVENT', (req, res) => {
 });
 
 /**
+ * Handle Slack Interactivity Webhooks
+ * NOTE: We can't currently parse the web form posts. We don't care either, as it's not used by this.
+ */
+app.post('/slack/INTERACTIVITY', (req, res) => {
+    console.info('Got an INTERACTIVITY from Slack!');
+
+    // We don't need to verify that the webhook came from Slack
+    // This is because we don't actually do anything about these requests. We only respond 200 to keep Slack from complaining.
+    res.sendStatus(200);
+});
+
+/**
  * Google Ads Form Lead
  */
 app.post('/google-ads/form', (req, res) => {
