@@ -230,6 +230,7 @@ query InvoiceQuery {
             total
         }
         createdAt
+        jobberWebUri
     }
 }
         `;
