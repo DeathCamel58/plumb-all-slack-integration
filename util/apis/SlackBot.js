@@ -248,9 +248,13 @@ async function unfurlMessage(event) {
             type: "divider"
         });
 
-        await sendReplyRawMessageBlocks(event, `Found references to these Jobber items:`, blocks);
+        if (blocks.length > 1) {
+            await sendReplyRawMessageBlocks(event, `Found references to these Jobber items:`, blocks);
 
-        console.info(`Found references to Jobber item in Slack. Linked.`);
+            console.info(`Found references to Jobber item in Slack. Linked.`);
+        } else {
+            console.info(`No references in Slack message. Not linked.`);
+        }
     }
 
 }
