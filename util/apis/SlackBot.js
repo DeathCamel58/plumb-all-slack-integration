@@ -165,12 +165,12 @@ async function unfurlMessage(event) {
                     break;
                 case "J":
                 case "j":
-                    let job = await Jobber.getJobSearchData("jobNumber", number);
+                    let job = await Jobber.getJobSearchData(number);
                     needToUnfurl.jobs.push(job);
                     break;
                 case "I":
                 case "i":
-                    let invoice = await Jobber.getInvoiceSearchData("invoiceNumber", number);
+                    let invoice = await Jobber.getInvoiceSearchData(number);
                     needToUnfurl.invoices.push(invoice);
                     break;
                 default:
@@ -183,58 +183,64 @@ async function unfurlMessage(event) {
     if (!(needToUnfurl.quotes.length === 0 && needToUnfurl.jobs.length === 0 && needToUnfurl.invoices.length === 0)) {
         // Unfurl found references
         for (let i = 0; i < needToUnfurl.quotes.length; i++) {
-            blocks.push({
-                type: "section",
-                text: {
-                    type: "mrkdwn",
-                    text: `*Quote #${needToUnfurl.quotes[i].quoteNumber}*\n*Client:* ${needToUnfurl.quotes[i].client.name}\n*Total:* $${needToUnfurl.quotes[i].amounts.total}\n*Date:* ${needToUnfurl.quotes[i].createdAt}`
-                },
-                accessory: {
-                    type: "button",
+            if (needToUnfurl.quotes[i] !== null) {
+                blocks.push({
+                    type: "section",
                     text: {
-                        type: "plain_text",
-                        emoji: true,
-                        text: ":globe_with_meridians: View"
+                        type: "mrkdwn",
+                        text: `*Quote #${needToUnfurl.quotes[i].quoteNumber}*\n*Client:* ${needToUnfurl.quotes[i].client.name}\n*Total:* $${needToUnfurl.quotes[i].amounts.total}\n*Date:* ${needToUnfurl.quotes[i].createdAt}`
                     },
-                    url: needToUnfurl.quotes[i].jobberWebUri
-                }
-            });
+                    accessory: {
+                        type: "button",
+                        text: {
+                            type: "plain_text",
+                            emoji: true,
+                            text: ":globe_with_meridians: View"
+                        },
+                        url: needToUnfurl.quotes[i].jobberWebUri
+                    }
+                });
+            }
         }
         for (let i = 0; i < needToUnfurl.jobs.length; i++) {
-            blocks.push({
-                type: "section",
-                text: {
-                    type: "mrkdwn",
-                    text: `*Job #${needToUnfurl.jobs[i].jobNumber}*\n*Client:* ${needToUnfurl.jobs[i].client.name}\n*Total:* $${needToUnfurl.jobs[i].amounts.total}\n*Date:* ${needToUnfurl.jobs[i].createdAt}`
-                },
-                accessory: {
-                    type: "button",
+            if (needToUnfurl.jobs[i] !== null) {
+                blocks.push({
+                    type: "section",
                     text: {
-                        type: "plain_text",
-                        emoji: true,
-                        text: ":globe_with_meridians: View"
+                        type: "mrkdwn",
+                        text: `*Job #${needToUnfurl.jobs[i].jobNumber}*\n*Client:* ${needToUnfurl.jobs[i].client.name}\n*Total:* $${needToUnfurl.jobs[i].total}\n*Date:* ${needToUnfurl.jobs[i].createdAt}`
                     },
-                    url: needToUnfurl.jobs[i].jobberWebUri
-                }
-            });
+                    accessory: {
+                        type: "button",
+                        text: {
+                            type: "plain_text",
+                            emoji: true,
+                            text: ":globe_with_meridians: View"
+                        },
+                        url: needToUnfurl.jobs[i].jobberWebUri
+                    }
+                });
+            }
         }
         for (let i = 0; i < needToUnfurl.invoices.length; i++) {
-            blocks.push({
-                type: "section",
-                text: {
-                    type: "mrkdwn",
-                    text: `*Invoice #${needToUnfurl.invoices[i].invoiceNumber}*\n*Client:* ${needToUnfurl.invoices[i].client.name}\n*Total:* $${needToUnfurl.invoices[i].amounts.total}\n*Date:* ${needToUnfurl.invoices[i].createdAt}`
-                },
-                accessory: {
-                    type: "button",
+            if (needToUnfurl.invoices[i] !== null) {
+                blocks.push({
+                    type: "section",
                     text: {
-                        type: "plain_text",
-                        emoji: true,
-                        text: ":globe_with_meridians: View"
+                        type: "mrkdwn",
+                        text: `*Invoice #${needToUnfurl.invoices[i].invoiceNumber}*\n*Client:* ${needToUnfurl.invoices[i].client.name}\n*Total:* $${needToUnfurl.invoices[i].amounts.total}\n*Date:* ${needToUnfurl.invoices[i].createdAt}`
                     },
-                    url: needToUnfurl.invoices[i].jobberWebUri
-                }
-            });
+                    accessory: {
+                        type: "button",
+                        text: {
+                            type: "plain_text",
+                            emoji: true,
+                            text: ":globe_with_meridians: View"
+                        },
+                        url: needToUnfurl.invoices[i].jobberWebUri
+                    }
+                });
+            }
         }
 
         // Add dividers in between elements

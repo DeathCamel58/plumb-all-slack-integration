@@ -243,17 +243,17 @@ query InvoiceQuery {
 
 /**
  * Runs Jobber Invoice query and returns the data
- * @param filterType The filter attribute name
- * @param filterValue The filter attribute value
+ * @param filterValue The invoice number to filter by
  * @returns {Promise<*>} The data for the invoice
  */
-async function getInvoiceSearchData(filterType, filterValue) {
+async function getInvoiceSearchData(filterValue) {
     let query =
         `
 query InvoiceQuery {
-  invoices (filter: {${filterType}: {eq: ${filterValue}}}, first: 1) {
+  invoices (searchTerm: "${filterValue}", first: 1) {
     nodes {
       id
+      invoiceNumber
     }
   }
 }
@@ -261,7 +261,7 @@ query InvoiceQuery {
 
     let invoiceResponse = await makeRequest(query);
 
-    if (invoiceResponse.invoices.nodes.length > 0) {
+    if (invoiceResponse != undefined && invoiceResponse.invoices.nodes.length > 0 && invoiceResponse.invoices.nodes[0].invoiceNumber.toString() === filterValue.toString()) {
         invoiceResponse = await getInvoiceData(invoiceResponse.invoices.nodes[0].id);
     } else {
         return null
@@ -368,18 +368,18 @@ query JobQuery {
 }
 
 /**
- * Runs Jobber Invoice query and returns the data
- * @param filterType The filter attribute name
- * @param filterValue The filter attribute value
+ * Runs Jobber Job query and returns the data
+ * @param filterValue The job number to filter by
  * @returns {Promise<*>} The data for the job
  */
-async function getJobSearchData(filterType, filterValue) {
+async function getJobSearchData(filterValue) {
     let query =
         `
 query JobQuery {
-  jobs (filter: {${filterType}: {eq: ${filterValue}}}, first: 1) {
+  jobs (searchTerm: "${filterValue}", first: 1) {
     nodes {
       id
+      jobNumber
     }
   }
 }
@@ -387,8 +387,8 @@ query JobQuery {
 
     let jobResponse = await makeRequest(query);
 
-    if (jobResponse.jobs.nodes.length > 0) {
-        jobResponse = await getInvoiceData(jobResponse.jobs.nodes[0].id);
+    if (jobResponse != undefined && jobResponse.jobs.nodes.length > 0 && jobResponse.jobs.nodes[0].jobNumber.toString() === filterValue.toString()) {
+        jobResponse = await getJobData(jobResponse.jobs.nodes[0].id);
     } else {
         return null
     }
