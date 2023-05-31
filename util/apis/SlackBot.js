@@ -186,11 +186,13 @@ async function unfurlMessage(event) {
             if (needToUnfurl.quotes[i] !== null) {
                 let dateTime = new Date(needToUnfurl.quotes[i].createdAt);
                 let dateToPrint = `${dateTime.toLocaleDateString()} ${dateTime.toLocaleTimeString()}`;
+                let total = needToUnfurl.quotes[i].amounts.total;
+                let totalToPrint = total.toLocaleString('en-US', {style: 'currency', currency: 'USD'});
                 blocks.push({
                     type: "section",
                     text: {
                         type: "mrkdwn",
-                        text: `*Quote #${needToUnfurl.quotes[i].quoteNumber}*\n*Client:* ${needToUnfurl.quotes[i].client.name}\n*Total:* $${needToUnfurl.quotes[i].amounts.total}\n*Date:* ${dateToPrint}`
+                        text: `*Quote #${needToUnfurl.quotes[i].quoteNumber}*\n*Client:* ${needToUnfurl.quotes[i].client.name}\n*Total:* ${totalToPrint}\n*Date:* ${dateToPrint}`
                     },
                     accessory: {
                         type: "button",
@@ -208,11 +210,13 @@ async function unfurlMessage(event) {
             if (needToUnfurl.jobs[i] !== null) {
                 let dateTime = new Date(needToUnfurl.jobs[i].createdAt);
                 let dateToPrint = `${dateTime.toLocaleDateString()} ${dateTime.toLocaleTimeString()}`;
+                let total = needToUnfurl.jobs[i].total;
+                let totalToPrint = total.toLocaleString('en-US', {style: 'currency', currency: 'USD'});
                 blocks.push({
                     type: "section",
                     text: {
                         type: "mrkdwn",
-                        text: `*Job #${needToUnfurl.jobs[i].jobNumber}*\n*Client:* ${needToUnfurl.jobs[i].client.name}\n*Total:* $${needToUnfurl.jobs[i].total}\n*Date:* ${dateToPrint}`
+                        text: `*Job #${needToUnfurl.jobs[i].jobNumber}*\n*Client:* ${needToUnfurl.jobs[i].client.name}\n*Total:* ${totalToPrint}\n*Date:* ${dateToPrint}`
                     },
                     accessory: {
                         type: "button",
@@ -230,11 +234,13 @@ async function unfurlMessage(event) {
             if (needToUnfurl.invoices[i] !== null) {
                 let dateTime = new Date(needToUnfurl.invoices[i].createdAt);
                 let dateToPrint = `${dateTime.toLocaleDateString()} ${dateTime.toLocaleTimeString()}`;
+                let total = needToUnfurl.invoices[i].amounts.total;
+                let totalToPrint = total.toLocaleString('en-US', {style: 'currency', currency: 'USD'});
                 blocks.push({
                     type: "section",
                     text: {
                         type: "mrkdwn",
-                        text: `*Invoice #${needToUnfurl.invoices[i].invoiceNumber}*\n*Client:* ${needToUnfurl.invoices[i].client.name}\n*Total:* $${needToUnfurl.invoices[i].amounts.total}\n*Date:* ${dateToPrint}`
+                        text: `*Invoice #${needToUnfurl.invoices[i].invoiceNumber}*\n*Client:* ${needToUnfurl.invoices[i].client.name}\n*Total:* ${totalToPrint}\n*Date:* ${dateToPrint}`
                     },
                     accessory: {
                         type: "button",
