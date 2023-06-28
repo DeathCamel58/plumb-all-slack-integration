@@ -1,4 +1,5 @@
 const DataUtilities = require("./DataUtilities");
+const queryString = require("querystring");
 
 /**
  * A contact from a client
@@ -96,7 +97,6 @@ class Contact {
      * Generates the message to send in Slack
      */
     messageToSend() {
-        let fullAddressForLink = this.contactAddress.replace(/\s/g, '+');
         let contactInfoParts = [];
         let message = `=== New ${this.contactType} ===\n`;
 
@@ -140,7 +140,8 @@ class Contact {
         }
 
         if (isAddress) {
-            message += `Address: <https://www.google.com/maps?hl=en&q=${fullAddressForLink}|${this.contactAddress}>\n`;
+            let fullAddressForLink = queryString.escape(this.contactAddress);
+            message += `Address: <https://www.google.com/maps/search/?api=1&query=${fullAddressForLink}|${this.contactAddress}>\n`;
         } else {
             message += `Address: Didn't leave one\n`;
         }
