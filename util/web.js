@@ -5,6 +5,7 @@ let fs = require('fs');
 const express = require('express');
 const bodyParser = require("body-parser");
 let GoogleAds = require('./apis/GoogleAds.js');
+let SasoWebHookHandler = require('./apis/SasoWebHookHandler.js');
 let JobberWebHookHandler = require('./apis/JobberWebHookHandler.js');
 let Jobber = require('./apis/Jobber.js');
 let Slack = require('./apis/SlackBot');
@@ -15,6 +16,34 @@ const app = express();
 let port = Number(process.env.WEB_PORT);
 // Use body-parser's JSON parsing
 app.use(bodyParser.text({type: 'application/json'}));
+
+/**
+ * Handle SASO lead webhooks
+ * This is for the SASO answering service
+ * Ref: https://support.specialtyansweringservice.net/article/368-post-message-data-to-webhooks-using-custom-action-app
+ */
+app.post('/saso/lead', (req, res) => {
+    console.log("Got a lead from SASO!");
+
+    // Webhook was valid.
+    res.sendStatus(200);
+
+    req.body = JSON.parse(req.body);
+
+    // Process Request
+    SasoWebHookHandler.leadHandle(req);
+});
+
+/**
+ * Log unhandled SASO webhooks
+ */
+app.post('/saso/:WEBHOOK_TYPE', (req, res) => {
+    console.log("Unhandled SASO webhook received!");
+    console.log(req.params);
+    console.log("Data was");
+    console.log(req.body);
+    res.sendStatus(200);
+});
 
 /**
  * Handle Invoice Webhooks
@@ -414,7 +443,7 @@ app.get('/jobber/authorize', (req, res) => {
 });
 
 /**
- * Log all other webhooks
+ * Log all other Jobber webhooks
  */
 app.post('/jobber/:WEBHOOK_TYPE', (req, res) => {
     console.log("Unhandled Jobber webhook received!");
