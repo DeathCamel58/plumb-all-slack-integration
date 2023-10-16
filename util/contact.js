@@ -135,7 +135,7 @@ class Contact {
         tmp = tmp.replace(/na/g, '');
         tmp = tmp.replace(/Na/g, '');
         tmp = tmp.replace(/nA/g, '');
-        if (tmp === '') {
+        if (tmp === '' || tmp === 'Ga') {
             isAddress = false;
         }
 
