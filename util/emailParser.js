@@ -3,29 +3,9 @@
 let Contact = require('./contact.js');
 
 module.exports = {
-    parseMessageFromAnswerphone,
     parseMessageFromWebsite,
     cleanText
 };
-
-/**
- * Takes email body from Answerphone service, and generates an array of contact information
- * @param message Email body
- * @returns {Contact} Contact Object
- */
-function parseMessageFromAnswerphone(message) {
-    let phone = message.split("<D: ")[1].split(" > ")[0];
-    let name = cleanText(message.split("CALLER:  ")[1].split("\n")[0]);
-    let address = cleanText(message.split("ADDRESS:  ")[1].split("\n")[0]);
-    let city = cleanText(message.split("CITY:  ")[1].split(" ST  ")[0]);
-    let state = cleanText(message.split("CITY:  ")[1].split(" ST  ")[1].split("ZIP ")[0]);
-    let zip = cleanText(message.split("ZIP ")[1].split("\n")[0]);
-    let fullAddress = address + ", " + city + " " + state + ", " + zip;
-    let contactMessage = cleanText(message.split("RE: ")[1].split("~ CALLERID:")[0]);
-    let callerid = cleanText(message.split("CALLERID:  ")[1].split("MSGID: ")[0]);
-
-    return new Contact("Call", name, phone, callerid, undefined, fullAddress, contactMessage);
-}
 
 /**
  * Takes email body from website contact form, and generates an array of contact information
