@@ -1,5 +1,5 @@
 /**
- * Takes in a phone number, and returns the number in the standard format: `(xxx) xxx-xxxx`
+ * Takes in a phone number, and returns the number in the standard format: `(###) ###-####` or `(###) ###-#### x###`
  * @param phone Unparsed phone number
  * @returns {null|*} Parsed Phone Number
  */
@@ -8,12 +8,14 @@ function normalizePhoneNumber(phone) {
     phone = phone.replace(/\D/g, "");
 
     //check if number length equals to 10
-    if (phone.length === 11) {
+    if (phone[0] === "1") {
         phone = phone.slice(1);
     }
     if (phone.length === 10) {
         //reformat and return phone number
         return phone.replace(/(\d{3})(\d{3})(\d{4})/, "($1) $2-$3");
+    } else if (phone.length > 10) {
+        return phone.replace(/(\d{3})(\d{3})(\d{4})(\d+)/, "($1) $2-$3 x$4");
     }
 
     return null;
