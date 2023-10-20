@@ -5,7 +5,7 @@ const queryString = require("querystring");
  * A contact from a client
  */
 class Contact {
-    constructor(type, name, phone, alternatePhone, email, address, message) {
+    constructor(type, name, phone, alternatePhone, email, address, message, source = null) {
         /**
          * The type of contact
          */
@@ -35,6 +35,8 @@ class Contact {
          * The message from the contact
          */
         this.contactMessage = (message != null ? message.replace(/^\s+|\s+$/g, '') : message);
+
+        this.contactSource = (source != null ? source : source);
     }
 
     get type() {
@@ -91,6 +93,10 @@ class Contact {
 
     set message(message) {
         this.contactMessage = message;
+    }
+
+    get source() {
+        return this.contactSource;
     }
 
     /**

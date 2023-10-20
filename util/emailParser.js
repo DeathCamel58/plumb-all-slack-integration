@@ -20,7 +20,7 @@ function parseMessageFromWebsite(message) {
     let address = cleanText(parts[3].split("address:")[1]);
     let contactMessage = cleanText(parts[5].split("message:")[1]);
 
-    return new Contact("Message From Website", name, phone, undefined, email, address, contactMessage);
+    return new Contact("Message From Website", name, phone, undefined, email, address, contactMessage, "Website");
 }
 
 /**

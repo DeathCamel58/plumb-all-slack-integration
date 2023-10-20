@@ -34,7 +34,7 @@ async function LeadFormHandle(data) {
     let name = (userData["FULL_NAME"] ? userData["FULL_NAME"] : '');
 
     // Create a contact object
-    let contact = new Contact("Google Ads", name, userData["PHONE_NUMBER"], undefined, undefined, location, userData['can_you_describe_your_plumbing_issue?']);
+    let contact = new Contact("Google Ads", name, userData["PHONE_NUMBER"], undefined, undefined, location, userData['can_you_describe_your_plumbing_issue?'], "Google Ads Lead Form");
 
     await APICoordinator.contactMade(contact, JSON.stringify(data));
 }

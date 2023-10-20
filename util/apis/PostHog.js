@@ -294,7 +294,8 @@ async function logContact(contact, originalMessage) {
             distinct_id: id,
             type: contact.type,
             message: contact.message,
-            originalMessage: originalMessage
+            originalMessage: originalMessage,
+            source: contact.source
         }
     };
     await useAPI('capture/', 'post', captureData);
@@ -344,7 +345,7 @@ async function logClient(jobberClient) {
         }
     }
 
-    let contact = new Contact(null, jobberClient.name, defaultPhone, (defaultPhone !== undefined ? defaultPhone : null), (defaultEmail !== undefined ? defaultEmail : null), (address !== "" ? address : null));
+    let contact = new Contact(null, jobberClient.name, defaultPhone, (defaultPhone !== undefined ? defaultPhone : null), (defaultEmail !== undefined ? defaultEmail : null), (address !== "" ? address : null), null, null);
 
     return await sendClientToPostHog(contact);
 }

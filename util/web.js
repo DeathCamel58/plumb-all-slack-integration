@@ -35,6 +35,23 @@ app.post('/saso/lead', (req, res) => {
 });
 
 /**
+ * Handle SASO lead webhooks that contain a source of the call
+ * This is for the SASO answering service
+ * Ref: https://support.specialtyansweringservice.net/article/368-post-message-data-to-webhooks-using-custom-action-app
+ */
+app.post('/saso/lead-source', (req, res) => {
+    console.log("Got a lead with a source from SASO!");
+
+    // Webhook was valid.
+    res.sendStatus(200);
+
+    req.body = JSON.parse(req.body);
+
+    // Process Request
+    SasoWebHookHandler.leadHandle(req);
+});
+
+/**
  * Log unhandled SASO webhooks
  */
 app.post('/saso/:WEBHOOK_TYPE', (req, res) => {
