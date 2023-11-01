@@ -341,6 +341,7 @@ async function event(req) {
                     console.info(`Message deleted!`);
                     break;
                 // If this was a message created
+                case "bot_message":
                 case undefined:
                     await unfurlMessage(event);
                     break;
