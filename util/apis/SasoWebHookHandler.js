@@ -12,7 +12,7 @@ async function leadHandle(req) {
     console.log("Data was");
     console.log(req.body);
 
-    let contact = new Contact("Call", `${body.first_name} ${body.last_name}`, body.phone_number, undefined, undefined, body.address, body.message, body.call_source);
+    let contact = new Contact("Call", `${body.first_name} ${body.last_name}`, body.phone_number, body.called_from, undefined, body.address, body.message, body.call_source);
 
     // Send the request to where it needs to go
     await APICoordinator.contactMade(contact, JSON.stringify(body));
