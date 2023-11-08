@@ -9,6 +9,7 @@ let SasoWebHookHandler = require('./apis/SasoWebHookHandler.js');
 let JobberWebHookHandler = require('./apis/JobberWebHookHandler.js');
 let Jobber = require('./apis/Jobber.js');
 let Slack = require('./apis/SlackBot');
+let CloudFlare = require('./apis/CloudFlareWorkers');
 
 // The app object
 const app = express();
@@ -527,8 +528,22 @@ app.post('/google-ads/form', (req, res) => {
 });
 
 /**
- * TODO: Add webhooks
+ * CloudFlare Workers Contact Form
  */
+app.post('/cloudflare/contactForm', (req, res) => {
+    let data = JSON.parse(req.body);
+
+    if (data["cloudflare_key"] === process.env.CLOUDFLARE_CONTACT_FORM_KEY) {
+        console.info('Webhook: CloudFlare Workers contact form received.');
+        res.sendStatus(200);
+
+        CloudFlare.ContactFormHandle(data);
+    } else {
+        console.error(`Webhook for CloudFlare Workers didn't have correct key.\n\tReceived: "${data["cloudflare_key"]}"\n\tExpected: "${process.env.GOOGLE_ADS_KEY}"`);
+        res.sendStatus(401);
+    }
+});
+
 app.get('/', (req, res) => {
     res.send("Hey! I'm plumb-all-slack integration. Plumb-All's Bot for stuff. This is not a website you should visit manually.");
 });
