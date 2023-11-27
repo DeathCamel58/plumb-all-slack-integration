@@ -9,9 +9,6 @@ const APICoordinator = require("../APICoordinator");
 async function leadHandle(req) {
     let body = req.body;
 
-    console.log("Data was");
-    console.log(req.body);
-
     let message = body.message;
     if (body.message === '') {
         message = body.agent_notes;

@@ -46,6 +46,9 @@ app.post('/saso/lead-source', (req, res) => {
     // Webhook was valid.
     res.sendStatus(200);
 
+    console.log("Data was");
+    console.log(req.body);
+
     req.body = JSON.parse(req.body);
 
     // Process Request
