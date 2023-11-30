@@ -29,7 +29,9 @@ app.post('/saso/lead', (req, res) => {
     // Webhook was valid.
     res.sendStatus(200);
 
-    req.body = JSON.parse(req.body);
+    // TODO: Check every once in a while to see if SASO fixed their JSON encoding issues
+    //       To workaround this, I've changed the data to use unique key separators
+    // req.body = JSON.parse(req.body);
 
     // Process Request
     SasoWebHookHandler.leadHandle(req);
@@ -49,7 +51,9 @@ app.post('/saso/lead-source', (req, res) => {
     console.log("Data was");
     console.log(req.body);
 
-    req.body = JSON.parse(req.body);
+    // TODO: Check every once in a while to see if SASO fixed their JSON encoding issues
+    //       To workaround this, I've changed the data to use unique key separators
+    // req.body = JSON.parse(req.body);
 
     // Process Request
     SasoWebHookHandler.leadHandle(req);
