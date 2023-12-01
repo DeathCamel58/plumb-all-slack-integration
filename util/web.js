@@ -19,54 +19,22 @@ let port = Number(process.env.WEB_PORT);
 app.use(bodyParser.text({type: 'application/json'}));
 
 /**
- * Handle SASO lead webhooks
- * This is for the SASO answering service
- * Ref: https://support.specialtyansweringservice.net/article/368-post-message-data-to-webhooks-using-custom-action-app
- */
-app.post('/saso/lead', (req, res) => {
-    console.log("Got a lead from SASO!");
-
-    // Webhook was valid.
-    res.sendStatus(200);
-
-    // TODO: Check every once in a while to see if SASO fixed their JSON encoding issues
-    //       To workaround this, I've changed the data to use unique key separators
-    // req.body = JSON.parse(req.body);
-
-    // Process Request
-    SasoWebHookHandler.leadHandle(req);
-});
-
-/**
- * Handle SASO lead webhooks that contain a source of the call
- * This is for the SASO answering service
- * Ref: https://support.specialtyansweringservice.net/article/368-post-message-data-to-webhooks-using-custom-action-app
- */
-app.post('/saso/lead-source', (req, res) => {
-    console.log("Got a lead with a source from SASO!");
-
-    // Webhook was valid.
-    res.sendStatus(200);
-
-    console.log("Data was");
-    console.log(req.body);
-
-    // TODO: Check every once in a while to see if SASO fixed their JSON encoding issues
-    //       To workaround this, I've changed the data to use unique key separators
-    // req.body = JSON.parse(req.body);
-
-    // Process Request
-    SasoWebHookHandler.leadHandle(req);
-});
-
-/**
  * Log unhandled SASO webhooks
  */
 app.post('/saso/:WEBHOOK_TYPE', (req, res) => {
-    console.log("Unhandled SASO webhook received!");
+    console.log("SASO webhook received!");
+
     console.log(req.params);
     console.log("Data was");
     console.log(req.body);
+
+    if (req.params.startsWith('lead-source&')) {
+        console.log("Got a lead with a source from SASO!");
+
+        // Process Request
+        SasoWebHookHandler.leadHandle(req);
+    }
+
     res.sendStatus(200);
 });
 
