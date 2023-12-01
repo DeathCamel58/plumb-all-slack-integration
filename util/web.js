@@ -28,7 +28,7 @@ app.post('/saso/:WEBHOOK_TYPE', (req, res) => {
     console.log("Data was");
     console.log(req.body);
 
-    if (req.params.startsWith('lead-source&')) {
+    if (req.params['WEBHOOK_TYPE'] && req.params['WEBHOOK_TYPE'].startsWith('lead-source&')) {
         console.log("Got a lead with a source from SASO!");
 
         // Process Request
