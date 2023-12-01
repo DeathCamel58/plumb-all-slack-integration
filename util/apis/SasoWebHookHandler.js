@@ -26,10 +26,10 @@ async function leadHandle(req) {
     let body = parseBody(req.body);
 
     let message = "";
-    if (body.message !== "") {
-        message += body.agent_notes;
+    if (body.message) {
+        message += body.message;
     }
-    if (body.agent_notes !== "") {
+    if (body.agent_notes) {
         if (message !== "") {
             message += " - ";
             message += body.agent_notes;

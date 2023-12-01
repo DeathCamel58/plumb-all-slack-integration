@@ -9,34 +9,34 @@ class Contact {
         /**
          * The type of contact
          */
-        this.contactType = (type != null ? type.replace(/^\s+|\s+$/g, '') : type);
+        this.contactType = (type ? type.replace(/^\s+|\s+$/g, '') : type);
         /**
          * The name of the contact
          */
-        this.contactName = (name != null ? name.replace(/^\s+|\s+$/g, '') : name);
+        this.contactName = (name ? name.replace(/^\s+|\s+$/g, '') : name);
         /**
          * The phone of the contact
          */
-        this.contactPhone = (phone != null ? DataUtilities.normalizePhoneNumber(phone) : phone);
+        this.contactPhone = (phone ? DataUtilities.normalizePhoneNumber(phone) : phone);
         /**
          * The alternate phone of the contact
          * NOTE: This is usually the phone number they called from, rather than the phone number they left.
          */
-        this.contactAlternatePhone = (alternatePhone != null ? DataUtilities.normalizePhoneNumber(alternatePhone) : alternatePhone);
+        this.contactAlternatePhone = (alternatePhone ? DataUtilities.normalizePhoneNumber(alternatePhone) : alternatePhone);
         /**
          * The email of the contact
          */
-        this.contactEmail = (email != null ? email.replace(/^\s+|\s+$/g, '') : email);
+        this.contactEmail = (email ? email.replace(/^\s+|\s+$/g, '') : email);
         /**
          * The address of the contact
          */
-        this.contactAddress = (address != null ? address.replace(/^\s+|\s+$/g, '') : address);
+        this.contactAddress = (address ? address.replace(/^\s+|\s+$/g, '') : address);
         /**
          * The message from the contact
          */
-        this.contactMessage = (message != null ? message.replace(/^\s+|\s+$/g, '') : message);
+        this.contactMessage = (message ? message.replace(/^\s+|\s+$/g, '') : message);
 
-        this.contactSource = (source != null ? source : source);
+        this.contactSource = (source ? source : source);
     }
 
     get type() {
