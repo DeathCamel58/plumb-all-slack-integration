@@ -2,7 +2,12 @@ const Contact = require("../contact");
 const APICoordinator = require("../APICoordinator");
 
 function parseBody(body) {
-    let parsed = body.split("\n039f7a43-a61a-4057-955b-e0d0818d3437\n");
+    let parsed = body.split("039f7a43-a61a-4057-955b-e0d0818d3437");
+
+    for (let i = 0; i < parsed.length; i++) {
+        parsed[i] = parsed[i].replace(/^\s+|\s+$/g, '');
+    }
+
     let data = {}
 
     data.first_name = parsed[0];
