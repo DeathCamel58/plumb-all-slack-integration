@@ -10,6 +10,7 @@ let JobberWebHookHandler = require('./apis/JobberWebHookHandler.js');
 let Jobber = require('./apis/Jobber.js');
 let Slack = require('./apis/SlackBot');
 let CloudFlare = require('./apis/CloudFlareWorkers');
+let FleetSharp = require('./apis/FleetSharp');
 
 // The app object
 const app = express();
@@ -517,6 +518,20 @@ app.post('/cloudflare/contactForm', (req, res) => {
         console.error(`Webhook for CloudFlare Workers didn't have correct key.\n\tReceived: "${data["cloudflare_key"]}"\n\tExpected: "${process.env.GOOGLE_ADS_KEY}"`);
         res.sendStatus(401);
     }
+});
+
+/**
+ * FleetSharp Alerts
+ */
+app.post('/fleetsharp/alerts', (req, res) => {
+    let data = JSON.parse(req.body);
+
+    console.info('Webhook: FleetSharp Alert received.');
+
+    // Return a `201`, as this is what the documentation specifies as our response
+    res.sendStatus(201);
+
+    FleetSharp.AlertHandle(data);
 });
 
 app.get('/', (req, res) => {
