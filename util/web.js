@@ -526,8 +526,6 @@ app.post('/cloudflare/contactForm', (req, res) => {
 app.post('/fleetsharp/alerts', (req, res) => {
     let data = JSON.parse(req.body);
 
-    console.info('Webhook: FleetSharp Alert received.');
-
     // Return a `201`, as this is what the documentation specifies as our response
     res.sendStatus(201);
 

@@ -13,7 +13,6 @@ async function AlertHandle(body) {
     console.log("Data was");
     console.log(body);
 
-    // let contact = new Contact("Message From Website", body.name, body.phone, undefined, body.email, body.address, body.message, "Website");
     let message;
     switch (body.alertCode) {
         // NOTE: These are the available alerts
@@ -40,10 +39,10 @@ async function AlertHandle(body) {
         //   SENSOR_TWO_LOW
         case 'HIGH_SPEED':
             // `HIGH_SPEED` is only fired if speed is above the configured one in Setup->Alert Settings->General Settings->High Speed Threshold
-            message = `Vehicle ${body.firstName} ${body.lastName} (VIN: \`${body.vin}\`) was going over 85. Chill out dude.`;
+            message = `Vehicle ${body.firstName} ${body.lastName} (VIN: \`${body.vin}\`) was going 85 or faster. Chill out dude.`;
             break;
         default:
-            console.info(`Was a ${body.alertCode} alert.`);
+            console.info(`FleetSharp: Got a ${body.alertCode} alert.`);
             break;
     }
 
