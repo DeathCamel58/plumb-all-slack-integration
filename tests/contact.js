@@ -1,5 +1,5 @@
 const assert = require('assert');
-const Contact = require('../util/contact.js');
+const Contact = require('../util/contact');
 
 // We can group similar tests inside a `describe` block
 describe("Contact Class", () => {

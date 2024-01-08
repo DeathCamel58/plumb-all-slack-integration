@@ -1,6 +1,6 @@
 const crypto = require('crypto');
-let Jobber = require("./Jobber.js");
-let PostHog = require('./PostHog.js');
+let Jobber = require("./Jobber");
+let PostHog = require('./PostHog');
 const Contact = require("../contact");
 const APICoordinator = require("../APICoordinator");
 

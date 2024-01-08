@@ -4,10 +4,10 @@ require('dotenv').config({path: process.env.ENV_LOCATION || '/root/plumb-all-sla
 let fs = require('fs');
 const express = require('express');
 const bodyParser = require("body-parser");
-let GoogleAds = require('./apis/GoogleAds.js');
-let SasoWebHookHandler = require('./apis/SasoWebHookHandler.js');
-let JobberWebHookHandler = require('./apis/JobberWebHookHandler.js');
-let Jobber = require('./apis/Jobber.js');
+let GoogleAds = require('./apis/GoogleAds');
+let SasoWebHookHandler = require('./apis/SasoWebHookHandler');
+let JobberWebHookHandler = require('./apis/JobberWebHookHandler');
+let Jobber = require('./apis/Jobber');
 let Slack = require('./apis/SlackBot');
 let CloudFlare = require('./apis/CloudFlareWorkers');
 let FleetSharp = require('./apis/FleetSharp');
