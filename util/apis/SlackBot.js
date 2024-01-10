@@ -6,7 +6,6 @@ const {interleave} = require("../DataUtilities");
 
 module.exports = {
     sendMessage,
-    sendRawMessage,
     verifyWebhook,
     event
 };
@@ -45,22 +44,6 @@ async function sendMessage(message, username) {
         });
 
         console.info('    Sent Message to Slack!');
-    } catch (error) {
-        console.error(error);
-    }
-}
-
-async function sendRawMessage(rawMessage) {
-    try {
-        const result = await app.client.chat.postMessage({
-            channel: slackCallChannelName,
-            text: rawMessage,
-            unfurl_links: false,
-            username: "Call Bot Jobber Authorization",
-            icon_url: "https://plumb-all.com/wp-content/uploads/2018/08/cropped-icon.png"
-        });
-
-        console.info('Sent Jobber authorization request to Slack!');
     } catch (error) {
         console.error(error);
     }
