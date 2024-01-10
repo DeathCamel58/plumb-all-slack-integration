@@ -143,6 +143,9 @@ async function refreshAccessToken() {
 
                     saveNewToken(data.refresh_token);
                     break;
+                case 429:
+                    console.error(`Got 429 while refreshing access token. This is likely because of some sort of limiting!`);
+                    break;
                 case 401:
                 default:
                     console.error(`Got ${response.status} while refreshing access token. Requesting authorization!`);
