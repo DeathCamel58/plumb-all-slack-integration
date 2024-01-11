@@ -1,6 +1,5 @@
 require('dotenv').config({path: process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env'});
 const fetch = require('node-fetch');
-const SlackBot = require("./SlackBot");
 const crypto = require("crypto");
 const fs = require("fs");
 
@@ -110,6 +109,7 @@ async function setAuthorization(code) {
  * @returns {Promise<void>}
  */
 async function requestAuthorization() {
+    const SlackBot = require("./SlackBot");
     let redirect_URI = `${process.env.WEB_URL}/jobber/authorize`;
     redirect_URI = encodeURIComponent(redirect_URI);
     let STATE = crypto.randomBytes(16).toString('hex');
