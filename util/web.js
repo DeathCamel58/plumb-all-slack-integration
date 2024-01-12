@@ -255,4 +255,8 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '../assets/index.html'));
 });
 
+app.get('/openapi.yaml', (req, res) => {
+    res.sendFile(path.join(__dirname, '../assets/openapi.yaml'));
+});
+
 app.listen(port, "0.0.0.0", () => console.info(`Node.js server started on port ${port}.`));
