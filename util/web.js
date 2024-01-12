@@ -2,6 +2,7 @@
 
 require('dotenv').config({path: process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env'});
 let fs = require('fs');
+const path = require('path');
 const express = require('express');
 const bodyParser = require("body-parser");
 let GoogleAds = require('./apis/GoogleAds');
@@ -533,7 +534,7 @@ app.post('/fleetsharp/alerts', (req, res) => {
 });
 
 app.get('/', (req, res) => {
-    res.send("Hey! I'm plumb-all-slack integration. Plumb-All's Bot for stuff. This is not a website you should visit manually.");
+    res.sendFile(path.join(__dirname, '../assets/index.html'));
 });
 
 app.listen(port, "0.0.0.0", () => console.info(`Node.js server started on port ${port}.`));
