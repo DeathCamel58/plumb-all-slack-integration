@@ -46,14 +46,14 @@ app.post('/saso/:WEBHOOK_TYPE', (req, res) => {
 app.post('/jobber/:WEBHOOK_TYPE', (req, res) => {
     console.info(`Got a ${req.params.WEBHOOK_TYPE} webhook from Jobber!`);
 
+    // Set the default response code of 200
+    let responseStatus = 200;
+
     // Verify that the webhook came from Jobber
     if (Jobber.verifyWebhook(req)) {
         if ("content-type" in req.headers && req.headers["content-type"] === "application/json") {
             req.body = JSON.parse(req.body);
         }
-
-        // Webhook was valid.
-        res.sendStatus(200);
 
         // Process Request
         switch (req.params.WEBHOOK_TYPE) {
@@ -126,13 +126,16 @@ app.post('/jobber/:WEBHOOK_TYPE', (req, res) => {
             default:
                 console.log("Data for unhandled webhook was");
                 console.log(req.body);
-                res.sendStatus(200);
+                responseStatus = 405;
                 break;
         }
     } else {
         // Webhook signature invalid. Send 401.
-        res.sendStatus(401);
+        responseStatus = 401;
     }
+
+    // Send the response
+    res.sendStatus(responseStatus);
 });
 
 /**
