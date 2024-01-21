@@ -41,129 +41,411 @@ app.post('/saso/:WEBHOOK_TYPE', (req, res) => {
 });
 
 /**
- * Handle Jobber Webhooks
+ * Handle Invoice Webhooks
  */
-app.post('/jobber/:WEBHOOK_TYPE', (req, res) => {
-    console.info(`Got a ${req.params.WEBHOOK_TYPE} webhook from Jobber!`);
-
-    if (req.params.WEBHOOK_TYPE === "authorize") {
-        let file = process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env';
-        let oldAuthCode = process.env.JOBBER_AUTHORIZATION_CODE;
-        try {
-            fs.readFile(file, 'utf8', function (err, data) {
-                if (err) {
-                    return console.error(err);
-                }
-
-                let result = data.replace(oldAuthCode, req.query.code);
-
-                fs.writeFile(file, result, 'utf8', function (err) {
-                    if (err) {
-                        console.error('Failed to save the Jobber Authorization Code to file.');
-                        console.error(err);
-                    } else {
-                        console.info('Received new Jobber authorization!');
-                        // console.log('Received new Jobber authorization! Restarting now.');
-                        Jobber.setAuthorization(req.query.code);
-                    }
-                });
-            });
-            process.env.JOBBER_AUTHORIZATION_CODE = req.query.code;
-            res.sendStatus(200);
-        } catch (e) {
-            console.error(`Updating Jobber Authorization Code failed with error ${e}`)
-            res.sendStatus(500);
-        }
-        return;
-    }
+app.post('/jobber/INVOICE_CREATE', (req, res) => {
+    console.info('Got an INVOICE_CREATE event from Jobber!');
 
     // Verify that the webhook came from Jobber
     if (Jobber.verifyWebhook(req)) {
-        if ("content-type" in req.headers && req.headers["content-type"] === "application/json") {
-            req.body = JSON.parse(req.body);
-        }
-
         // Webhook was valid.
         res.sendStatus(200);
 
+        req.body = JSON.parse(req.body);
         // Process Request
-        switch (req.params.WEBHOOK_TYPE) {
-            case "INVOICE_CREATE":
-                JobberWebHookHandler.invoiceHandle(req);
-                break;
-            case "INVOICE_UPDATE":
-                // TODO: Maybe update the already existing invoice event to show remaining balance now?
-                // invoiceWebhookHandle(req);
-                break;
-            // TODO: Handle { WEBHOOK_TYPE: 'INVOICE_DESTROY' }
-            case "CLIENT_CREATE":
-                JobberWebHookHandler.clientHandle(req);
-                break;
-            case "CLIENT_UPDATE":
-                JobberWebHookHandler.clientHandle(req);
-                break;
-            // TODO: Handle { WEBHOOK_TYPE: 'CLIENT_DESTROY' }
-            // TODO: Handle { WEBHOOK_TYPE: 'REQUEST_DESTROY' }
-            case "QUOTE_CREATE":
-                JobberWebHookHandler.quoteCreateHandle(req);
-                break;
-            case "QUOTE_UPDATE":
-                JobberWebHookHandler.quoteUpdateHandle(req);
-                break;
-            // TODO: Handle { WEBHOOK_TYPE: 'QUOTE_DESTROY' }
-            case "JOB_CREATE":
-                JobberWebHookHandler.jobCreateHandle(req);
-                break;
-            case "JOB_UPDATE":
-                JobberWebHookHandler.jobUpdateHandle(req);
-                break;
-            // TODO: Handle { WEBHOOK_TYPE: 'JOB_DESTROY' }
-            case "PAYMENT_CREATE":
-                JobberWebHookHandler.paymentCreateHandle(req);
-                break;
-            case "PAYMENT_UPDATE":
-                JobberWebHookHandler.paymentUpdateHandle(req);
-                break;
-            // TODO: Handle { WEBHOOK_TYPE: 'PAYMENT_DESTROY' }
-            case "PAYOUT_CREATE":
-                JobberWebHookHandler.payoutCreateHandle(req);
-                break;
-            case "PAYOUT_UPDATE":
-                JobberWebHookHandler.payoutUpdateHandle(req);
-                break;
-            case "PROPERTY_CREATE":
-                JobberWebHookHandler.propertyCreateHandle(req);
-                break;
-            case "PROPERTY_UPDATE":
-                JobberWebHookHandler.propertyUpdateHandle(req);
-                break;
-            // TODO: Handle { WEBHOOK_TYPE: 'PROPERTY_DESTROY' }
-            case "VISIT_CREATE":
-                JobberWebHookHandler.visitCreateHandle(req);
-                break;
-            case "VISIT_UPDATE":
-                JobberWebHookHandler.visitUpdateHandle(req);
-                break;
-            case "VISIT_COMPLETE":
-                JobberWebHookHandler.visitCompleteHandle(req);
-                break;
-            // TODO: Handle { WEBHOOK_TYPE: 'VISIT_DESTROY' }
-            case "REQUEST_CREATE":
-                JobberWebHookHandler.requestCreateHandle(req);
-                break;
-            case "REQUEST_UPDATE":
-                JobberWebHookHandler.requestUpdateHandle(req);
-                break;
-            default:
-                console.log("Data for unhandled webhook was");
-                console.log(req.body);
-                res.sendStatus(200);
-                break;
-        }
+        JobberWebHookHandler.invoiceHandle(req);
     } else {
         // Webhook signature invalid. Send 401.
         res.sendStatus(401);
     }
+});
+
+app.post('/jobber/INVOICE_UPDATE', (req, res) => {
+    console.info('Got an INVOICE_UPDATE event from Jobber!');
+
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus(200);
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        // TODO: Maybe update the already existing invoice event to show remaining balance now?
+        // invoiceWebhookHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
+});
+
+//  TODO: Handle { WEBHOOK_TYPE: 'INVOICE_DESTROY' }
+
+/**
+ * Handle Client Webhooks
+ */
+app.post('/jobber/CLIENT_CREATE', (req, res) => {
+    console.info('Got an CLIENT_CREATE event from Jobber!');
+
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus(200);
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        JobberWebHookHandler.clientHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
+});
+
+app.post('/jobber/CLIENT_UPDATE', (req, res) => {
+    console.info('Got an CLIENT_UPDATE event from Jobber!');
+
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus(200);
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        JobberWebHookHandler.clientHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
+});
+
+// TODO: Handle { WEBHOOK_TYPE: 'CLIENT_DESTROY' }
+
+/**
+ * Handle Quote Webhooks
+ */
+app.post('/jobber/QUOTE_CREATE', (req, res) => {
+    console.info('Got an QUOTE_CREATE event from Jobber!');
+
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus(200);
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        JobberWebHookHandler.quoteCreateHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
+});
+
+app.post('/jobber/QUOTE_UPDATE', (req, res) => {
+    console.info('Got an QUOTE_UPDATE event from Jobber!');
+
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus(200);
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        JobberWebHookHandler.quoteUpdateHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
+});
+
+//  TODO: Handle { WEBHOOK_TYPE: 'QUOTE_DESTROY' }
+
+/**
+ * Handle Job Webhooks
+ */
+app.post('/jobber/JOB_CREATE', (req, res) => {
+    console.info('Got an JOB_CREATE event from Jobber!');
+
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus(200);
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        JobberWebHookHandler.jobCreateHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
+});
+
+app.post('/jobber/JOB_UPDATE', (req, res) => {
+    console.info('Got an JOB_UPDATE event from Jobber!');
+
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus(200);
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        JobberWebHookHandler.jobUpdateHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
+});
+
+//  TODO: Handle { WEBHOOK_TYPE: 'JOB_DESTROY' }
+
+/**
+ * Handle Payment Webhooks
+ */
+app.post('/jobber/PAYMENT_CREATE', (req, res) => {
+    console.info('Got an PAYMENT_CREATE event from Jobber!');
+
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus(200);
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        JobberWebHookHandler.paymentCreateHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
+});
+
+app.post('/jobber/PAYMENT_UPDATE', (req, res) => {
+    console.info('Got an PAYMENT_UPDATE event from Jobber!');
+
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus(200);
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        JobberWebHookHandler.paymentUpdateHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
+});
+
+//  TODO: Handle { WEBHOOK_TYPE: 'PAYMENT_DESTROY' }
+
+/**
+ * Handle Payout Webhooks
+ */
+app.post('/jobber/PAYOUT_CREATE', (req, res) => {
+    console.info('Got an PAYOUT_CREATE event from Jobber!');
+
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus(200);
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        JobberWebHookHandler.payoutCreateHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
+});
+
+app.post('/jobber/PAYOUT_UPDATE', (req, res) => {
+    console.info('Got an PAYOUT_UPDATE event from Jobber!');
+
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus(200);
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        JobberWebHookHandler.payoutUpdateHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
+});
+
+/**
+ * Handle Property Webhooks
+ */
+app.post('/jobber/PROPERTY_CREATE', (req, res) => {
+    console.info('Got an PROPERTY_CREATE event from Jobber!');
+
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus(200);
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        JobberWebHookHandler.propertyCreateHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
+});
+
+app.post('/jobber/PROPERTY_UPDATE', (req, res) => {
+    console.info('Got an PROPERTY_UPDATE event from Jobber!');
+
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus(200);
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        JobberWebHookHandler.propertyUpdateHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
+});
+
+//  TODO: Handle { WEBHOOK_TYPE: 'PROPERTY_DESTROY' }
+
+/**
+ * Handle Visit Webhooks
+ */
+app.post('/jobber/VISIT_CREATE', (req, res) => {
+    console.info('Got an VISIT_CREATE event from Jobber!');
+
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus(200);
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        JobberWebHookHandler.visitCreateHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
+});
+
+app.post('/jobber/VISIT_UPDATE', (req, res) => {
+    console.info('Got an VISIT_UPDATE event from Jobber!');
+
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus(200);
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        JobberWebHookHandler.visitUpdateHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
+});
+
+app.post('/jobber/VISIT_COMPLETE', (req, res) => {
+    console.info('Got an VISIT_COMPLETE event from Jobber!');
+
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus(200);
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        JobberWebHookHandler.visitCompleteHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
+});
+
+//  TODO: Handle { WEBHOOK_TYPE: 'VISIT_DESTROY' }
+
+/**
+ * Handle Request Webhooks
+ */
+app.post('/jobber/REQUEST_CREATE', (req, res) => {
+    console.info('Got an REQUEST_CREATE event from Jobber!');
+
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus(200);
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        JobberWebHookHandler.requestCreateHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
+});
+
+app.post('/jobber/REQUEST_UPDATE', (req, res) => {
+    console.info('Got an REQUEST_UPDATE event from Jobber!');
+
+    // Verify that the webhook came from Jobber
+    if (Jobber.verifyWebhook(req)) {
+        // Webhook was valid.
+        res.sendStatus(200);
+
+        req.body = JSON.parse(req.body);
+        // Process Request
+        JobberWebHookHandler.requestUpdateHandle(req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
+});
+
+//  TODO: Handle { WEBHOOK_TYPE: 'REQUEST_DESTROY' }
+
+/**
+ * Handles a new Jobber Authorization Code, sets it in the config, then exits
+ */
+app.get('/jobber/authorize', (req, res) => {
+    res.sendStatus(200);
+
+    // Process Request
+    let file = process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env';
+    let oldAuthCode = process.env.JOBBER_AUTHORIZATION_CODE;
+    fs.readFile(file, 'utf8', function (err, data) {
+        if (err) {
+            return console.error(err);
+        }
+
+        let result = data.replace(oldAuthCode, req.query.code);
+
+        fs.writeFile(file, result, 'utf8', function (err) {
+            if (err) {
+                console.error('Failed to save the Jobber Authorization Code to file.');
+                console.error(err);
+            } else {
+                console.info('Received new Jobber authorization!');
+                // console.log('Received new Jobber authorization! Restarting now.');
+                Jobber.setAuthorization(req.query.code);
+            }
+        });
+    });
+    process.env.JOBBER_AUTHORIZATION_CODE = req.query.code;
+});
+
+/**
+ * Log all other Jobber webhooks
+ */
+app.post('/jobber/:WEBHOOK_TYPE', (req, res) => {
+    console.log("Unhandled Jobber webhook received!");
+    console.log(req.params);
+    console.log("Data was");
+    console.log(req.body);
+    res.sendStatus(200);
 });
 
 /**
