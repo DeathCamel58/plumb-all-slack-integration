@@ -3,6 +3,7 @@ let Jobber = require("./Jobber");
 let PostHog = require('./PostHog');
 const Contact = require("../contact");
 const APICoordinator = require("../APICoordinator");
+const events = require('../events');
 
 
 /**
@@ -42,6 +43,7 @@ async function invoiceHandle(req) {
         await PostHog.logInvoice(invoice, clientID);
     }
 }
+events.emitter.on('jobber-INVOICE_CREATE', invoiceHandle);
 
 /**
  * Adds/Updates client in PostHog
@@ -59,6 +61,8 @@ async function clientHandle(req) {
         await PostHog.logClient(client);
     }
 }
+events.emitter.on('jobber-CLIENT_CREATE', clientHandle);
+events.emitter.on('jobber-CLIENT_UPDATE', clientHandle);
 
 /**
  * Adds quote event in PostHog
@@ -78,6 +82,7 @@ async function quoteCreateHandle(req) {
         await PostHog.logQuote(quote, clientID);
     }
 }
+events.emitter.on('jobber-QUOTE_CREATE', quoteCreateHandle);
 
 /**
  * Adds quote acceptance event in PostHog
@@ -97,6 +102,7 @@ async function quoteUpdateHandle(req) {
         await PostHog.logQuoteUpdate(quote, clientID);
     }
 }
+events.emitter.on('jobber-QUOTE_UPDATE', quoteUpdateHandle);
 
 /**
  * Adds job create event in PostHog
@@ -116,6 +122,7 @@ async function jobCreateHandle(req) {
         await PostHog.logJob(job, clientID);
     }
 }
+events.emitter.on('jobber-JOB_CREATE', jobCreateHandle);
 
 /**
  * Adds job update event in PostHog
@@ -135,6 +142,7 @@ async function jobUpdateHandle(req) {
         await PostHog.logJobUpdate(job, clientID);
     }
 }
+events.emitter.on('jobber-JOB_UPDATE', jobUpdateHandle);
 
 /**
  * Adds new payment event in PostHog
@@ -154,6 +162,7 @@ async function paymentCreateHandle(req) {
         await PostHog.logPayment(payment, clientID);
     }
 }
+events.emitter.on('jobber-PAYMENT_CREATE', paymentCreateHandle);
 
 /**
  * Adds payment update event in PostHog
@@ -173,6 +182,7 @@ async function paymentUpdateHandle(req) {
         await PostHog.logPaymentUpdate(payment, clientID);
     }
 }
+events.emitter.on('jobber-PAYMENT_UPDATE', paymentUpdateHandle);
 
 /**
  * Adds payout create event in PostHog
@@ -190,6 +200,7 @@ async function payoutCreateHandle(req) {
         await PostHog.logPayout(payout);
     }
 }
+events.emitter.on('jobber-PAYOUT_CREATE', payoutCreateHandle);
 
 /**
  * Adds payout updated event in PostHog
@@ -207,6 +218,7 @@ async function payoutUpdateHandle(req) {
         await PostHog.logPayoutUpdate(payout);
     }
 }
+events.emitter.on('jobber-PAYOUT_UPDATE', payoutUpdateHandle);
 
 /**
  * Adds new property event in PostHog
@@ -226,6 +238,7 @@ async function propertyCreateHandle(req) {
         await PostHog.logProperty(property, clientID);
     }
 }
+events.emitter.on('jobber-PROPERTY_CREATE', propertyCreateHandle);
 
 /**
  * Adds property update event in PostHog
@@ -245,6 +258,7 @@ async function propertyUpdateHandle(req) {
         await PostHog.logPropertyUpdate(property, clientID);
     }
 }
+events.emitter.on('jobber-PROPERTY_UPDATE', propertyUpdateHandle);
 
 /**
  * Adds new visit event in PostHog
@@ -264,6 +278,7 @@ async function visitCreateHandle(req) {
         await PostHog.logVisit(visit, clientID);
     }
 }
+events.emitter.on('jobber-VISIT_CREATE', visitCreateHandle);
 
 /**
  * Adds visit update event in PostHog
@@ -283,6 +298,7 @@ async function visitUpdateHandle(req) {
         await PostHog.logVisitUpdate(visit, clientID);
     }
 }
+events.emitter.on('jobber-VISIT_UPDATE', visitUpdateHandle);
 
 /**
  * Adds visit complete event in PostHog
@@ -302,6 +318,7 @@ async function visitCompleteHandle(req) {
         await PostHog.logVisitComplete(visit, clientID);
     }
 }
+events.emitter.on('jobber-VISIT_COMPLETE', visitCompleteHandle);
 
 /**
  * Adds new visit event in PostHog
@@ -327,6 +344,7 @@ async function requestCreateHandle(req) {
         await APICoordinator.contactMade(contact, JSON.stringify(body));
     }
 }
+events.emitter.on('jobber-REQUEST_CREATE', requestCreateHandle);
 
 /**
  * Adds request update event in PostHog
@@ -346,23 +364,4 @@ async function requestUpdateHandle(req) {
         await PostHog.logRequestUpdate(request, clientID);
     }
 }
-
-module.exports = {
-    clientHandle,
-    invoiceHandle,
-    quoteCreateHandle,
-    quoteUpdateHandle,
-    jobCreateHandle,
-    jobUpdateHandle,
-    paymentCreateHandle,
-    paymentUpdateHandle,
-    payoutCreateHandle,
-    payoutUpdateHandle,
-    propertyCreateHandle,
-    propertyUpdateHandle,
-    visitCreateHandle,
-    visitUpdateHandle,
-    visitCompleteHandle,
-    requestCreateHandle,
-    requestUpdateHandle
-};
+events.emitter.on('jobber-REQUEST_UPDATE', requestUpdateHandle);

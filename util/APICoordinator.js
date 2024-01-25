@@ -1,6 +1,4 @@
-const PostHog = require("./apis/PostHog");
-const Trello = require("./apis/Trello");
-const SlackBot = require("./apis/SlackBot");
+const events = require("./events");
 
 /**
  * When a contact is made, this will tell all APIs.
@@ -9,10 +7,11 @@ const SlackBot = require("./apis/SlackBot");
  * @returns {Promise<void>}
  */
 async function contactMade(contact, originalMessage) {
-    await SlackBot.sendMessage(contact.messageToSend(), `${contact.type} Contact`);
-    await PostHog.logContact(contact, originalMessage);
-    await Trello.addContact(contact);
+    events.emitter.emit('slackbot-send-message', contact.messageToSend(), `${contact.type} Contact`);
+    events.emitter.emit('posthog-log-contact', contact, originalMessage);
+    events.emitter.emit('trello-add-contact', contact, originalMessage);
 }
+events.emitter.on('contact-made', contactMade);
 
 module.exports = {
     contactMade

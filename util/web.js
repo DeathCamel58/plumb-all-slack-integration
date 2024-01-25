@@ -5,13 +5,9 @@ let fs = require('fs');
 const path = require('path');
 const express = require('express');
 const bodyParser = require("body-parser");
-let GoogleAds = require('./apis/GoogleAds');
-let SasoWebHookHandler = require('./apis/SasoWebHookHandler');
-let JobberWebHookHandler = require('./apis/JobberWebHookHandler');
+const events = require('./events');
 let Jobber = require('./apis/Jobber');
 let Slack = require('./apis/SlackBot');
-let CloudFlare = require('./apis/CloudFlareWorkers');
-let FleetSharp = require('./apis/FleetSharp');
 
 // The app object
 const app = express();
@@ -33,8 +29,8 @@ app.post('/saso/:WEBHOOK_TYPE', (req, res) => {
     if (req.params['WEBHOOK_TYPE'] && req.params['WEBHOOK_TYPE'].startsWith('lead-source&')) {
         console.log("Got a lead with a source from SASO!");
 
-        // Process Request
-        SasoWebHookHandler.leadHandle(req);
+        // Emit Event
+        events.emitter.emit('saso-lead', req);
     }
 
     res.sendStatus(200);
@@ -50,84 +46,20 @@ app.post('/jobber/:WEBHOOK_TYPE', (req, res) => {
     let responseStatus = 200;
 
     // Verify that the webhook came from Jobber
-    if (Jobber.verifyWebhook(req)) {
+    if (!Jobber.verifyWebhook(req)) {
         if ("content-type" in req.headers && req.headers["content-type"] === "application/json") {
             req.body = JSON.parse(req.body);
         }
 
         // Process Request
-        switch (req.params.WEBHOOK_TYPE) {
-            case "INVOICE_CREATE":
-                JobberWebHookHandler.invoiceHandle(req);
-                break;
-            case "INVOICE_UPDATE":
-                // TODO: Maybe update the already existing invoice event to show remaining balance now?
-                // invoiceWebhookHandle(req);
-                break;
-            // TODO: Handle { WEBHOOK_TYPE: 'INVOICE_DESTROY' }
-            case "CLIENT_CREATE":
-                JobberWebHookHandler.clientHandle(req);
-                break;
-            case "CLIENT_UPDATE":
-                JobberWebHookHandler.clientHandle(req);
-                break;
-            // TODO: Handle { WEBHOOK_TYPE: 'CLIENT_DESTROY' }
-            // TODO: Handle { WEBHOOK_TYPE: 'REQUEST_DESTROY' }
-            case "QUOTE_CREATE":
-                JobberWebHookHandler.quoteCreateHandle(req);
-                break;
-            case "QUOTE_UPDATE":
-                JobberWebHookHandler.quoteUpdateHandle(req);
-                break;
-            // TODO: Handle { WEBHOOK_TYPE: 'QUOTE_DESTROY' }
-            case "JOB_CREATE":
-                JobberWebHookHandler.jobCreateHandle(req);
-                break;
-            case "JOB_UPDATE":
-                JobberWebHookHandler.jobUpdateHandle(req);
-                break;
-            // TODO: Handle { WEBHOOK_TYPE: 'JOB_DESTROY' }
-            case "PAYMENT_CREATE":
-                JobberWebHookHandler.paymentCreateHandle(req);
-                break;
-            case "PAYMENT_UPDATE":
-                JobberWebHookHandler.paymentUpdateHandle(req);
-                break;
-            // TODO: Handle { WEBHOOK_TYPE: 'PAYMENT_DESTROY' }
-            case "PAYOUT_CREATE":
-                JobberWebHookHandler.payoutCreateHandle(req);
-                break;
-            case "PAYOUT_UPDATE":
-                JobberWebHookHandler.payoutUpdateHandle(req);
-                break;
-            case "PROPERTY_CREATE":
-                JobberWebHookHandler.propertyCreateHandle(req);
-                break;
-            case "PROPERTY_UPDATE":
-                JobberWebHookHandler.propertyUpdateHandle(req);
-                break;
-            // TODO: Handle { WEBHOOK_TYPE: 'PROPERTY_DESTROY' }
-            case "VISIT_CREATE":
-                JobberWebHookHandler.visitCreateHandle(req);
-                break;
-            case "VISIT_UPDATE":
-                JobberWebHookHandler.visitUpdateHandle(req);
-                break;
-            case "VISIT_COMPLETE":
-                JobberWebHookHandler.visitCompleteHandle(req);
-                break;
-            // TODO: Handle { WEBHOOK_TYPE: 'VISIT_DESTROY' }
-            case "REQUEST_CREATE":
-                JobberWebHookHandler.requestCreateHandle(req);
-                break;
-            case "REQUEST_UPDATE":
-                JobberWebHookHandler.requestUpdateHandle(req);
-                break;
-            default:
-                console.log("Data for unhandled webhook was");
-                console.log(req.body);
-                responseStatus = 405;
-                break;
+        // This checks if the given webhook type has listeners, and if so, we fire that event
+        const listenerName = `jobber-${req.params.WEBHOOK_TYPE}`;
+        if (events.emitter.listenerCount(listenerName) > 0) {
+            events.emitter.emit(listenerName, req);
+        } else {
+            console.log("Data for unhandled webhook was");
+            console.log(req.body);
+            responseStatus = 405;
         }
     } else {
         // Webhook signature invalid. Send 401.
@@ -186,8 +118,8 @@ app.post('/slack/EVENT', (req, res) => {
             console.info(`Received verification token ${req.body.challenge} from Slack.`);
         } else {
             res.sendStatus(200);
-            // Process Request
-            Slack.event(req);
+
+            events.emitter.emit('slack-EVENT', req);
         }
     } else {
         // Webhook signature invalid. Send 401.
@@ -217,7 +149,7 @@ app.post('/google-ads/form', (req, res) => {
         console.info('Webhook: Google Ads lead form received.');
         res.sendStatus(200);
 
-        GoogleAds.LeadFormHandle(data);
+        events.emitter.emit('google-ads-form', req);
     } else {
         console.error(`Webhook for Google Ads didn't have correct key.\n\tReceived: "${data["google_key"]}"\n\tExpected: "${process.env.GOOGLE_ADS_KEY}"`);
         res.sendStatus(401);
@@ -234,7 +166,7 @@ app.post('/cloudflare/contactForm', (req, res) => {
         console.info('Webhook: CloudFlare Workers contact form received.');
         res.sendStatus(200);
 
-        CloudFlare.ContactFormHandle(data);
+        events.emitter.emit('cloudflare-contact-form', req);
     } else {
         console.error(`Webhook for CloudFlare Workers didn't have correct key.\n\tReceived: "${data["cloudflare_key"]}"\n\tExpected: "${process.env.GOOGLE_ADS_KEY}"`);
         res.sendStatus(401);
@@ -250,7 +182,7 @@ app.post('/fleetsharp/alerts', (req, res) => {
     // Return a `201`, as this is what the documentation specifies as our response
     res.sendStatus(201);
 
-    FleetSharp.AlertHandle(data);
+    events.emitter.emit('fleetsharp-alert', req);
 });
 
 app.get('/', (req, res) => {

@@ -1,7 +1,4 @@
-// const Contact = require("../contact");
-// const GoogleMaps = require("./GoogleMaps");
-const APICoordinator = require("../APICoordinator");
-const SlackBot = require("./SlackBot");
+const events = require('../events');
 
 /**
  * Processes a FleetSharp Alert webhook
@@ -52,10 +49,7 @@ async function AlertHandle(body) {
 
     if (message !== '') {
         // Send the request to where it needs to go
-        await SlackBot.sendMessage(message, `FleetSharp Alert`);
+        events.emitter.emit('slackbot-send-message', message, 'FleetSharp Alert');
     }
 }
-
-module.exports = {
-    AlertHandle
-};
+events.emitter.on('fleetsharp-alert', AlertHandle);

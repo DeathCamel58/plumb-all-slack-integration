@@ -2,6 +2,7 @@ require('dotenv').config({path: process.env.ENV_LOCATION || '/root/plumb-all-sla
 const fetch = require('node-fetch');
 const crypto = require("crypto");
 const fs = require("fs");
+const events = require('../events');
 
 
 const JOBBER_BASE_URL = "https://api.getjobber.com/api/graphql";
@@ -113,8 +114,8 @@ async function requestAuthorization() {
     let redirect_URI = `${process.env.WEB_URL}/jobber/authorize`;
     redirect_URI = encodeURIComponent(redirect_URI);
     let STATE = crypto.randomBytes(16).toString('hex');
-    let message = `Error from the call bot. *Super technical error code*: :robot_face::frowning::thumbsdown:\nI\'ve lost my access to Jobber and I need some help.\nI need an admin in Jobber to click on --><https://api.getjobber.com/api/oauth/authorize?client_id=${process.env.JOBBER_CLIENT_ID}&redirect_uri=${redirect_URI}&state=${STATE}|this link><-- and click \`ALLOW ACCESS\`.`
-    await SlackBot.sendMessage(message, "Call Bot Jobber Authorization");
+    let message = `Error from the call bot. *Super technical error code*: :robot_face::frowning::thumbsdown:\nI\'ve lost my access to Jobber and I need some help.\nI need an admin in Jobber to click on --><https://api.getjobber.com/api/oauth/authorize?client_id=${process.env.JOBBER_CLIENT_ID}&redirect_uri=${redirect_URI}&state=${STATE}|this link><-- and click \`ALLOW ACCESS\`.`;
+    events.emitter.emit('slackbot-send-message', message, 'Call Bot Jobber Authorization');
     console.info('Sent Jobber authorization request to Slack!');
     await sleep(120 * 1000);
 }

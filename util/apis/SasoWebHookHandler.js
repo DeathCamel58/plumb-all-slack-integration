@@ -1,5 +1,6 @@
 const Contact = require("../contact");
 const APICoordinator = require("../APICoordinator");
+const events = require('../events');
 
 function parseBody(body) {
     let parsed = body.split("039f7a43-a61a-4057-955b-e0d0818d3437");
@@ -46,7 +47,4 @@ async function leadHandle(req) {
     // Send the request to where it needs to go
     await APICoordinator.contactMade(contact, JSON.stringify(body));
 }
-
-module.exports = {
-    leadHandle
-};
+events.emitter.on('saso-lead', leadHandle);

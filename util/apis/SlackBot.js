@@ -1,8 +1,8 @@
 const {App} = require('@slack/bolt');
-let Trello = require('./Trello');
 const crypto = require('crypto');
 const Jobber = require("./Jobber");
 const {interleave} = require("../DataUtilities");
+const events = require('../events');
 
 module.exports = {
     sendMessage,
@@ -48,6 +48,7 @@ async function sendMessage(message, username) {
         console.error(error);
     }
 }
+events.emitter.on('slackbot-send-message', sendMessage);
 
 async function sendReplyRawMessageBlocks(event, rawMessage, blocks) {
     try {
@@ -304,17 +305,17 @@ async function event(req) {
 
             // If this was a thumbs up reaction
             if (event.reaction.includes("+1")) {
-                await Trello.moveContactCard(message.text, process.env.TRELLO_LIST_NAME_WIP);
+                events.emitter.emit('trello-move-contact-card', message.text, process.env.TRELLO_LIST_NAME_WIP);
             }
 
             // If this was a thumbs up reaction
             if (event.reaction.includes("check_mark")) {
-                await Trello.moveContactCard(message.text, process.env.TRELLO_LIST_NAME_DONE);
+                events.emitter.emit('trello-move-contact-card', message.text, process.env.TRELLO_LIST_NAME_DONE);
             }
 
             // If this was an X, thumbs down, or call_me reaction
             if (event.reaction === "x" || event.reaction.includes("-1") || event.reaction.includes("call_me")) {
-                await Trello.moveContactCard(message.text, process.env.TRELLO_LIST_NAME_NO_GO);
+                events.emitter.emit('trello-move-contact-card', message.text, process.env.TRELLO_LIST_NAME_NO_GO);
             }
             break;
         case "message":
@@ -341,3 +342,4 @@ async function event(req) {
             break;
     }
 }
+events.emitter.on('slack-EVENT', event);

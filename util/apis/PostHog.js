@@ -2,6 +2,7 @@ require('dotenv').config({path: process.env.ENV_LOCATION || '/root/plumb-all-sla
 const crypto = require('crypto');
 let Contact = require('../contact');
 const GoogleMaps = require("./GoogleMaps");
+const events = require("../events");
 
 const fetch = require('node-fetch');
 
@@ -302,6 +303,7 @@ async function logContact(contact, originalMessage) {
 
     // Send all queued data to PostHog
 }
+events.emitter.on('posthog-log-contact', logContact);
 
 /**
  * Logs a created client in Jobber to PostHog

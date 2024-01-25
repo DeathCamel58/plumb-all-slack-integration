@@ -1,6 +1,6 @@
 const Contact = require("../contact");
-const GoogleMaps = require("./GoogleMaps");
 const APICoordinator = require("../APICoordinator");
+const events = require('../events');
 
 /**
  * Processes a CloudFlare Contact form webhook
@@ -17,7 +17,4 @@ async function ContactFormHandle(body) {
     // Send the request to where it needs to go
     await APICoordinator.contactMade(contact, JSON.stringify(body));
 }
-
-module.exports = {
-    ContactFormHandle
-};
+events.emitter.on('cloudflare-contact-form', ContactFormHandle);
