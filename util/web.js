@@ -46,7 +46,7 @@ app.post('/jobber/:WEBHOOK_TYPE', (req, res) => {
     let responseStatus = 200;
 
     // Verify that the webhook came from Jobber
-    if (!Jobber.verifyWebhook(req)) {
+    if (Jobber.verifyWebhook(req)) {
         if ("content-type" in req.headers && req.headers["content-type"] === "application/json") {
             req.body = JSON.parse(req.body);
         }

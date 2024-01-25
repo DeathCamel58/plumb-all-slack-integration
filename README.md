@@ -63,4 +63,6 @@ CLOUDFLARE_CONTACT_FORM_KEY=6c6d60e7-dc09-4b1d-b780-8ddc50a61e4c
 # Web Stuff
 WEB_URL=https://publicly.accessable.url
 WEB_PORT=80
+
+DEBUG=FALSE
 ```

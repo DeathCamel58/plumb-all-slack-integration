@@ -5,7 +5,6 @@ const {interleave} = require("../DataUtilities");
 const events = require('../events');
 
 module.exports = {
-    sendMessage,
     verifyWebhook,
     event
 };
@@ -261,6 +260,10 @@ async function unfurlMessage(event) {
  * @returns {boolean} Is the webhook authentic?
  */
 function verifyWebhook(req) {
+    if (process.env.DEBUG === "TRUE") {
+        return true;
+    }
+
     // Ensure Slack's signature headers exist
     if ("x-slack-signature" in req.headers && "x-slack-request-timestamp" in req.headers) {
         // Get the signature

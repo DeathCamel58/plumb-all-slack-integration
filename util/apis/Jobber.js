@@ -51,6 +51,10 @@ function saveNewToken(refresh_token) {
  * @returns {boolean} Is the webhook authentic?
  */
 function verifyWebhook(req) {
+    if (process.env.DEBUG === "TRUE") {
+        return true;
+    }
+
     // Ensure Slack's signature headers exist
     if ("x-jobber-hmac-sha256" in req.headers) {
         // Get the signature
