@@ -160,7 +160,8 @@ app.post('/google-ads/form', (req, res) => {
  * CloudFlare Workers Contact Form
  */
 app.post('/cloudflare/contactForm', (req, res) => {
-    let data = JSON.parse(req.body);
+    req.body = JSON.parse(req.body);
+    let data = req.body;
 
     if (data["cloudflare_key"] === process.env.CLOUDFLARE_CONTACT_FORM_KEY) {
         console.info('Webhook: CloudFlare Workers contact form received.');

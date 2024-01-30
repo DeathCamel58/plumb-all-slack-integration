@@ -132,17 +132,19 @@ class Contact {
 
         // If there's an address, use it.
         let tmp = this.contactAddress;
-        let isAddress = true;
-        tmp = tmp.replace(/ /g, '');
-        tmp = tmp.replace(/,/g, '');
-        tmp = tmp.replace(/-/g, '');
-        tmp = tmp.replace(/\//g, '');
-        tmp = tmp.replace(/NA/g, '');
-        tmp = tmp.replace(/na/g, '');
-        tmp = tmp.replace(/Na/g, '');
-        tmp = tmp.replace(/nA/g, '');
-        if (tmp === '' || tmp === 'Ga') {
-            isAddress = false;
+        let isAddress = false;
+        if (tmp) {
+            tmp = tmp.replace(/ /g, '');
+            tmp = tmp.replace(/,/g, '');
+            tmp = tmp.replace(/-/g, '');
+            tmp = tmp.replace(/\//g, '');
+            tmp = tmp.replace(/NA/g, '');
+            tmp = tmp.replace(/na/g, '');
+            tmp = tmp.replace(/Na/g, '');
+            tmp = tmp.replace(/nA/g, '');
+        }
+        if (typeof tmp !== 'undefined' && tmp !== '' && tmp !== 'Ga') {
+            isAddress = true;
         }
 
         if (isAddress) {
