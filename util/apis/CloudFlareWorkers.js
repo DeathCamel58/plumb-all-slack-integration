@@ -4,11 +4,13 @@ const events = require('../events');
 
 /**
  * Processes a CloudFlare Contact form webhook
- * @param body the data that was received
+ * @param req the data that was received
  * @returns {Promise<void>}
  * @constructor
  */
-async function ContactFormHandle(body) {
+async function ContactFormHandle(req) {
+    let body = req.body;
+
     console.log("Data was");
     console.log(body);
 
