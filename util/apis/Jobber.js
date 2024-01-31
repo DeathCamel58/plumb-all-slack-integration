@@ -109,19 +109,38 @@ async function setAuthorization(code) {
     }
 }
 
+function waitForEvent(eventName, emitter) {
+    return new Promise(resolve => {
+        emitter.once(eventName, data => {
+            resolve(data);
+        });
+    });
+}
+
+let waitingForAuthorization = false;
+
 /**
  * Sends a message to slack that the user can click on to get authorization
  * @returns {Promise<void>}
  */
 async function requestAuthorization() {
-    const SlackBot = require("./SlackBot");
-    let redirect_URI = `${process.env.WEB_URL}/jobber/authorize`;
-    redirect_URI = encodeURIComponent(redirect_URI);
-    let STATE = crypto.randomBytes(16).toString('hex');
-    let message = `Error from the call bot. *Super technical error code*: :robot_face::frowning::thumbsdown:\nI\'ve lost my access to Jobber and I need some help.\nI need an admin in Jobber to click on --><https://api.getjobber.com/api/oauth/authorize?client_id=${process.env.JOBBER_CLIENT_ID}&redirect_uri=${redirect_URI}&state=${STATE}|this link><-- and click \`ALLOW ACCESS\`.`;
-    events.emitter.emit('slackbot-send-message', message, 'Call Bot Jobber Authorization');
-    console.info('Sent Jobber authorization request to Slack!');
-    await sleep(120 * 1000);
+    if (!waitingForAuthorization) {
+        const SlackBot = require("./SlackBot");
+        let redirect_URI = `${process.env.WEB_URL}/jobber/authorize`;
+        redirect_URI = encodeURIComponent(redirect_URI);
+        let STATE = crypto.randomBytes(16).toString('hex');
+        let message = `Error from the call bot. *Super technical error code*: :robot_face::frowning::thumbsdown:\nI\'ve lost my access to Jobber and I need some help.\nI need an admin in Jobber to click on --><https://api.getjobber.com/api/oauth/authorize?client_id=${process.env.JOBBER_CLIENT_ID}&redirect_uri=${redirect_URI}&state=${STATE}|this link><-- and click \`ALLOW ACCESS\`.`;
+        events.emitter.emit('slackbot-send-message', message, 'Call Bot Jobber Authorization');
+        console.info('Sent Jobber authorization request to Slack!');
+
+        waitingForAuthorization = true;
+    }
+
+    // Wait for the event that's fired when the authorization is updated
+    await waitForEvent('jobber-AUTHORIZATION', events.emitter);
+
+    console.log("Got the authorization!");
+    waitingForAuthorization = false;
 }
 
 /**

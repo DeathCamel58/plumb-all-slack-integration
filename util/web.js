@@ -98,6 +98,8 @@ app.get('/jobber/authorize', (req, res) => {
         });
     });
     process.env.JOBBER_AUTHORIZATION_CODE = req.query.code;
+
+    events.emitter.emit('jobber-AUTHORIZATION', req);
 });
 
 /**
