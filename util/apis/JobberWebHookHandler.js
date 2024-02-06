@@ -321,7 +321,7 @@ async function visitCompleteHandle(req) {
 events.emitter.on('jobber-VISIT_COMPLETE', visitCompleteHandle);
 
 /**
- * Adds new visit event in PostHog
+ * Adds new request create event in PostHog
  * @param req The incoming web data
  * @returns {Promise<void>}
  */
@@ -345,6 +345,50 @@ async function requestCreateHandle(req) {
     }
 }
 events.emitter.on('jobber-REQUEST_CREATE', requestCreateHandle);
+
+/**
+ * Adds expense create event in PostHog
+ * @param req The incoming web data
+ * @returns {Promise<void>}
+ */
+async function expenseCreateHandle(req) {
+    let body = req.body;
+
+    // Verify authenticity of webhook, then process
+    if (jobberVerify(body, req.header('X-Jobber-Hmac-SHA256'))) {
+        // Get expense data
+        let expense = await Jobber.getExpenseData(body.data["webHookEvent"]["itemId"]);
+
+        // Insert/Update employee in PostHog
+        await PostHog.logEmployee(expense.enteredBy);
+
+        // Insert visit in PostHog
+        await PostHog.logExpenseCreate(expense, expense.enteredBy.uuid);
+    }
+}
+events.emitter.on('jobber-EXPENSE_CREATE', expenseCreateHandle);
+
+/**
+ * Adds expense update event in PostHog
+ * @param req The incoming web data
+ * @returns {Promise<void>}
+ */
+async function expenseUpdateHandle(req) {
+    let body = req.body;
+
+    // Verify authenticity of webhook, then process
+    if (jobberVerify(body, req.header('X-Jobber-Hmac-SHA256'))) {
+        // Get expense data
+        let expense = await Jobber.getExpenseData(body.data["webHookEvent"]["itemId"]);
+
+        // Insert/Update employee in PostHog
+        await PostHog.logEmployee(expense.enteredBy);
+
+        // Insert visit in PostHog
+        await PostHog.logExpenseUpdate(expense, expense.enteredBy.uuid);
+    }
+}
+events.emitter.on('jobber-EXPENSE_UPDATE', expenseUpdateHandle);
 
 /**
  * Adds request update event in PostHog

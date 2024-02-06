@@ -353,6 +353,32 @@ async function logClient(jobberClient) {
 }
 
 /**
+ * Logs a user in Jobber to PostHog
+ * @param jobberUser The user in Jobber
+ */
+async function logEmployee(jobberUser) {
+    // Identify the user to allow PostHog to display employee details properly
+    let userData = {
+        name: jobberUser.name.full,
+        phone: jobberUser.phone.friendly,
+        email: jobberUser.email.raw,
+        uuid: jobberUser.uuid,
+        id: jobberUser.id
+    }
+
+    let identifyData = {
+        api_key: process.env.POSTHOG_TOKEN,
+        distinct_id: jobberUser.uuid,
+        event: '$identify',
+        $set: userData
+    };
+
+    await useAPI('capture/', 'post', identifyData);
+
+    return jobberUser.uuid;
+}
+
+/**
  * Logs a created Invoice in Jobber to PostHog
  * @param jobberInvoice The Invoice that was parsed
  * @param clientID The client ID to use for the event
@@ -728,6 +754,58 @@ async function logVisitComplete(jobberVisit, clientID) {
 }
 
 /**
+ * Logs an expense creation in Jobber to PostHog
+ * @param jobberExpense The expense that was parsed
+ * @param userID The user ID to use for the event
+ */
+async function logExpenseCreate(jobberExpense, userID) {
+    let captureData = {
+        api_key: process.env.POSTHOG_TOKEN,
+        event: 'expense created',
+        properties: {
+            distinct_id: userID,
+            createdAt: jobberExpense.createdAt,
+            date: jobberExpense.date,
+            description: jobberExpense.description,
+            id: jobberExpense.id,
+            linkedJob: jobberExpense.linkedJob ? jobberExpense.linkedJob.id : null,
+            paidBy: jobberExpense.paidBy ? jobberExpense.paidBy.id : null,
+            reimbursableTo: jobberExpense.reimbursableTo ? jobberExpense.reimbursableTo.id : null,
+            title: jobberExpense.title,
+            total: jobberExpense.total,
+            updatedAt: jobberExpense.updatedAt,
+        }
+    };
+    await useAPI('capture/', 'post', captureData);
+}
+
+/**
+ * Logs an expense update in Jobber to PostHog
+ * @param jobberExpense The expense that was parsed
+ * @param userID The user ID to use for the event
+ */
+async function logExpenseUpdate(jobberExpense, userID) {
+    let captureData = {
+        api_key: process.env.POSTHOG_TOKEN,
+        event: 'expense updated',
+        properties: {
+            distinct_id: userID,
+            createdAt: jobberExpense.createdAt,
+            date: jobberExpense.date,
+            description: jobberExpense.description,
+            id: jobberExpense.id,
+            linkedJob: jobberExpense.linkedJob ? jobberExpense.linkedJob.id : null,
+            paidBy: jobberExpense.paidBy ? jobberExpense.paidBy.id : null,
+            reimbursableTo: jobberExpense.reimbursableTo ? jobberExpense.reimbursableTo.id : null,
+            title: jobberExpense.title,
+            total: jobberExpense.total,
+            updatedAt: jobberExpense.updatedAt
+        }
+    };
+    await useAPI('capture/', 'post', captureData);
+}
+
+/**
  * Logs a request update in Jobber to PostHog
  * @param jobberRequest The request that was parsed
  * @param clientID The client ID to use for the event
@@ -777,6 +855,7 @@ module.exports = {
     sendClientToPostHog,
     logContact,
     logClient,
+    logEmployee,
     logInvoice,
     logQuote,
     logQuoteUpdate,
@@ -791,5 +870,7 @@ module.exports = {
     logVisit,
     logVisitUpdate,
     logVisitComplete,
+    logExpenseCreate,
+    logExpenseUpdate,
     logRequestUpdate
 };

@@ -650,6 +650,97 @@ query RequestQuery {
     return requestResponse["request"];
 }
 
+/**
+ * Runs Jobber expense query for given itemID, and returns the data
+ * @param itemID The itemID in the webhook
+ * @returns {Promise<*>} The data for the payment
+ */
+async function getExpenseData(itemID) {
+    let query =
+        `
+query ExpenseQuery {
+    expense (id: "${itemID}") {
+        createdAt
+        date
+        description
+        enteredBy {
+            id
+        }
+        id
+        linkedJob {
+            id
+        }
+        paidBy {
+            id
+        }
+        reimbursableTo {
+            id
+        }
+        title
+        total
+        updatedAt
+    }
+}
+        `;
+
+    let expenseResponse = await makeRequest(query);
+
+    // Get the employee data and fill those fields
+    if (expenseResponse.expense.enteredBy && expenseResponse.expense.enteredBy.id) {
+        expenseResponse.expense.enteredBy = await getUserData(expenseResponse.expense.enteredBy.id)
+    }
+    if (expenseResponse.expense.paidBy && expenseResponse.expense.paidBy.id) {
+        expenseResponse.expense.paidBy = await getUserData(expenseResponse.expense.paidBy.id)
+    }
+    if (expenseResponse.expense.reimbursableTo && expenseResponse.expense.reimbursableTo.id) {
+        expenseResponse.expense.reimbursableTo = await getUserData(expenseResponse.expense.reimbursableTo.id)
+    }
+
+    return expenseResponse["expense"];
+}
+
+/**
+ * Runs Jobber user query for given itemID, and returns the data
+ * @param itemID The user ID
+ * @returns {Promise<*>} The data for the payment
+ */
+async function getUserData(itemID) {
+    let query =
+        `
+query UserQuery {
+    user (id: "${itemID}") {
+        id
+        createdAt
+        email {
+            isValid
+            raw
+        }
+        isAccountAdmin
+        isAccountOwner
+        lastLoginAt
+        name {
+            first
+            last
+            full
+        }
+        phone {
+            areaCode
+            countryCode
+            friendly
+            isValid
+            raw
+        }
+        status
+        uuid
+    }
+}
+        `;
+
+    let userResponse = await makeRequest(query);
+
+    return userResponse["user"];
+}
+
 module.exports = {
     verifyWebhook,
     setAuthorization,
@@ -664,5 +755,7 @@ module.exports = {
     getPayoutData,
     getPropertyData,
     getVisitData,
-    getRequestData
+    getRequestData,
+    getExpenseData,
+    getUserData
 };
