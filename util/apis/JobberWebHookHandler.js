@@ -15,6 +15,10 @@ const events = require('../events');
  * @returns {boolean} `true` if the HMAC was valid
  */
 function jobberVerify(webhookBody, jobberHmac) {
+    if (process.env.DEBUG === "TRUE") {
+        return true;
+    }
+
     let jobberSecret = process.env.JOBBER_APP_SECRET || "";
     let stringData = JSON.stringify(webhookBody.data, null, 2);
     const digest = crypto.createHmac('sha256', jobberSecret).update(stringData).digest('base64');
