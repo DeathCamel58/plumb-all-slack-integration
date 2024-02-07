@@ -15,6 +15,7 @@ const app = express();
 let port = Number(process.env.WEB_PORT);
 // Use body-parser's JSON parsing
 app.use(bodyParser.text({type: 'application/json'}));
+app.use(express.urlencoded({ extended: true })); // support encoded bodies
 
 /**
  * Log unhandled SASO webhooks
@@ -136,9 +137,16 @@ app.post('/slack/EVENT', (req, res) => {
 app.post('/slack/INTERACTIVITY', (req, res) => {
     console.info('Got an INTERACTIVITY from Slack!');
 
-    // We don't need to verify that the webhook came from Slack
-    // This is because we don't actually do anything about these requests. We only respond 200 to keep Slack from complaining.
-    res.sendStatus(200);
+    // Verify that the webhook came from Slack
+    if (Slack.verifyWebhook(req)) {
+        // Webhook was valid.
+        req.body.payload = JSON.parse(req.body.payload)
+
+        events.emitter.emit('slack-INTERACTIVITY', req);
+    } else {
+        // Webhook signature invalid. Send 401.
+        res.sendStatus(401);
+    }
 });
 
 /**

@@ -340,9 +340,115 @@ async function event(req) {
             // Ref: https://github.com/DeathCamel58/plumb-all-slack-integration/issues/3#issuecomment-1433056300
             console.warn(`Link was shared in message. Can't unfurl due to Jobber API lacking search functionality.`);
             break;
+        case "app_home_opened":
+            app.client.views.update({
+                view_id: event.view.id,
+                hash: event.view.hash,
+                view: {
+                    type: 'home',
+                    title: {
+                        type: 'plain_text',
+                        text: 'Home'
+                    },
+                    blocks: [
+                        {
+                            "type": "section",
+                            "text": {
+                                "type": "mrkdwn",
+                                "text": "*Welcome!*\nThis is the home for Plumb-All's Slack Integration."
+                            }
+                        },
+                        {
+                            "type": "actions",
+                            "elements": [
+                                {
+                                    "type": "button",
+                                    "text": {
+                                        "type": "plain_text",
+                                        "text": "Get list of open jobs as message",
+                                        "emoji": true
+                                    },
+                                    "value": "get_open_jobs",
+                                    "action_id": "get-open-jobs-0"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            });
+            break;
         default:
             console.info(`Slack sent an unhandled event type: ${event.type}`);
             break;
     }
 }
 events.emitter.on('slack-EVENT', event);
+
+/**
+ * Takes in a Slack webhook for an INTERACTIVITY event, and processes it
+ * @param req
+ * @returns {Promise<void>}
+ */
+async function interactivity(req) {
+    let event = req.body.payload;
+
+    // Do stuff based on type of event
+    switch (event.type) {
+        // If the event is a reaction added
+        case "block_actions":
+            for (let action of event.actions) {
+                switch (action.action_id) {
+                    case 'get-open-jobs-0':
+                        console.log('User requests the get open jobs message!');
+
+                        // Get the open jobs by user
+                        let openJobs = await Jobber.findOpenJobBlame();
+
+                        // Now that we have the dict of open jobs by user, build the message someone can copy and paste in Slack
+                        let message = '';
+                        for (const key in openJobs) {
+                            let currentUserMessage = `Do these jobs need to be open @${key}? `;
+
+                            for (const job in openJobs[key]) {
+                                currentUserMessage += `J#${job} `;
+                            }
+
+                            currentUserMessage += '\n';
+
+                            message += currentUserMessage;
+                        }
+
+                        await app.client.views.open({
+                            trigger_id: event.trigger_id,
+                            view: {
+                                type: 'modal',
+                                callback_id: 'open_job_modal',
+                                title: {
+                                    type: 'plain_text',
+                                    text: 'Open Jobs Message'
+                                },
+                                blocks: [
+                                    {
+                                        "type": "section",
+                                        "text": {
+                                            "type": "mrkdwn",
+                                            "text": `\`\`\`\n${message}\n\`\`\``
+                                        }
+                                    }
+                                ]
+                            }
+                        });
+
+                        break;
+                    default:
+                        console.warn(`Slack INTERACTIVITY had unhandled action ID ${action.action_id}`);
+                        break;
+                }
+            }
+            break;
+        default:
+            console.info(`Slack sent an unhandled INTERACTIVITY type: ${event.type}`);
+            break;
+    }
+}
+events.emitter.on('slack-INTERACTIVITY', interactivity);

@@ -741,6 +741,85 @@ query UserQuery {
     return userResponse["user"];
 }
 
+/**
+ * Queries the Jobber API to get a list of open jobs, and performs tasks necessary to assign blame to people
+ */
+async function findOpenJobBlame() {
+    let jobs = {};
+    let openJobStatusTypes = [
+        'requires_invoicing',
+        'late',
+        'action_required',
+        'on_hold',
+        'unscheduled',
+        'active'
+    ]
+
+    for (let jobStatus of openJobStatusTypes) {
+        let query =
+            `
+query OpenJobQuery {
+    jobs (filter: {status: ${jobStatus}}) {
+        nodes {
+            id
+            jobNumber
+            title
+            client {
+                name
+            }
+            total
+            customFields {
+                ... on CustomFieldText {
+                    label
+                    valueText
+                }
+            }
+            visits (first: 1) {
+                nodes {
+                    assignedUsers (first: 1) {
+                        nodes {
+                            name {
+                                full
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+        `;
+
+        let jobResponse = await makeRequest(query);
+
+        for (let job of jobResponse.jobs.nodes) {
+            let user = "unknown";
+            if (job.visits.nodes.length > 0 && job.visits.nodes[0].assignedUsers.nodes.length > 0 && job.visits.nodes[0].assignedUsers.nodes[0].name.full) {
+                // First, check if visit is assigned to user
+                user = job.visits.nodes[0].assignedUsers.nodes[0].name.full;
+            } else if (job.customFields.length > 0) {
+                // Second, check if user put their name on the job
+                for (let customField of job.customFields) {
+                    if (customField.label === "Technician Name" && customField.valueText !== "") {
+                        user = customField.valueText;
+                    }
+                }
+            }
+            // TODO: If neither of these works, we'll have to pull the Quote and Invoice to check if they did those properly
+
+            if (!(user in jobs)) {
+                jobs[user] = {};
+            }
+
+            if (!(`${job.jobNumber}` in jobs[user])) {
+                jobs[user][job.jobNumber] = job;
+            }
+        }
+    }
+
+    return jobs;
+}
+
 module.exports = {
     verifyWebhook,
     setAuthorization,
@@ -757,5 +836,6 @@ module.exports = {
     getVisitData,
     getRequestData,
     getExpenseData,
-    getUserData
+    getUserData,
+    findOpenJobBlame
 };
