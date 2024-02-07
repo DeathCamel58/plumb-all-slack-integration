@@ -268,7 +268,7 @@ function verifyWebhook(req) {
     if ("x-slack-signature" in req.headers && "x-slack-request-timestamp" in req.headers) {
         // Get the signature
         let slackSignature = req.headers['x-slack-signature'];
-        let body = req.rawBody;
+        let body = req.body;
         let timestamp = req.headers['x-slack-request-timestamp'];
 
         // Verify that this request was signed within the past 5 minutes
@@ -356,7 +356,7 @@ async function event(req) {
                             "type": "button",
                             "text": {
                                 "type": "plain_text",
-                                "text": "Get list of open jobs as message",
+                                "text": "Get open jobs as message",
                                 "emoji": true
                             },
                             "value": "get_open_jobs",
