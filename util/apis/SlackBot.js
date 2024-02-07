@@ -268,7 +268,7 @@ function verifyWebhook(req) {
     if ("x-slack-signature" in req.headers && "x-slack-request-timestamp" in req.headers) {
         // Get the signature
         let slackSignature = req.headers['x-slack-signature'];
-        let body = req.body;
+        let body = req.rawBody;
         let timestamp = req.headers['x-slack-request-timestamp'];
 
         // Verify that this request was signed within the past 5 minutes

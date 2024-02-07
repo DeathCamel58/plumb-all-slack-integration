@@ -59,7 +59,7 @@ function verifyWebhook(req) {
     if ("x-jobber-hmac-sha256" in req.headers) {
         // Get the signature
         let jobberSignature = req.headers['x-jobber-hmac-sha256'];
-        let body = req.body;
+        let body = req.rawBody;
 
         let mySignature = crypto
             .createHmac('sha256', process.env.JOBBER_APP_SECRET)

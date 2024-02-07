@@ -15,6 +15,19 @@ const app = express();
 let port = Number(process.env.WEB_PORT);
 // Use body-parser's JSON parsing
 app.use(bodyParser.text({type: 'application/json'}));
+
+// This saves the raw body data to `rawBody` in the req
+app.use((req, res, next) => {
+    req.rawBody = '';
+
+    req.on('data', function(chunk) {
+        req.rawBody += chunk;
+    });
+
+    // call next() outside of 'end' after setting 'data' handler
+    next();
+});
+
 app.use(express.urlencoded({ extended: true })); // support encoded bodies
 
 /**
