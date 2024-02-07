@@ -257,9 +257,10 @@ async function unfurlMessage(event) {
 /**
  * Takes in a Slack webhook request, and checks if it's authentic
  * @param req The request
+ * @param doYouLikeItRaw Should we validate signature using the raw body?
  * @returns {boolean} Is the webhook authentic?
  */
-function verifyWebhook(req) {
+function verifyWebhook(req, doYouLikeItRaw = false) {
     if (process.env.DEBUG === "TRUE") {
         return true;
     }
@@ -268,7 +269,7 @@ function verifyWebhook(req) {
     if ("x-slack-signature" in req.headers && "x-slack-request-timestamp" in req.headers) {
         // Get the signature
         let slackSignature = req.headers['x-slack-signature'];
-        let body = req.body;
+        let body = doYouLikeItRaw ? req.rawBody : req.body;
         let timestamp = req.headers['x-slack-request-timestamp'];
 
         // Verify that this request was signed within the past 5 minutes

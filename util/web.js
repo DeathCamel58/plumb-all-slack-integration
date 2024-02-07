@@ -151,7 +151,7 @@ app.post('/slack/INTERACTIVITY', (req, res) => {
     console.info('Got an INTERACTIVITY from Slack!');
 
     // Verify that the webhook came from Slack
-    if (Slack.verifyWebhook(req)) {
+    if (Slack.verifyWebhook(req, true)) {
         // Webhook was valid.
         req.body.payload = JSON.parse(req.body.payload)
 
