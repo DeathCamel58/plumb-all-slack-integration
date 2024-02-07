@@ -341,41 +341,57 @@ async function event(req) {
             console.warn(`Link was shared in message. Can't unfurl due to Jobber API lacking search functionality.`);
             break;
         case "app_home_opened":
-            app.client.views.update({
-                view_id: event.view.id,
-                hash: event.view.hash,
-                view: {
-                    type: 'home',
-                    title: {
-                        type: 'plain_text',
-                        text: 'Home'
-                    },
-                    blocks: [
+            const homeBlocks = [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "*Welcome!*\nThis is the home for Plumb-All's Slack Integration."
+                    }
+                },
+                {
+                    "type": "actions",
+                    "elements": [
                         {
-                            "type": "section",
+                            "type": "button",
                             "text": {
-                                "type": "mrkdwn",
-                                "text": "*Welcome!*\nThis is the home for Plumb-All's Slack Integration."
-                            }
-                        },
-                        {
-                            "type": "actions",
-                            "elements": [
-                                {
-                                    "type": "button",
-                                    "text": {
-                                        "type": "plain_text",
-                                        "text": "Get list of open jobs as message",
-                                        "emoji": true
-                                    },
-                                    "value": "get_open_jobs",
-                                    "action_id": "get-open-jobs-0"
-                                }
-                            ]
+                                "type": "plain_text",
+                                "text": "Get list of open jobs as message",
+                                "emoji": true
+                            },
+                            "value": "get_open_jobs",
+                            "action_id": "get-open-jobs-0"
                         }
                     ]
                 }
-            });
+            ];
+
+            if (event.view) {
+                await app.client.views.update({
+                    view_id: event.view.id,
+                    hash: event.view.hash,
+                    view: {
+                        type: 'home',
+                        title: {
+                            type: 'plain_text',
+                            text: 'Home'
+                        },
+                        blocks: homeBlocks
+                    }
+                });
+            } else {
+                await app.client.views.publish({
+                    user_id: event.user,
+                    view: {
+                        type: 'home',
+                        title: {
+                            type: 'plain_text',
+                            text: 'Home'
+                        },
+                        blocks: homeBlocks
+                    }
+                })
+            }
             break;
         default:
             console.info(`Slack sent an unhandled event type: ${event.type}`);
