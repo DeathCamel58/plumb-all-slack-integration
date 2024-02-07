@@ -366,32 +366,18 @@ async function event(req) {
                 }
             ];
 
-            if (event.view) {
-                await app.client.views.update({
-                    view_id: event.view.id,
-                    hash: event.view.hash,
-                    view: {
-                        type: 'home',
-                        title: {
-                            type: 'plain_text',
-                            text: 'Home'
-                        },
-                        blocks: homeBlocks
-                    }
-                });
-            } else {
-                await app.client.views.publish({
-                    user_id: event.user,
-                    view: {
-                        type: 'home',
-                        title: {
-                            type: 'plain_text',
-                            text: 'Home'
-                        },
-                        blocks: homeBlocks
-                    }
-                })
-            }
+            await app.client.views.publish({
+                user_id: event.user,
+                view: {
+                    type: 'home',
+                    title: {
+                        type: 'plain_text',
+                        text: 'Home'
+                    },
+                    blocks: homeBlocks
+                }
+            })
+
             break;
         default:
             console.info(`Slack sent an unhandled event type: ${event.type}`);
