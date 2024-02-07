@@ -260,6 +260,12 @@ query InvoiceQuery {
         }
         createdAt
         jobberWebUri
+        customFields {
+            ... on CustomFieldText {
+                label
+                valueText
+            }
+        }
     }
 }
         `;
@@ -327,6 +333,12 @@ query QuoteQuery {
           total
         }
         createdAt
+        customFields {
+            ... on CustomFieldText {
+                label
+                valueText
+            }
+        }
     }
 }
         `;
@@ -785,6 +797,14 @@ query OpenJobQuery {
                     }
                 }
             }
+            quote {
+                id
+            }
+            invoices (first: 1) {
+                nodes {
+                    id
+                }
+            }
         }
     }
 }
@@ -793,6 +813,7 @@ query OpenJobQuery {
         let jobResponse = await makeRequest(query);
 
         for (let job of jobResponse.jobs.nodes) {
+            // Use a number of different techniques to attempt to identify the user who created the job
             let user = "unknown";
             if (job.visits.nodes.length > 0 && job.visits.nodes[0].assignedUsers.nodes.length > 0 && job.visits.nodes[0].assignedUsers.nodes[0].name.full) {
                 // First, check if visit is assigned to user
@@ -804,8 +825,37 @@ query OpenJobQuery {
                         user = customField.valueText;
                     }
                 }
+            } else {
+                // Fetch a linked quote and check if they put their name on it
+                let quote;
+                if (job.quote) {
+                    quote = await getQuoteData(job.quote.id);
+                }
+
+                if (quote.customFields.length > 0) {
+                    // Second, check if user put their name on the job
+                    for (let customField of quote.customFields) {
+                        if (customField.label === "Technician Name" && customField.valueText !== "") {
+                            user = customField.valueText;
+                        }
+                    }
+                }
+
+                // Fetch a linked invoice and check if they put their name on it
+                let invoice;
+                if (job.invoices.nodes.length > 0 && user === "unknown") {
+                    invoice = await getInvoiceData(job.invoices.nodes[0].id);
+                }
+
+                if (invoice.customFields.length > 0) {
+                    // Second, check if user put their name on the job
+                    for (let customField of invoice.customFields) {
+                        if (customField.label === "Technician Name" && customField.valueText !== "") {
+                            user = customField.valueText;
+                        }
+                    }
+                }
             }
-            // TODO: If neither of these works, we'll have to pull the Quote and Invoice to check if they did those properly
 
             if (!(user in jobs)) {
                 jobs[user] = {};
