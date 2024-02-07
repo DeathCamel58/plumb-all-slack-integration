@@ -759,7 +759,7 @@ query UserQuery {
 async function findOpenJobBlame() {
     let jobs = {};
     let openJobStatusTypes = [
-        'requires_invoicing',
+        // 'requires_invoicing',
         'late',
         'action_required',
         'on_hold',
