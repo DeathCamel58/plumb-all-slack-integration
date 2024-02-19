@@ -200,7 +200,7 @@ async function makeRequest(query) {
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${JOBBER_ACCESS_TOKEN}`,
-                    'X-JOBBER-GRAPHQL-VERSION': '2022-12-07'
+                    'X-JOBBER-GRAPHQL-VERSION': '2023-11-15'
                 },
                 body: `{"query":${JSON.stringify(query)}}`
             });
