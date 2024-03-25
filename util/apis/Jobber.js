@@ -34,7 +34,8 @@ function saveNewToken(refresh_token) {
         let result = data.replace(process.env.JOBBER_REFRESH_TOKEN, refresh_token);
         process.env.JOBBER_REFRESH_TOKEN = refresh_token;
 
-        fs.writeFile(file, result, 'utf8', function (err) {
+        // Write data into a new file
+        fs.writeFile(`${file}2`, result, 'utf8', function (err) {
             if (err) {
                 console.error('Failed to save the Jobber Refresh Token to file.');
                 console.error(err);
@@ -42,6 +43,16 @@ function saveNewToken(refresh_token) {
                 console.info('Received new Jobber Refresh Token!');
             }
         });
+
+        // Ensure the new file isn't empty, then delete original, and move new into the original's place
+        if (fs.statSync(`${file}2`)["size"] > 0) {
+            fs.unlink(file);
+            fs.renameSync(`${file}2`, file);
+        } else {
+            console.error('ERROR: New file is empty. Dumping variables and arguments to assist with debugging.');
+            console.info(`\trefresh_token:\t${refresh_token}`);
+            console.info(`\tdata:\t${data}`);
+        }
     });
 }
 

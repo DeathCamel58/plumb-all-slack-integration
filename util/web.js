@@ -100,7 +100,8 @@ app.get('/jobber/authorize', (req, res) => {
 
         let result = data.replace(oldAuthCode, req.query.code);
 
-        fs.writeFile(file, result, 'utf8', function (err) {
+        // Write data into a new file
+        fs.writeFile(`${file}2`, result, 'utf8', function (err) {
             if (err) {
                 console.error('Failed to save the Jobber Authorization Code to file.');
                 console.error(err);
@@ -112,6 +113,17 @@ app.get('/jobber/authorize', (req, res) => {
         });
     });
     process.env.JOBBER_AUTHORIZATION_CODE = req.query.code;
+
+    // Ensure the new file isn't empty, then delete original, and move new into the original's place
+    if (fs.statSync(`${file}2`)["size"] > 0) {
+        fs.unlink(file);
+        fs.renameSync(`${file}2`, file);
+    } else {
+        console.error('ERROR: New file is empty. Dumping variables and arguments to assist with debugging.');
+        console.info(`\toldAuthCode:\t${oldAuthCode}`);
+        console.info(`\treq.query.code:\t${req.query.code}`);
+        console.info(`\tdata:\t${data}`);
+    }
 
     events.emitter.emit('jobber-AUTHORIZATION', req);
 });
