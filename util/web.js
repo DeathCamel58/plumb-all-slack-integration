@@ -201,8 +201,6 @@ app.post('/cloudflare/contactForm', (req, res) => {
  * FleetSharp Alerts
  */
 app.post('/fleetsharp/alerts', (req, res) => {
-    let data = JSON.parse(req.body);
-
     // Return a `201`, as this is what the documentation specifies as our response
     res.sendStatus(201);
 

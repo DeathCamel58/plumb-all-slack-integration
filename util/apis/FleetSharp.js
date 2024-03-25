@@ -2,11 +2,13 @@ const events = require('../events');
 
 /**
  * Processes a FleetSharp Alert webhook
- * @param body the data that was received
+ * @param req The incoming web data
  * @returns {Promise<void>}
  * @constructor
  */
-async function AlertHandle(body) {
+async function AlertHandle(req) {
+    let body = JSON.parse(req.body);
+
     console.log("Data was");
     console.log(body);
 
@@ -47,7 +49,7 @@ async function AlertHandle(body) {
             break;
     }
 
-    if (message !== '') {
+    if (message !== undefined) {
         // Send the request to where it needs to go
         events.emitter.emit('slackbot-send-message', message, 'FleetSharp Alert');
     }
