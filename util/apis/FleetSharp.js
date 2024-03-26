@@ -51,7 +51,7 @@ async function AlertHandle(req) {
 
     if (message !== undefined) {
         // Send the request to where it needs to go
-        events.emitter.emit('slackbot-send-message', message, 'FleetSharp Alert');
+        events.emitter.emit('slackbot-send-message', message, 'FleetSharp Alert', 'general');
     }
 }
 events.emitter.on('fleetsharp-alert', AlertHandle);

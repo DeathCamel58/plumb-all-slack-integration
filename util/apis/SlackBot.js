@@ -28,14 +28,15 @@ const app = new App({
  * Takes message, and sends it to slack with given username
  * @param message The message to send
  * @param username Username to send the message as
+ * @param channelName The channel to send the message to
  * @returns {Promise<void>} Promise that resolves after message is sent
  */
-async function sendMessage(message, username) {
+async function sendMessage(message, username, channelName = slackCallChannelName) {
     console.info(message);
 
     try {
         const result = await app.client.chat.postMessage({
-            channel: slackCallChannelName,
+            channel: channelName,
             text: message,
             unfurl_links: false,
             username: username,
