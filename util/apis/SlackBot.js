@@ -131,11 +131,13 @@ async function unfurlMessage(event) {
     ];
 
     // Check for references in multiple formats, and add them to `needToUnfurl`
+    // Remove all user references first, as user references can make the regex return a false positive
+    let tmp = event.text.replace(/<@.{11}>/gi, '');
     // - Q[number], J[number], I[number]
     // - Q#[number], J#[number], I#[number]
     // - Quote [number], Job [number], Invoice [number]
     // - Quote #[number], Job #[number], Invoice #[number]
-    let tmp = event.text.match(/(QUOTE|JOB|INVOICE|Q|J|I)+ *#* *(\d+)/gi);
+    tmp = tmp.match(/(QUOTE|JOB|INVOICE|Q|J|I)+ *#* *(\d+)/gi);
     if (tmp) {
         for (let i = 0; i < tmp.length; i++) {
             let number = tmp[i].match(/\d+/g)[0];
