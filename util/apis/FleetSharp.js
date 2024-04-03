@@ -40,10 +40,10 @@ async function AlertHandle(req) {
             // `HIGH_SPEED` is only fired if speed is above the configured one in Setup->Alert Settings->General Settings->High Speed Threshold
             message = `Vehicle ${body.firstName} ${body.lastName} (VIN: \`${body.vin}\`) was going 85 or faster. Chill out dude.`;
             break;
-        case 'RAPID_ACCELERATION':
-            // `RAPID_ACCELERATION` is fired when people gas it too hard
-            message = `Vehicle ${body.firstName} ${body.lastName} (VIN: \`${body.vin}\`) rapidly accelerated. Quit flooring it.`;
-            break;
+        // case 'RAPID_ACCELERATION':
+        //     // `RAPID_ACCELERATION` is fired when people gas it too hard
+        //     message = `Vehicle ${body.firstName} ${body.lastName} (VIN: \`${body.vin}\`) rapidly accelerated. Quit flooring it.`;
+        //     break;
         default:
             console.info(`FleetSharp: Got a ${body.alertCode} alert.`);
             break;
