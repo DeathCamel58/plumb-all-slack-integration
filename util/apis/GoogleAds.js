@@ -5,11 +5,13 @@ const events = require('../events');
 
 /**
  * Processes a Google Ads Lead form webhook
- * @param data the data that was received
+ * @param rawData the data that was received
  * @returns {Promise<void>}
  * @constructor
  */
-async function LeadFormHandle(data) {
+async function LeadFormHandle(rawData) {
+    let data = JSON.parse(rawData.body);
+
     // Map all data into a dict
     let userData = {};
     for (let i = 0; i < data["user_column_data"].length; i++) {
