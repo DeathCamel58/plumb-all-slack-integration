@@ -195,7 +195,7 @@ app.post('/cloudflare/contactForm', (req, res) => {
 
         events.emitter.emit('cloudflare-contact-form', req);
     } else {
-        console.error(`Webhook for CloudFlare Workers didn't have correct key.\n\tReceived: "${data["cloudflare_key"]}"\n\tExpected: "${process.env.GOOGLE_ADS_KEY}"`);
+        console.error(`Webhook for CloudFlare Workers didn't have correct key.\n\tReceived: "${data["cloudflare_key"]}"\n\tExpected: "${process.env.CLOUDFLARE_CONTACT_FORM_KEY}"`);
         res.sendStatus(401);
     }
 });
