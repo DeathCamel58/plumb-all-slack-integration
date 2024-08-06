@@ -210,6 +210,24 @@ app.post('/fleetsharp/alerts', (req, res) => {
     events.emitter.emit('fleetsharp-alert', req);
 });
 
+/**
+ * Verisae Notification
+ */
+app.post('/verisae/ingles', (req, res) => {
+    req.body = JSON.parse(req.body);
+    let data = req.body;
+
+    if (data.payload.sender.includes("plumb-all.com")) {
+        console.info('Webhook: Verisae (Ingles) email received.');
+        res.sendStatus(200);
+
+        events.emitter.emit('verisae-ingles', data);
+    } else {
+        console.error(`Webhook for Verisae (Ingles) didn't come from our organization.\n\tEmail from: "${data.payload.sender}"`);
+        res.sendStatus(401);
+    }
+});
+
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '../assets/index.html'));
 });

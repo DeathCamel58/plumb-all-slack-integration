@@ -6,7 +6,8 @@ const files = [
     './util/apis/FleetSharp',
     './util/apis/GoogleAds',
     './util/apis/JobberWebHookHandler',
-    './util/apis/SasoWebHookHandler'
+    './util/apis/SasoWebHookHandler',
+    './util/apis/VerisaeIngles'
 ];
 for (let i = 0; i < files.length; i++) {
     let tmp = require(files[i]);
