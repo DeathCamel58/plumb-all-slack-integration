@@ -1,6 +1,7 @@
 const Contact = require("../contact");
 const APICoordinator = require("../APICoordinator");
-const events = require('../events');
+const HTMLParser = require("node-html-parser");
+const events = require("../events");
 
 /**
  * Processes a Verisae Ingles webhook
@@ -12,14 +13,17 @@ async function AlertHandle(data) {
     console.log("Data was");
     console.log(data);
 
-    const email = data.payload;
+    const email = HTMLParser.parse(data.payload['body-html']);
 
-    const storeNumber = email['body-html'].split("<b>Subject:</b> ")[1].split(" - ")[0];
-    const storeAddress = email['body-html'].split("<td width=\"325px\" rowspan=\"2\" class=\"x_Text2\">")[1].split("</span><br>\r\n")[1].split("<br>\r\nPhone:")[0].replace("<br>\r\n", ", ");
-    const woNumber = email['body-html'].split("<td class=\"x_WOID\">")[1].split(" ")[0];
-    const woType = email['body-html'].split("<b>Work Order Type:</b> ")[1].split("<br>")[0];
-    const problemType = email['body-html'].split("<b>Problem Type:</b> ")[1].split("<br>")[0];
-    const callDescription = email['body-html'].split("<b>Call Description:</b><span class=\"x_boldText\"> ")[1].split("</span><br>")[0];
+    const storeNumber = email.querySelector("body > table > tbody > tr:nth-child(12) > td:nth-child(3) > div > span:nth-child(1) > b").toString().split(" - ")[0].replaceAll("<b>", "");
+    const storeAddress = email.querySelector("body > table > tbody > tr:nth-child(12) > td:nth-child(3) > div > span:nth-child(2)").textContent.split("Phone: ")[0].replaceAll("\n\r\n", " ").substr(1)
+    const woNumber = email.querySelector("body > table > tbody > tr:nth-child(1) > td:nth-child(3) > table > tbody > tr:nth-child(2) > td > div > b").textContent;
+
+    const problemDescription = email.querySelector("body > table > tbody > tr:nth-child(15) > td > div").textContent;
+
+    const woType = problemDescription.split(" ")[1].split("\n")[0];
+    const problemType = problemDescription.split("Problem Type: ")[1].split("\n")[0];
+    const callDescription = problemDescription.split("Call Description: ")[1].split("\n")[0];
 
     const message = `Work Order: ${woNumber}\nWork Order Type: ${woType}\nProblem Type: ${problemType}\nCall Description: ${callDescription}`;
 
