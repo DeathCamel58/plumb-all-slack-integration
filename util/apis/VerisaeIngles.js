@@ -15,19 +15,29 @@ async function AlertHandle(data) {
 
     const email = HTMLParser.parse(data.payload['body-html']);
 
-    const storeNumber = email.querySelector("body > table > tbody > tr:nth-child(12) > td:nth-child(3) > div > span:nth-child(1) > b").toString().split(" - ")[0].replaceAll("<b>", "");
-    const storeAddress = email.querySelector("body > table > tbody > tr:nth-child(12) > td:nth-child(3) > div > span:nth-child(2)").textContent.split("Phone: ")[0].replaceAll("\n\r\n", " ").substr(1)
-    const woNumber = email.querySelector("body > table > tbody > tr:nth-child(1) > td:nth-child(3) > table > tbody > tr:nth-child(2) > td > div > b").textContent;
+    const storeNumber = email.querySelector("table > tbody > tr:nth-child(12) > td:nth-child(3) > span").textContent.split(" - ")[0].split(", ")[1].replaceAll("<b>", "");
+    const storeAddress = email.querySelector("table > tbody > tr:nth-child(12) > td:nth-child(3)").toString().split("\r\n").slice(1, 3).toString().replaceAll("<br>,", ", ").replace("<br>", "")
+    const woNumber = email.querySelector(".x_WOID").textContent.replace(" ", "")
 
-    const problemDescription = email.querySelector("body > table > tbody > tr:nth-child(15) > td > div").textContent;
+    const problemDescription = email.querySelector("body > div:nth-child(7) > table > tbody > tr:nth-child(15) > td").textContent.split("\n\r\n")
 
-    const woType = problemDescription.split(" ")[1].split("\n")[0];
-    const problemType = problemDescription.split("Problem Type: ")[1].split("\n")[0];
-    const callDescription = problemDescription.split("Call Description: ")[1].split("\n")[0];
+    let woType = "";
+    let problemType = "";
+    let callDescription = "";
+
+    for (const line of problemDescription) {
+        if (line.includes("Work Order Type")) {
+            woType = line.split(": ")[1]
+        } else if (line.includes("Problem Type")) {
+            problemType = line.split(": ")[1]
+        } else if (line.includes("Call Description")) {
+            callDescription = line.split(": ")[1]
+        }
+    }
 
     const message = `Work Order: ${woNumber}\nWork Order Type: ${woType}\nProblem Type: ${problemType}\nCall Description: ${callDescription}`;
 
-    let contact = new Contact("Ingles Call", storeNumber, undefined, undefined, undefined, storeAddress, message, "ingles");
+    let contact = new Contact("Ingles Call", `Ingles ${storeNumber}`, undefined, undefined, undefined, storeAddress, message, "ingles");
 
     await APICoordinator.contactMade(contact, JSON.stringify(data));
 }
