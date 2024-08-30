@@ -17,7 +17,7 @@ async function AlertHandle(data) {
 
     const storeNumber = email.querySelector("table > tbody > tr:nth-child(12) > td:nth-child(3) > span").textContent.split(" - ")[0].split(", ")[1].replaceAll("<b>", "");
     const storeAddress = email.querySelector("table > tbody > tr:nth-child(12) > td:nth-child(3)").toString().split("\r\n").slice(1, 3).toString().replaceAll("<br>,", ", ").replace("<br>", "")
-    const woNumber = email.querySelector(".x_WOID").textContent.replace(" ", "")
+    const woNumber = email.querySelector(".WOID").textContent.replace(" ", "")
 
     const problemDescription = email.querySelector("body > div:nth-child(7) > table > tbody > tr:nth-child(15) > td").textContent.split("\n\r\n")
 
