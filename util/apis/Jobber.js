@@ -832,6 +832,11 @@ query OpenJobQuery {
                     valueText
                 }
             }
+            salesperson {
+              name {
+                full
+              }
+            }
             visits (first: 1) {
                 nodes {
                     assignedUsers (first: 1) {
@@ -861,43 +866,48 @@ query OpenJobQuery {
         for (let job of jobResponse.jobs.nodes) {
             // Use a number of different techniques to attempt to identify the user who created the job
             let user = "unknown";
-            if (job.visits.nodes.length > 0 && job.visits.nodes[0].assignedUsers.nodes.length > 0 && job.visits.nodes[0].assignedUsers.nodes[0].name.full) {
-                // First, check if visit is assigned to user
-                user = job.visits.nodes[0].assignedUsers.nodes[0].name.full;
-            } else if (job.customFields.length > 0) {
-                // Second, check if user put their name on the job
-                for (let customField of job.customFields) {
-                    if (customField.label === "Technician Name" && customField.valueText !== "") {
-                        user = customField.valueText;
-                    }
-                }
-            } else {
-                // Fetch a linked quote and check if they put their name on it
-                let quote;
-                if (job.quote) {
-                    quote = await getQuoteData(job.quote.id);
-                }
-
-                if (quote.customFields.length > 0) {
+            if (job.salesperson !== null && job.salesperson.name !== null) {
+                user = job.salesperson.name.full;
+            }
+            if (user === "unknown" || user === "Joshua Waldrep") {
+                if (job.visits.nodes.length > 0 && job.visits.nodes[0].assignedUsers.nodes.length > 0 && job.visits.nodes[0].assignedUsers.nodes[0].name.full) {
+                    // First, check if the visit is assigned to user
+                    user = job.visits.nodes[0].assignedUsers.nodes[0].name.full;
+                } else if (job.customFields.length > 0) {
                     // Second, check if user put their name on the job
-                    for (let customField of quote.customFields) {
+                    for (let customField of job.customFields) {
                         if (customField.label === "Technician Name" && customField.valueText !== "") {
                             user = customField.valueText;
                         }
                     }
-                }
+                } else {
+                    // Fetch a linked quote and check if they put their name on it
+                    let quote;
+                    if (job.quote) {
+                        quote = await getQuoteData(job.quote.id);
+                    }
 
-                // Fetch a linked invoice and check if they put their name on it
-                let invoice;
-                if (job.invoices.nodes.length > 0 && user === "unknown") {
-                    invoice = await getInvoiceData(job.invoices.nodes[0].id);
-                }
+                    if (quote.customFields.length > 0) {
+                        // Second, check if user put their name on the job
+                        for (let customField of quote.customFields) {
+                            if (customField.label === "Technician Name" && customField.valueText !== "") {
+                                user = customField.valueText;
+                            }
+                        }
+                    }
 
-                if (invoice.customFields.length > 0) {
-                    // Second, check if user put their name on the job
-                    for (let customField of invoice.customFields) {
-                        if (customField.label === "Technician Name" && customField.valueText !== "") {
-                            user = customField.valueText;
+                    // Fetch a linked invoice and check if they put their name on it
+                    let invoice;
+                    if (job.invoices.nodes.length > 0 && user === "unknown") {
+                        invoice = await getInvoiceData(job.invoices.nodes[0].id);
+                    }
+
+                    if (invoice.customFields.length > 0) {
+                        // Second, check if user put their name on the job
+                        for (let customField of invoice.customFields) {
+                            if (customField.label === "Technician Name" && customField.valueText !== "") {
+                                user = customField.valueText;
+                            }
                         }
                     }
                 }
