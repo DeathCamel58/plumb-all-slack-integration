@@ -103,7 +103,7 @@ app.get('/jobber/authorize', (req, res) => {
         // Write data into a new file
         fs.writeFileSync(`${file}2`, result, 'utf8');
 
-        // Ensure the new file isn't empty, then delete original, and move new into the original's place
+        // Ensure the new file isn't empty, then delete the original, and move new into the original's place
         if (fs.statSync(`${file}2`)["size"] > 0) {
             fs.unlinkSync(file);
             fs.renameSync(`${file}2`, file);
@@ -115,6 +115,8 @@ app.get('/jobber/authorize', (req, res) => {
         }
     });
     process.env.JOBBER_AUTHORIZATION_CODE = req.query.code;
+
+    Jobber.getRefreshToken();
 
     events.emitter.emit('jobber-AUTHORIZATION', req);
 });

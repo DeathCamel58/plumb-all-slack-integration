@@ -37,7 +37,7 @@ function saveNewToken(refresh_token) {
         // Write data into a new file
         fs.writeFileSync(`${file}2`, result, 'utf8');
 
-        // Ensure the new file isn't empty, then delete original, and move new into the original's place
+        // Ensure the new file isn't empty, then delete the original, and move new into the original's place
         if (fs.statSync(`${file}2`)["size"] > 0) {
             fs.unlinkSync(file);
             fs.renameSync(`${file}2`, file);
@@ -145,6 +145,48 @@ async function requestAuthorization() {
 
     console.log("Got the authorization!");
     waitingForAuthorization = false;
+}
+
+/**
+ * Updates the access token when it's found to be invalid.
+ * @returns {Promise<void>}
+ */
+async function getRefreshToken() {
+    let success = false;
+    let data;
+    while (!success) {
+        try {
+            let response = await fetch(`https://api.getjobber.com/api/oauth/token`, {
+                method: 'post',
+                headers: {
+                    "content-type": "application/x-www-form-urlencoded"
+                },
+                body: `client_id=${process.env.JOBBER_CLIENT_ID}&client_secret=${process.env.JOBBER_APP_SECRET}&grant_type=authorization_code&code=${process.env.JOBBER_AUTHORIZATION_CODE}`
+            });
+
+            switch (response.status) {
+                case 200:
+                    success = true;
+                    data = await response.text();
+                    data = JSON.parse(data);
+                    JOBBER_ACCESS_TOKEN = data.access_token;
+
+                    saveNewToken(data.refresh_token);
+                    break;
+                case 429:
+                    console.error(`Got 429 while refreshing access token. This is likely because of some sort of limiting!`);
+                    break;
+                case 401:
+                default:
+                    console.error(`Got ${response.status} while refreshing access token. Requesting authorization!`);
+                    await requestAuthorization();
+                    break;
+            }
+        } catch (e) {
+            console.error(`Fetch: Failure in getRefreshToken`);
+            console.error(e);
+        }
+    }
 }
 
 /**
@@ -891,5 +933,6 @@ module.exports = {
     getRequestData,
     getExpenseData,
     getUserData,
-    findOpenJobBlame
+    findOpenJobBlame,
+    getRefreshToken
 };
