@@ -99,6 +99,10 @@ class Contact {
         return this.contactSource;
     }
 
+    set source(source) {
+        this.contactSource = source;
+    }
+
     /**
      * Generates the message to send in Slack
      */

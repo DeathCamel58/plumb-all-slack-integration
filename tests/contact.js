@@ -7,7 +7,7 @@ describe("Contact Class", () => {
     // We can add nested blocks for different tests
     describe( "Getters and Setters", () => {
         // Create contact for use during testing
-        let contact = new Contact("Call", "Test Name", "555-123-4567", "555-234-5678", "email@address.com", "240 Wallaby Way, Sydney Australia", "This is a test message.");
+        let contact = new Contact("Call", "Test Name", "555-123-4567", "555-234-5678", "email@address.com", "240 Wallaby Way, Sydney Australia", "This is a test message.", "Google");
 
         it("Get Type", () => {
             assert.equal(contact.type, "Call");
@@ -35,6 +35,10 @@ describe("Contact Class", () => {
 
         it("Get Message", () => {
             assert.equal(contact.message, "This is a test message.");
+        });
+
+        it("Get Source", () => {
+            assert.equal(contact.source, "Google");
         });
 
         it("Set Type", () => {
@@ -70,6 +74,11 @@ describe("Contact Class", () => {
         it("Set Message", () => {
             contact.message = "TEST VALUE3";
             assert.equal(contact.message, "TEST VALUE3");
+        });
+
+        it("Set Source", () => {
+            contact.source = "TEST VALUE4";
+            assert.equal(contact.source, "TEST VALUE4");
         });
     });
 
