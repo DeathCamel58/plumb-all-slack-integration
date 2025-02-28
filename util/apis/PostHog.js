@@ -89,6 +89,11 @@ async function individualSearch(searchQuery, parameter) {
  */
 async function searchByKey(key, value) {
     if (value !== null && value !== undefined) {
+        /*
+          TODO: Figure out how to do a case-insensitive search
+          Ref: https://posthog.com/docs/api/persons#get-api-projects-project_id-persons
+          One of their libraries has this: https://github.com/PostHog/posthog/blob/a074f9643fdc09419c8d8de3d7d036b7f8a1341c/rust/feature-flags/src/properties/property_models.rs#L5-L23
+         */
         let query = [{
             key: key,
             value: value,

@@ -1,5 +1,6 @@
 const assert = require('assert');
 const Contact = require('../util/contact');
+const {describe, it} = require("@jest/globals");
 
 // We can group similar tests inside a `describe` block
 describe("Contact Class", () => {
@@ -79,7 +80,7 @@ describe("Contact Class", () => {
             assert.equal(contact.messageToSend(),
                 '=== New Call ===\n' +
                 'Caller: Test Name ( (555) 123-4567 )\n' +
-                'Address: <https://www.google.com/maps?hl=en&q=240+Wallaby+Way,+Sydney+Australia|240 Wallaby Way, Sydney Australia>\n' +
+                'Address: <https://www.google.com/maps/search/?api=1&query=240%20Wallaby%20Way%2C%20Sydney%20Australia|240 Wallaby Way, Sydney Australia>\n' +
                 'Message: This is a test message.');
         });
 
@@ -97,7 +98,7 @@ describe("Contact Class", () => {
             assert.equal(contact.messageToSend(),
                 '=== New Call ===\n' +
                 'Caller: Test Name ( (555) 123-4567 ) ( email@address.com )\n' +
-                'Address: <https://www.google.com/maps?hl=en&q=240+Wallaby+Way,+Sydney+Australia|240 Wallaby Way, Sydney Australia>\n' +
+                'Address: <https://www.google.com/maps/search/?api=1&query=240%20Wallaby%20Way%2C%20Sydney%20Australia|240 Wallaby Way, Sydney Australia>\n' +
                 'Message: This is a test message.');
         });
 
@@ -106,7 +107,7 @@ describe("Contact Class", () => {
             assert.equal(contact.messageToSend(),
                 '=== New Call ===\n' +
                 'Caller: Test Name ( Left (555) 123-4567 but called from: (555) 234-5678 ) ( email@address.com )\n' +
-                'Address: <https://www.google.com/maps?hl=en&q=240+Wallaby+Way,+Sydney+Australia|240 Wallaby Way, Sydney Australia>\n' +
+                'Address: <https://www.google.com/maps/search/?api=1&query=240%20Wallaby%20Way%2C%20Sydney%20Australia|240 Wallaby Way, Sydney Australia>\n' +
                 'Message: This is a test message.');
         });
 
@@ -115,7 +116,7 @@ describe("Contact Class", () => {
             assert.equal(contact.messageToSend(),
                 '=== New Call ===\n' +
                 'Caller: Test Name ( Left (555) 123-4567 but called from: (555) 234-5678 )\n' +
-                'Address: <https://www.google.com/maps?hl=en&q=240+Wallaby+Way,+Sydney+Australia|240 Wallaby Way, Sydney Australia>\n' +
+                'Address: <https://www.google.com/maps/search/?api=1&query=240%20Wallaby%20Way%2C%20Sydney%20Australia|240 Wallaby Way, Sydney Australia>\n' +
                 'Message: This is a test message.');
         });
 
@@ -125,7 +126,7 @@ describe("Contact Class", () => {
             assert.equal(contact.messageToSend(),
                 '=== New Message from Website ===\n' +
                 'Caller: Test Name ( (555) 123-4567 )\n' +
-                'Address: <https://www.google.com/maps?hl=en&q=240+Wallaby+Way,+Sydney+Australia|240 Wallaby Way, Sydney Australia>\n' +
+                'Address: <https://www.google.com/maps/search/?api=1&query=240%20Wallaby%20Way%2C%20Sydney%20Australia|240 Wallaby Way, Sydney Australia>\n' +
                 'Message: This is a test message.');
         });
 
@@ -134,7 +135,7 @@ describe("Contact Class", () => {
             assert.equal(contact.messageToSend(),
                 '=== New Message from Website ===\n' +
                 'Caller: Test Name ( (555) 123-4567 ) ( email@address.com )\n' +
-                'Address: <https://www.google.com/maps?hl=en&q=240+Wallaby+Way,+Sydney+Australia|240 Wallaby Way, Sydney Australia>\n' +
+                'Address: <https://www.google.com/maps/search/?api=1&query=240%20Wallaby%20Way%2C%20Sydney%20Australia|240 Wallaby Way, Sydney Australia>\n' +
                 'Message: This is a test message.');
         });
 
@@ -143,7 +144,7 @@ describe("Contact Class", () => {
             assert.equal(contact.messageToSend(),
                 '=== New Message from Website ===\n' +
                 'Caller: Test Name ( email@address.com )\n' +
-                'Address: <https://www.google.com/maps?hl=en&q=240+Wallaby+Way,+Sydney+Australia|240 Wallaby Way, Sydney Australia>\n' +
+                'Address: <https://www.google.com/maps/search/?api=1&query=240%20Wallaby%20Way%2C%20Sydney%20Australia|240 Wallaby Way, Sydney Australia>\n' +
                 'Message: This is a test message.');
         });
     });
