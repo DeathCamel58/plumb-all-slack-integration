@@ -9,18 +9,25 @@ const client = new Client();
  * @returns {Promise<GeocodeResult[]>}
  */
 async function searchPlace(address) {
-    let place = await client.geocode({
-        params: {
-            address: address,
-            key: process.env.GOOGLE_API_KEY || "GOOGLE_API_KEY"
-        }
-    });
+    try {
+        let place = await client.geocode({
+            params: {
+                address: address,
+                key: process.env.GOOGLE_API_KEY || "GOOGLE_API_KEY"
+            }
+        });
 
-    if (place.data.results.length === 0) {
-        return null;
+        if (place.data.results.length === 0) {
+            return null;
+        }
+
+        return place.data.results;
+    } catch (e) {
+        console.error(`Fetch: Failure in searchPlace`);
+        console.error(e);
     }
 
-    return place.data.results;
+    return null;
 }
 
 module.exports = {
