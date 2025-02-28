@@ -9,8 +9,10 @@ const events = require('../events');
 async function AlertHandle(req) {
     let body = JSON.parse(req.body);
 
-    console.log("Data was");
-    console.log(body);
+    if (process.env.DEBUG === "TRUE") {
+        console.log("Data was");
+        console.log(body);
+    }
 
     let message;
     switch (body.alertCode) {

@@ -11,8 +11,10 @@ const events = require('../events');
 async function ContactFormHandle(req) {
     let body = req.body;
 
-    console.log("Data was");
-    console.log(body);
+    if (process.env.DEBUG === "TRUE") {
+        console.log("Data was");
+        console.log(body);
+    }
 
     let contact = new Contact("Message From Website", body.name, body.phone, undefined, body.email, body.address, body.message, "Website");
 

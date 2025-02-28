@@ -36,8 +36,9 @@ app.use(express.urlencoded({ extended: true })); // support encoded bodies
 app.post('/saso/:WEBHOOK_TYPE', (req, res) => {
     console.log("SASO webhook received!");
 
-    console.log(req.params);
+    // Log this data *no matter what* so that tracing issues on mission-critical stuff is easier
     console.log("Data was");
+    console.log(req.params);
     console.log(req.body);
 
     if (req.params['WEBHOOK_TYPE'] && req.params['WEBHOOK_TYPE'].startsWith('lead-source')) {

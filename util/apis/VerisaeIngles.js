@@ -10,8 +10,10 @@ const events = require("../events");
  * @constructor
  */
 async function AlertHandle(data) {
-    console.log("Data was");
-    console.log(data);
+    if (process.env.DEBUG === "TRUE") {
+        console.log("Data was");
+        console.log(body);
+    }
 
     const email = HTMLParser.parse(data.payload['body-html']);
 
