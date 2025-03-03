@@ -7,7 +7,8 @@ const files = [
     './util/apis/GoogleAds',
     './util/apis/JobberWebHookHandler',
     './util/apis/SasoWebHookHandler',
-    './util/apis/VerisaeIngles'
+    './util/apis/VerisaeIngles',
+    './util/apis/WebsiteContact'
 ];
 for (let i = 0; i < files.length; i++) {
     let tmp = require(files[i]);

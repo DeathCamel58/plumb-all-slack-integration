@@ -231,6 +231,25 @@ app.post('/verisae/ingles', (req, res) => {
     }
 });
 
+/**
+ * Website form Notification
+ */
+app.post('/website/contactForm', (req, res) => {
+    req.body = JSON.parse(req.body);
+    let data = req.body;
+
+    console.info('Webhook: Website contact form received.');
+
+    // Log this data *no matter what* so that tracing issues on mission-critical stuff is easier
+    console.log("Data was");
+    console.log(req.params);
+    console.log(req.body);
+
+    res.sendStatus(200);
+
+    events.emitter.emit('website-contact', data);
+});
+
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '../assets/index.html'));
 });
