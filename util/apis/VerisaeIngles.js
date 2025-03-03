@@ -12,7 +12,7 @@ const events = require("../events");
 async function AlertHandle(data) {
     if (process.env.DEBUG === "TRUE") {
         console.log("Data was");
-        console.log(body);
+        console.log(data);
     }
 
     const email = HTMLParser.parse(data.payload['body-html']);
