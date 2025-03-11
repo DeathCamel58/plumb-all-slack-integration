@@ -17,15 +17,23 @@ This is an internal integration tool that [Plumb-All](https://plumb-all.com) use
 ## Example `.env` file
 
 ```dotenv
-SLACK_CHANNEL=slack-channel-name
-
 # Email Connection information
 EMAIL_ADDRESS=email@address.com
 EMAIL_CHECK_INTERVAL=[milliseconds for email check interval]
 
 # Slack App Credentials
+SLACK_CHANNEL=slack-channel-name
 SLACK_TOKEN=xoxb-6c6d60e7-dc09-4b1d-b780-8ddc50a61e4c
 SLACK_SIGNING_SECRET=6c6d60e7-dc09-4b1d-b780-8ddc50a61e4c
+SLACK_USER_ID=6c6d60e7-dc09-4b1d-b780-8ddc50a61e4c
+
+# Mattermost App Credentials
+MATTERMOST_CHANNEL=mattermost-channel-name
+MATTERMOST_URL=https://mattermost.example.com
+MATTERMOST_TOKEN_ID=6c6d60e7-dc09-4b1d-b780-8ddc50a61e4c
+MATTERMOST_TOKEN=6c6d60e7-dc09-4b1d-b780-8ddc50a61e4c
+MATTERMOST_USERNAME=mattermost-username
+MATTERMOST_SLASH_COMMAND_TOKEN=6c6d60e7-dc09-4b1d-b780-8ddc50a61e4c
 
 # Google Ads Key
 GOOGLE_ADS_KEY=6c6d60e7-dc09-4b1d-b780-8ddc50a61e4c
