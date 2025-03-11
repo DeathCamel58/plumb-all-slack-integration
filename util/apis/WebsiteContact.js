@@ -9,13 +9,22 @@ const events = require("../events");
  * @constructor
  */
 async function AlertHandle(data) {
-    if (process.env.DEBUG === "TRUE") {
-        console.log("Data was");
-        console.log(data);
-    }
+  if (process.env.DEBUG === "TRUE") {
+    console.log("Data was");
+    console.log(data);
+  }
 
-    let contact = new Contact("Message From Website", data["form_data"]["name"], data["form_data"]["phone"], undefined, data["form_data"]["email"], data["form_data"]["address"], data["form_data"]["message"], "Website");
+  let contact = new Contact(
+    "Message From Website",
+    data["form_data"]["name"],
+    data["form_data"]["phone"],
+    undefined,
+    data["form_data"]["email"],
+    data["form_data"]["address"],
+    data["form_data"]["message"],
+    "Website",
+  );
 
-    await APICoordinator.contactMade(contact, JSON.stringify(data));
+  await APICoordinator.contactMade(contact, JSON.stringify(data));
 }
-events.emitter.on('website-contact', AlertHandle);
+events.emitter.on("website-contact", AlertHandle);

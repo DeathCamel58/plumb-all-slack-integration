@@ -1,9 +1,10 @@
-require('dotenv').config({path: process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env'});
-const fetch = require('node-fetch');
+require("dotenv").config({
+  path: process.env.ENV_LOCATION || "/root/plumb-all-slack-integration/.env",
+});
+const fetch = require("node-fetch");
 const crypto = require("crypto");
 const fs = require("fs");
-const events = require('../events');
-
+const events = require("../events");
 
 const JOBBER_BASE_URL = "https://api.getjobber.com/api/graphql";
 let JOBBER_ACCESS_TOKEN;
@@ -14,9 +15,9 @@ let JOBBER_ACCESS_TOKEN;
  * @returns {Promise<unknown>}
  */
 function sleep(ms) {
-    return new Promise((resolve) => {
-        setTimeout(resolve, ms);
-    });
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 /**
@@ -24,29 +25,32 @@ function sleep(ms) {
  * @param refresh_token The new refresh token
  */
 function saveNewToken(refresh_token) {
-    // Save the refresh token to file
-    let file = process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env';
-    fs.readFile(file, 'utf8', function (err, data) {
-        if (err) {
-            return console.error(err);
-        }
+  // Save the refresh token to file
+  let file =
+    process.env.ENV_LOCATION || "/root/plumb-all-slack-integration/.env";
+  fs.readFile(file, "utf8", function (err, data) {
+    if (err) {
+      return console.error(err);
+    }
 
-        let result = data.replace(process.env.JOBBER_REFRESH_TOKEN, refresh_token);
-        process.env.JOBBER_REFRESH_TOKEN = refresh_token;
+    let result = data.replace(process.env.JOBBER_REFRESH_TOKEN, refresh_token);
+    process.env.JOBBER_REFRESH_TOKEN = refresh_token;
 
-        // Write data into a new file
-        fs.writeFileSync(`${file}2`, result, 'utf8');
+    // Write data into a new file
+    fs.writeFileSync(`${file}2`, result, "utf8");
 
-        // Ensure the new file isn't empty, then delete the original, and move new into the original's place
-        if (fs.statSync(`${file}2`)["size"] > 0) {
-            fs.unlinkSync(file);
-            fs.renameSync(`${file}2`, file);
-        } else {
-            console.error('ERROR: New file is empty. Dumping variables and arguments to assist with debugging.');
-            console.info(`\trefresh_token:\t${refresh_token}`);
-            console.info(`\tdata:\t${data}`);
-        }
-    });
+    // Ensure the new file isn't empty, then delete the original, and move new into the original's place
+    if (fs.statSync(`${file}2`)["size"] > 0) {
+      fs.unlinkSync(file);
+      fs.renameSync(`${file}2`, file);
+    } else {
+      console.error(
+        "ERROR: New file is empty. Dumping variables and arguments to assist with debugging.",
+      );
+      console.info(`\trefresh_token:\t${refresh_token}`);
+      console.info(`\tdata:\t${data}`);
+    }
+  });
 }
 
 /**
@@ -55,30 +59,37 @@ function saveNewToken(refresh_token) {
  * @returns {boolean} Is the webhook authentic?
  */
 function verifyWebhook(req) {
-    if (process.env.DEBUG === "TRUE") {
-        return true;
+  if (process.env.DEBUG === "TRUE") {
+    return true;
+  }
+
+  // Ensure Slack's signature headers exist
+  if ("x-jobber-hmac-sha256" in req.headers) {
+    // Get the signature
+    let jobberSignature = req.headers["x-jobber-hmac-sha256"];
+    let body = req.body;
+
+    let mySignature = crypto
+      .createHmac("sha256", process.env.JOBBER_APP_SECRET)
+      .update(body, "utf8")
+      .digest("base64");
+
+    if (
+      crypto.timingSafeEqual(
+        Buffer.from(mySignature, "utf8"),
+        Buffer.from(jobberSignature, "utf8"),
+      )
+    ) {
+      return true;
+    } else {
+      console.warn(
+        `Jobber webhook signature invalid.\n\tExpecting: ${mySignature}\n\tReceived: ${jobberSignature}`,
+      );
     }
+  }
 
-    // Ensure Slack's signature headers exist
-    if ("x-jobber-hmac-sha256" in req.headers) {
-        // Get the signature
-        let jobberSignature = req.headers['x-jobber-hmac-sha256'];
-        let body = req.body;
-
-        let mySignature = crypto
-            .createHmac('sha256', process.env.JOBBER_APP_SECRET)
-            .update(body, 'utf8')
-            .digest('base64');
-
-        if (crypto.timingSafeEqual(Buffer.from(mySignature, 'utf8'), Buffer.from(jobberSignature, 'utf8'))) {
-            return true;
-        } else {
-            console.warn(`Jobber webhook signature invalid.\n\tExpecting: ${mySignature}\n\tReceived: ${jobberSignature}`);
-        }
-    }
-
-    // This is not signed properly
-    return false;
+  // This is not signed properly
+  return false;
 }
 
 /**
@@ -86,39 +97,44 @@ function verifyWebhook(req) {
  * @param code The new authorization code
  */
 async function setAuthorization(code) {
-    process.env.JOBBER_AUTHORIZATION_CODE = code;
-    let success = false;
-    while (!success) {
-        try {
-            let response = await fetch(`https://api.getjobber.com/api/oauth/token?client_id=${process.env.JOBBER_CLIENT_ID}&client_secret=${process.env.JOBBER_APP_SECRET}&grant_type=authorization_code&code=${process.env.JOBBER_AUTHORIZATION_CODE}`, {
-                method: 'post'
-            });
+  process.env.JOBBER_AUTHORIZATION_CODE = code;
+  let success = false;
+  while (!success) {
+    try {
+      let response = await fetch(
+        `https://api.getjobber.com/api/oauth/token?client_id=${process.env.JOBBER_CLIENT_ID}&client_secret=${process.env.JOBBER_APP_SECRET}&grant_type=authorization_code&code=${process.env.JOBBER_AUTHORIZATION_CODE}`,
+        {
+          method: "post",
+        },
+      );
 
-            if (response.status === 200) {
-                success = true;
-                let data = await response.text();
-                data = JSON.parse(data);
-                JOBBER_ACCESS_TOKEN = data.access_token;
+      if (response.status === 200) {
+        success = true;
+        let data = await response.text();
+        data = JSON.parse(data);
+        JOBBER_ACCESS_TOKEN = data.access_token;
 
-                saveNewToken(data.refresh_token);
-            }
-            if (response.status === 401) {
-                console.error(`Got ${response.status} while refreshing access token. Requesting authorization!`);
-                await requestAuthorization();
-            }
-        } catch (e) {
-            console.error(`Fetch: Failure in setAuthorization`);
-            console.error(e);
-        }
+        saveNewToken(data.refresh_token);
+      }
+      if (response.status === 401) {
+        console.error(
+          `Got ${response.status} while refreshing access token. Requesting authorization!`,
+        );
+        await requestAuthorization();
+      }
+    } catch (e) {
+      console.error(`Fetch: Failure in setAuthorization`);
+      console.error(e);
     }
+  }
 }
 
 function waitForEvent(eventName, emitter) {
-    return new Promise(resolve => {
-        emitter.once(eventName, data => {
-            resolve(data);
-        });
+  return new Promise((resolve) => {
+    emitter.once(eventName, (data) => {
+      resolve(data);
     });
+  });
 }
 
 let waitingForAuthorization = false;
@@ -128,24 +144,32 @@ let waitingForAuthorization = false;
  * @returns {Promise<void>}
  */
 async function requestAuthorization() {
-    if (!waitingForAuthorization) {
-        const SlackBot = require("./SlackBot");
-        let redirect_URI = `${process.env.WEB_URL}/jobber/authorize`;
-        redirect_URI = encodeURIComponent(redirect_URI);
-        let STATE = crypto.randomBytes(16).toString('hex');
-        let message = `Error from the call bot. *Super technical error code*: :robot_face::frowning::thumbsdown:\nI\'ve lost my access to Jobber and I need some help.\nI need an admin in Jobber to click on --><https://api.getjobber.com/api/oauth/authorize?client_id=${process.env.JOBBER_CLIENT_ID}&redirect_uri=${redirect_URI}&state=${STATE}|this link><-- and click \`ALLOW ACCESS\`.`;
-        events.emitter.emit('slackbot-send-message', message, 'Call Bot Jobber Authorization');
-        events.emitter.emit('mattermost-send-message', message, 'Call Bot Jobber Authorization');
-        console.info('Sent Jobber authorization request to Slack!');
+  if (!waitingForAuthorization) {
+    const SlackBot = require("./SlackBot");
+    let redirect_URI = `${process.env.WEB_URL}/jobber/authorize`;
+    redirect_URI = encodeURIComponent(redirect_URI);
+    let STATE = crypto.randomBytes(16).toString("hex");
+    let message = `Error from the call bot. *Super technical error code*: :robot_face::frowning::thumbsdown:\nI\'ve lost my access to Jobber and I need some help.\nI need an admin in Jobber to click on --><https://api.getjobber.com/api/oauth/authorize?client_id=${process.env.JOBBER_CLIENT_ID}&redirect_uri=${redirect_URI}&state=${STATE}|this link><-- and click \`ALLOW ACCESS\`.`;
+    events.emitter.emit(
+      "slackbot-send-message",
+      message,
+      "Call Bot Jobber Authorization",
+    );
+    events.emitter.emit(
+      "mattermost-send-message",
+      message,
+      "Call Bot Jobber Authorization",
+    );
+    console.info("Sent Jobber authorization request to Slack!");
 
-        waitingForAuthorization = true;
-    }
+    waitingForAuthorization = true;
+  }
 
-    // Wait for the event that's fired when the authorization is updated
-    await waitForEvent('jobber-AUTHORIZATION', events.emitter);
+  // Wait for the event that's fired when the authorization is updated
+  await waitForEvent("jobber-AUTHORIZATION", events.emitter);
 
-    console.log("Got the authorization!");
-    waitingForAuthorization = false;
+  console.log("Got the authorization!");
+  waitingForAuthorization = false;
 }
 
 /**
@@ -153,41 +177,45 @@ async function requestAuthorization() {
  * @returns {Promise<void>}
  */
 async function getRefreshToken() {
-    let success = false;
-    let data;
-    while (!success) {
-        try {
-            let response = await fetch(`https://api.getjobber.com/api/oauth/token`, {
-                method: 'post',
-                headers: {
-                    "content-type": "application/x-www-form-urlencoded"
-                },
-                body: `client_id=${process.env.JOBBER_CLIENT_ID}&client_secret=${process.env.JOBBER_APP_SECRET}&grant_type=authorization_code&code=${process.env.JOBBER_AUTHORIZATION_CODE}`
-            });
+  let success = false;
+  let data;
+  while (!success) {
+    try {
+      let response = await fetch(`https://api.getjobber.com/api/oauth/token`, {
+        method: "post",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: `client_id=${process.env.JOBBER_CLIENT_ID}&client_secret=${process.env.JOBBER_APP_SECRET}&grant_type=authorization_code&code=${process.env.JOBBER_AUTHORIZATION_CODE}`,
+      });
 
-            switch (response.status) {
-                case 200:
-                    success = true;
-                    data = await response.text();
-                    data = JSON.parse(data);
-                    JOBBER_ACCESS_TOKEN = data.access_token;
+      switch (response.status) {
+        case 200:
+          success = true;
+          data = await response.text();
+          data = JSON.parse(data);
+          JOBBER_ACCESS_TOKEN = data.access_token;
 
-                    saveNewToken(data.refresh_token);
-                    break;
-                case 429:
-                    console.error(`Got 429 while refreshing access token. This is likely because of some sort of limiting!`);
-                    break;
-                case 401:
-                default:
-                    console.error(`Got ${response.status} while refreshing access token. Requesting authorization!`);
-                    await requestAuthorization();
-                    break;
-            }
-        } catch (e) {
-            console.error(`Fetch: Failure in getRefreshToken`);
-            console.error(e);
-        }
+          saveNewToken(data.refresh_token);
+          break;
+        case 429:
+          console.error(
+            `Got 429 while refreshing access token. This is likely because of some sort of limiting!`,
+          );
+          break;
+        case 401:
+        default:
+          console.error(
+            `Got ${response.status} while refreshing access token. Requesting authorization!`,
+          );
+          await requestAuthorization();
+          break;
+      }
+    } catch (e) {
+      console.error(`Fetch: Failure in getRefreshToken`);
+      console.error(e);
     }
+  }
 }
 
 /**
@@ -195,41 +223,45 @@ async function getRefreshToken() {
  * @returns {Promise<void>}
  */
 async function refreshAccessToken() {
-    let success = false;
-    let data;
-    while (!success) {
-        try {
-            let response = await fetch(`https://api.getjobber.com/api/oauth/token`, {
-                method: 'post',
-                headers: {
-                    "content-type": "application/x-www-form-urlencoded"
-                },
-                body: `client_id=${process.env.JOBBER_CLIENT_ID}&client_secret=${process.env.JOBBER_APP_SECRET}&grant_type=refresh_token&refresh_token=${process.env.JOBBER_REFRESH_TOKEN}`
-            });
+  let success = false;
+  let data;
+  while (!success) {
+    try {
+      let response = await fetch(`https://api.getjobber.com/api/oauth/token`, {
+        method: "post",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: `client_id=${process.env.JOBBER_CLIENT_ID}&client_secret=${process.env.JOBBER_APP_SECRET}&grant_type=refresh_token&refresh_token=${process.env.JOBBER_REFRESH_TOKEN}`,
+      });
 
-            switch (response.status) {
-                case 200:
-                    success = true;
-                    data = await response.text();
-                    data = JSON.parse(data);
-                    JOBBER_ACCESS_TOKEN = data.access_token;
+      switch (response.status) {
+        case 200:
+          success = true;
+          data = await response.text();
+          data = JSON.parse(data);
+          JOBBER_ACCESS_TOKEN = data.access_token;
 
-                    saveNewToken(data.refresh_token);
-                    break;
-                case 429:
-                    console.error(`Got 429 while refreshing access token. This is likely because of some sort of limiting!`);
-                    break;
-                case 401:
-                default:
-                    console.error(`Got ${response.status} while refreshing access token. Requesting authorization!`);
-                    await requestAuthorization();
-                    break;
-            }
-        } catch (e) {
-            console.error(`Fetch: Failure in refreshAccessToken`);
-            console.error(e);
-        }
+          saveNewToken(data.refresh_token);
+          break;
+        case 429:
+          console.error(
+            `Got 429 while refreshing access token. This is likely because of some sort of limiting!`,
+          );
+          break;
+        case 401:
+        default:
+          console.error(
+            `Got ${response.status} while refreshing access token. Requesting authorization!`,
+          );
+          await requestAuthorization();
+          break;
+      }
+    } catch (e) {
+      console.error(`Fetch: Failure in refreshAccessToken`);
+      console.error(e);
     }
+  }
 }
 
 /**
@@ -238,47 +270,51 @@ async function refreshAccessToken() {
  * @returns {Promise<*>} The GraphQL query data
  */
 async function makeRequest(query) {
-    let success = false;
-    let response;
-    while (!success) {
-        try {
-            response = await fetch(JOBBER_BASE_URL, {
-                method: 'post',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${JOBBER_ACCESS_TOKEN}`,
-                    'X-JOBBER-GRAPHQL-VERSION': '2023-11-15'
-                },
-                body: `{"query":${JSON.stringify(query)}}`
-            });
+  let success = false;
+  let response;
+  while (!success) {
+    try {
+      response = await fetch(JOBBER_BASE_URL, {
+        method: "post",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${JOBBER_ACCESS_TOKEN}`,
+          "X-JOBBER-GRAPHQL-VERSION": "2023-11-15",
+        },
+        body: `{"query":${JSON.stringify(query)}}`,
+      });
 
-            switch (response.status) {
-                // HTTP: OK
-                case 200:
-                    success = true;
-                    break;
-                // HTTP: Unauthorized
-                case 401:
-                    console.error(`Got ${response.status} from the Jobber API. Refreshing access token and trying again!`);
-                    await refreshAccessToken();
-                    break;
-                // HTTP: All Others
-                default:
-                    console.error(`Got ${response.status} while running query. Body follows.`);
-                    let text = await response.text();
-                    console.error(text);
-                    break;
-            }
-        } catch (e) {
-            console.error(`Fetch: Failure in makeRequest`);
-            console.error(e);
-        }
+      switch (response.status) {
+        // HTTP: OK
+        case 200:
+          success = true;
+          break;
+        // HTTP: Unauthorized
+        case 401:
+          console.error(
+            `Got ${response.status} from the Jobber API. Refreshing access token and trying again!`,
+          );
+          await refreshAccessToken();
+          break;
+        // HTTP: All Others
+        default:
+          console.error(
+            `Got ${response.status} while running query. Body follows.`,
+          );
+          let text = await response.text();
+          console.error(text);
+          break;
+      }
+    } catch (e) {
+      console.error(`Fetch: Failure in makeRequest`);
+      console.error(e);
     }
+  }
 
-    let data = await response.text();
-    data = JSON.parse(data);
+  let data = await response.text();
+  data = JSON.parse(data);
 
-    return data.data;
+  return data.data;
 }
 
 /**
@@ -287,8 +323,7 @@ async function makeRequest(query) {
  * @returns {Promise<*>} The data for the invoice
  */
 async function getInvoiceData(itemID) {
-    let query =
-        `
+  let query = `
 query InvoiceQuery {
     invoice (id: "${itemID}") {
         client {
@@ -317,11 +352,13 @@ query InvoiceQuery {
 }
         `;
 
-    let invoiceResponse = await makeRequest(query);
+  let invoiceResponse = await makeRequest(query);
 
-    invoiceResponse["invoice"].client = await getClientData(invoiceResponse["invoice"].client.id);
+  invoiceResponse["invoice"].client = await getClientData(
+    invoiceResponse["invoice"].client.id,
+  );
 
-    return invoiceResponse["invoice"];
+  return invoiceResponse["invoice"];
 }
 
 /**
@@ -330,8 +367,7 @@ query InvoiceQuery {
  * @returns {Promise<*>} The data for the invoice
  */
 async function getInvoiceSearchData(filterValue) {
-    let query =
-        `
+  let query = `
 query InvoiceQuery {
   invoices (searchTerm: "${filterValue}", first: 1) {
     nodes {
@@ -342,15 +378,22 @@ query InvoiceQuery {
 }
         `;
 
-    let invoiceResponse = await makeRequest(query);
+  let invoiceResponse = await makeRequest(query);
 
-    if (invoiceResponse != undefined && invoiceResponse.invoices.nodes.length > 0 && invoiceResponse.invoices.nodes[0].invoiceNumber.toString() === filterValue.toString()) {
-        invoiceResponse = await getInvoiceData(invoiceResponse.invoices.nodes[0].id);
-    } else {
-        return null
-    }
+  if (
+    invoiceResponse != undefined &&
+    invoiceResponse.invoices.nodes.length > 0 &&
+    invoiceResponse.invoices.nodes[0].invoiceNumber.toString() ===
+      filterValue.toString()
+  ) {
+    invoiceResponse = await getInvoiceData(
+      invoiceResponse.invoices.nodes[0].id,
+    );
+  } else {
+    return null;
+  }
 
-    return invoiceResponse;
+  return invoiceResponse;
 }
 
 /**
@@ -359,8 +402,7 @@ query InvoiceQuery {
  * @returns {Promise<*>} The data for the quote
  */
 async function getQuoteData(itemID) {
-    let query =
-        `
+  let query = `
 query QuoteQuery {
     quote (id: "${itemID}") {
         client {
@@ -390,11 +432,13 @@ query QuoteQuery {
 }
         `;
 
-    let quoteResponse = await makeRequest(query);
+  let quoteResponse = await makeRequest(query);
 
-    quoteResponse["quote"].client = await getClientData(quoteResponse["quote"].client.id);
+  quoteResponse["quote"].client = await getClientData(
+    quoteResponse["quote"].client.id,
+  );
 
-    return quoteResponse["quote"];
+  return quoteResponse["quote"];
 }
 
 /**
@@ -404,8 +448,7 @@ query QuoteQuery {
  * @returns {Promise<*>} The data for the quote
  */
 async function getQuoteSearchData(filterType, filterValue) {
-    let query =
-        `
+  let query = `
 query QuoteQuery {
   quotes (filter: {${filterType}: {eq: ${filterValue}}}, first: 1) {
     nodes {
@@ -415,15 +458,15 @@ query QuoteQuery {
 }
         `;
 
-    let quoteResponse = await makeRequest(query);
+  let quoteResponse = await makeRequest(query);
 
-    if (quoteResponse.quotes.nodes.length > 0) {
-        quoteResponse = await getQuoteData(quoteResponse.quotes.nodes[0].id);
-    } else {
-        return null
-    }
+  if (quoteResponse.quotes.nodes.length > 0) {
+    quoteResponse = await getQuoteData(quoteResponse.quotes.nodes[0].id);
+  } else {
+    return null;
+  }
 
-    return quoteResponse;
+  return quoteResponse;
 }
 
 /**
@@ -432,8 +475,7 @@ query QuoteQuery {
  * @returns {Promise<*>} The data for the job
  */
 async function getJobData(itemID) {
-    let query =
-        `
+  let query = `
 query JobQuery {
     job (id: "${itemID}") {
         client {
@@ -449,11 +491,11 @@ query JobQuery {
 }
         `;
 
-    let jobResponse = await makeRequest(query);
+  let jobResponse = await makeRequest(query);
 
-    jobResponse["job"].client = await getClientData(jobResponse["job"].client.id);
+  jobResponse["job"].client = await getClientData(jobResponse["job"].client.id);
 
-    return jobResponse["job"];
+  return jobResponse["job"];
 }
 
 /**
@@ -462,8 +504,7 @@ query JobQuery {
  * @returns {Promise<*>} The data for the job
  */
 async function getJobSearchData(filterValue) {
-    let query =
-        `
+  let query = `
 query JobQuery {
   jobs (searchTerm: "${filterValue}", first: 1) {
     nodes {
@@ -474,15 +515,19 @@ query JobQuery {
 }
         `;
 
-    let jobResponse = await makeRequest(query);
+  let jobResponse = await makeRequest(query);
 
-    if (jobResponse != undefined && jobResponse.jobs.nodes.length > 0 && jobResponse.jobs.nodes[0].jobNumber.toString() === filterValue.toString()) {
-        jobResponse = await getJobData(jobResponse.jobs.nodes[0].id);
-    } else {
-        return null
-    }
+  if (
+    jobResponse != undefined &&
+    jobResponse.jobs.nodes.length > 0 &&
+    jobResponse.jobs.nodes[0].jobNumber.toString() === filterValue.toString()
+  ) {
+    jobResponse = await getJobData(jobResponse.jobs.nodes[0].id);
+  } else {
+    return null;
+  }
 
-    return jobResponse;
+  return jobResponse;
 }
 
 /**
@@ -491,8 +536,7 @@ query JobQuery {
  * @returns {Promise<*>} The data for the client
  */
 async function getClientData(itemID) {
-    let query =
-        `
+  let query = `
 query ClientQuery {
   client (id: "${itemID}") {
     name
@@ -523,9 +567,9 @@ query ClientQuery {
 }
         `;
 
-    let clientResponse = await makeRequest(query);
+  let clientResponse = await makeRequest(query);
 
-    return clientResponse.client;
+  return clientResponse.client;
 }
 
 /**
@@ -534,8 +578,7 @@ query ClientQuery {
  * @returns {Promise<*>} The data for the payment
  */
 async function getPaymentData(itemID) {
-    let query =
-        `
+  let query = `
 query PaymentQuery {
     paymentRecord (id: "${itemID}") {
         client {
@@ -550,11 +593,13 @@ query PaymentQuery {
 }
         `;
 
-    let paymentResponse = await makeRequest(query);
+  let paymentResponse = await makeRequest(query);
 
-    paymentResponse["paymentRecord"].client = await getClientData(paymentResponse["paymentRecord"].client.id);
+  paymentResponse["paymentRecord"].client = await getClientData(
+    paymentResponse["paymentRecord"].client.id,
+  );
 
-    return paymentResponse["paymentRecord"];
+  return paymentResponse["paymentRecord"];
 }
 
 /**
@@ -563,8 +608,7 @@ query PaymentQuery {
  * @returns {Promise<*>} The data for the payment
  */
 async function getPayoutData(itemID) {
-    let query =
-        `
+  let query = `
 query PayoutQuery {
     payoutRecord (id: "${itemID}") {
         arrivalDate
@@ -582,9 +626,9 @@ query PayoutQuery {
 }
         `;
 
-    let payoutResponse = await makeRequest(query);
+  let payoutResponse = await makeRequest(query);
 
-    return payoutResponse["payoutRecord"];
+  return payoutResponse["payoutRecord"];
 }
 
 /**
@@ -593,8 +637,7 @@ query PayoutQuery {
  * @returns {Promise<*>} The data for the property
  */
 async function getPropertyData(itemID) {
-    let query =
-        `
+  let query = `
 query PropertyQuery {
     property (id: "${itemID}") {
         address {
@@ -613,11 +656,13 @@ query PropertyQuery {
 }
         `;
 
-    let propertyResponse = await makeRequest(query);
+  let propertyResponse = await makeRequest(query);
 
-    propertyResponse["property"].client = await getClientData(propertyResponse["property"].client.id);
+  propertyResponse["property"].client = await getClientData(
+    propertyResponse["property"].client.id,
+  );
 
-    return propertyResponse["property"];
+  return propertyResponse["property"];
 }
 
 /**
@@ -626,8 +671,7 @@ query PropertyQuery {
  * @returns {Promise<*>} The data for the visit
  */
 async function getVisitData(itemID) {
-    let query =
-        `
+  let query = `
 query VisitQuery {
     visit (id: "${itemID}") {
         allDay
@@ -655,11 +699,13 @@ query VisitQuery {
 }
         `;
 
-    let visitResponse = await makeRequest(query);
+  let visitResponse = await makeRequest(query);
 
-    visitResponse["visit"].client = await getClientData(visitResponse["visit"].client.id);
+  visitResponse["visit"].client = await getClientData(
+    visitResponse["visit"].client.id,
+  );
 
-    return visitResponse["visit"];
+  return visitResponse["visit"];
 }
 
 /**
@@ -668,8 +714,7 @@ query VisitQuery {
  * @returns {Promise<*>} The data for the visit
  */
 async function getRequestData(itemID) {
-    let query =
-        `
+  let query = `
 query RequestQuery {
     request (id: "${itemID}") {
         client {
@@ -702,11 +747,13 @@ query RequestQuery {
 }
         `;
 
-    let requestResponse = await makeRequest(query);
+  let requestResponse = await makeRequest(query);
 
-    requestResponse["request"].client = await getClientData(requestResponse["request"].client.id);
+  requestResponse["request"].client = await getClientData(
+    requestResponse["request"].client.id,
+  );
 
-    return requestResponse["request"];
+  return requestResponse["request"];
 }
 
 /**
@@ -715,8 +762,7 @@ query RequestQuery {
  * @returns {Promise<*>} The data for the payment
  */
 async function getExpenseData(itemID) {
-    let query =
-        `
+  let query = `
 query ExpenseQuery {
     expense (id: "${itemID}") {
         createdAt
@@ -742,20 +788,32 @@ query ExpenseQuery {
 }
         `;
 
-    let expenseResponse = await makeRequest(query);
+  let expenseResponse = await makeRequest(query);
 
-    // Get the employee data and fill those fields
-    if (expenseResponse.expense.enteredBy && expenseResponse.expense.enteredBy.id) {
-        expenseResponse.expense.enteredBy = await getUserData(expenseResponse.expense.enteredBy.id)
-    }
-    if (expenseResponse.expense.paidBy && expenseResponse.expense.paidBy.id) {
-        expenseResponse.expense.paidBy = await getUserData(expenseResponse.expense.paidBy.id)
-    }
-    if (expenseResponse.expense.reimbursableTo && expenseResponse.expense.reimbursableTo.id) {
-        expenseResponse.expense.reimbursableTo = await getUserData(expenseResponse.expense.reimbursableTo.id)
-    }
+  // Get the employee data and fill those fields
+  if (
+    expenseResponse.expense.enteredBy &&
+    expenseResponse.expense.enteredBy.id
+  ) {
+    expenseResponse.expense.enteredBy = await getUserData(
+      expenseResponse.expense.enteredBy.id,
+    );
+  }
+  if (expenseResponse.expense.paidBy && expenseResponse.expense.paidBy.id) {
+    expenseResponse.expense.paidBy = await getUserData(
+      expenseResponse.expense.paidBy.id,
+    );
+  }
+  if (
+    expenseResponse.expense.reimbursableTo &&
+    expenseResponse.expense.reimbursableTo.id
+  ) {
+    expenseResponse.expense.reimbursableTo = await getUserData(
+      expenseResponse.expense.reimbursableTo.id,
+    );
+  }
 
-    return expenseResponse["expense"];
+  return expenseResponse["expense"];
 }
 
 /**
@@ -764,8 +822,7 @@ query ExpenseQuery {
  * @returns {Promise<*>} The data for the payment
  */
 async function getUserData(itemID) {
-    let query =
-        `
+  let query = `
 query UserQuery {
     user (id: "${itemID}") {
         id
@@ -795,28 +852,27 @@ query UserQuery {
 }
         `;
 
-    let userResponse = await makeRequest(query);
+  let userResponse = await makeRequest(query);
 
-    return userResponse["user"];
+  return userResponse["user"];
 }
 
 /**
  * Queries the Jobber API to get a list of open jobs, and performs tasks necessary to assign blame to people
  */
 async function findOpenJobBlame() {
-    let jobs = {};
-    let openJobStatusTypes = [
-        // 'requires_invoicing',
-        'late',
-        'action_required',
-        'on_hold',
-        'unscheduled',
-        'active'
-    ]
+  let jobs = {};
+  let openJobStatusTypes = [
+    // 'requires_invoicing',
+    "late",
+    "action_required",
+    "on_hold",
+    "unscheduled",
+    "active",
+  ];
 
-    for (let jobStatus of openJobStatusTypes) {
-        let query =
-            `
+  for (let jobStatus of openJobStatusTypes) {
+    let query = `
 query OpenJobQuery {
     jobs (filter: {status: ${jobStatus}}) {
         nodes {
@@ -862,88 +918,101 @@ query OpenJobQuery {
 }
         `;
 
-        let jobResponse = await makeRequest(query);
+    let jobResponse = await makeRequest(query);
 
-        for (let job of jobResponse.jobs.nodes) {
-            // Use a number of different techniques to attempt to identify the user who created the job
-            let user = "unknown";
-            if (job.salesperson !== null && job.salesperson.name !== null) {
-                user = job.salesperson.name.full;
+    for (let job of jobResponse.jobs.nodes) {
+      // Use a number of different techniques to attempt to identify the user who created the job
+      let user = "unknown";
+      if (job.salesperson !== null && job.salesperson.name !== null) {
+        user = job.salesperson.name.full;
+      }
+      if (user === "unknown" || user === "Joshua Waldrep") {
+        if (
+          job.visits.nodes.length > 0 &&
+          job.visits.nodes[0].assignedUsers.nodes.length > 0 &&
+          job.visits.nodes[0].assignedUsers.nodes[0].name.full
+        ) {
+          // First, check if the visit is assigned to user
+          user = job.visits.nodes[0].assignedUsers.nodes[0].name.full;
+        } else if (job.customFields.length > 0) {
+          // Second, check if user put their name on the job
+          for (let customField of job.customFields) {
+            if (
+              customField.label === "Technician Name" &&
+              customField.valueText !== ""
+            ) {
+              user = customField.valueText;
             }
-            if (user === "unknown" || user === "Joshua Waldrep") {
-                if (job.visits.nodes.length > 0 && job.visits.nodes[0].assignedUsers.nodes.length > 0 && job.visits.nodes[0].assignedUsers.nodes[0].name.full) {
-                    // First, check if the visit is assigned to user
-                    user = job.visits.nodes[0].assignedUsers.nodes[0].name.full;
-                } else if (job.customFields.length > 0) {
-                    // Second, check if user put their name on the job
-                    for (let customField of job.customFields) {
-                        if (customField.label === "Technician Name" && customField.valueText !== "") {
-                            user = customField.valueText;
-                        }
-                    }
-                } else {
-                    // Fetch a linked quote and check if they put their name on it
-                    let quote;
-                    if (job.quote) {
-                        quote = await getQuoteData(job.quote.id);
-                    }
+          }
+        } else {
+          // Fetch a linked quote and check if they put their name on it
+          let quote;
+          if (job.quote) {
+            quote = await getQuoteData(job.quote.id);
+          }
 
-                    if (quote.customFields.length > 0) {
-                        // Second, check if user put their name on the job
-                        for (let customField of quote.customFields) {
-                            if (customField.label === "Technician Name" && customField.valueText !== "") {
-                                user = customField.valueText;
-                            }
-                        }
-                    }
-
-                    // Fetch a linked invoice and check if they put their name on it
-                    let invoice;
-                    if (job.invoices.nodes.length > 0 && user === "unknown") {
-                        invoice = await getInvoiceData(job.invoices.nodes[0].id);
-                    }
-
-                    if (invoice.customFields.length > 0) {
-                        // Second, check if user put their name on the job
-                        for (let customField of invoice.customFields) {
-                            if (customField.label === "Technician Name" && customField.valueText !== "") {
-                                user = customField.valueText;
-                            }
-                        }
-                    }
-                }
+          if (quote.customFields.length > 0) {
+            // Second, check if user put their name on the job
+            for (let customField of quote.customFields) {
+              if (
+                customField.label === "Technician Name" &&
+                customField.valueText !== ""
+              ) {
+                user = customField.valueText;
+              }
             }
+          }
 
-            if (!(user in jobs)) {
-                jobs[user] = {};
-            }
+          // Fetch a linked invoice and check if they put their name on it
+          let invoice;
+          if (job.invoices.nodes.length > 0 && user === "unknown") {
+            invoice = await getInvoiceData(job.invoices.nodes[0].id);
+          }
 
-            if (!(`${job.jobNumber}` in jobs[user])) {
-                jobs[user][job.jobNumber] = job;
+          if (invoice.customFields.length > 0) {
+            // Second, check if user put their name on the job
+            for (let customField of invoice.customFields) {
+              if (
+                customField.label === "Technician Name" &&
+                customField.valueText !== ""
+              ) {
+                user = customField.valueText;
+              }
             }
+          }
         }
-    }
+      }
 
-    return jobs;
+      if (!(user in jobs)) {
+        jobs[user] = {};
+      }
+
+      if (!(`${job.jobNumber}` in jobs[user])) {
+        jobs[user][job.jobNumber] = job;
+      }
+    }
+  }
+
+  return jobs;
 }
 
 module.exports = {
-    verifyWebhook,
-    setAuthorization,
-    getInvoiceData,
-    getInvoiceSearchData,
-    getQuoteData,
-    getQuoteSearchData,
-    getJobData,
-    getJobSearchData,
-    getClientData,
-    getPaymentData,
-    getPayoutData,
-    getPropertyData,
-    getVisitData,
-    getRequestData,
-    getExpenseData,
-    getUserData,
-    findOpenJobBlame,
-    getRefreshToken
+  verifyWebhook,
+  setAuthorization,
+  getInvoiceData,
+  getInvoiceSearchData,
+  getQuoteData,
+  getQuoteSearchData,
+  getJobData,
+  getJobSearchData,
+  getClientData,
+  getPaymentData,
+  getPayoutData,
+  getPropertyData,
+  getVisitData,
+  getRequestData,
+  getExpenseData,
+  getUserData,
+  findOpenJobBlame,
+  getRefreshToken,
 };

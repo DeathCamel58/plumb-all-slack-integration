@@ -1,7 +1,9 @@
 # Plumb-All's Slack integration
+
 This is an internal integration tool that [Plumb-All](https://plumb-all.com) uses to integrate various things.
 
 ## Custom integrations
+
 - [Jobber](https://getjobber.com)
   - New clients, invoices, quotes, jobs, etc get sent to [PostHog](https://posthog.com)
   - New requests in Jobber get sent into Slack, PostHog, and Trello
@@ -13,6 +15,7 @@ This is an internal integration tool that [Plumb-All](https://plumb-all.com) use
   - Sends certain vehicle alerts to Slack
 
 ## Example `.env` file
+
 ```dotenv
 SLACK_CHANNEL=slack-channel-name
 

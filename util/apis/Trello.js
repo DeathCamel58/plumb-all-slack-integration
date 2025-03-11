@@ -1,8 +1,10 @@
-require('dotenv').config({path: process.env.ENV_LOCATION || '/root/plumb-all-slack-integration/.env'});
+require("dotenv").config({
+  path: process.env.ENV_LOCATION || "/root/plumb-all-slack-integration/.env",
+});
 const fetch = require("node-fetch");
 const events = require("../events");
 
-const trelloHost = 'https://api.trello.com';
+const trelloHost = "https://api.trello.com";
 
 /**
  * Sends a raw request to Trello's API
@@ -12,35 +14,37 @@ const trelloHost = 'https://api.trello.com';
  * @returns {Promise<void>}
  */
 async function useAPI(url, httpMethod, data) {
-    let query = JSON.stringify(data);
-    let response = [];
-    try {
-        let options = {
-            method: httpMethod,
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        };
-        if (data !== null && data !== undefined) {
-            options.body = query;
-        }
-        response = await fetch(`${trelloHost}/${url}`, options);
-        switch (response.status) {
-            // HTTP: OK
-            case 200:
-                // Return the data
-                return await response.text();
-            // HTTP Bad Request
-            case 400:
-            default:
-                console.error(`Received status ${response.status} from Trello. Body follows.`);
-                let text = await response.text();
-                console.error(text);
-        }
-    } catch (e) {
-        console.error(`Fetch: Failure in Trello:useAPI`);
-        console.error(e);
+  let query = JSON.stringify(data);
+  let response = [];
+  try {
+    let options = {
+      method: httpMethod,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    };
+    if (data !== null && data !== undefined) {
+      options.body = query;
     }
+    response = await fetch(`${trelloHost}/${url}`, options);
+    switch (response.status) {
+      // HTTP: OK
+      case 200:
+        // Return the data
+        return await response.text();
+      // HTTP Bad Request
+      case 400:
+      default:
+        console.error(
+          `Received status ${response.status} from Trello. Body follows.`,
+        );
+        let text = await response.text();
+        console.error(text);
+    }
+  } catch (e) {
+    console.error(`Fetch: Failure in Trello:useAPI`);
+    console.error(e);
+  }
 }
 
 /**
@@ -49,17 +53,21 @@ async function useAPI(url, httpMethod, data) {
  * @returns {Promise<*|null>} The board id, or null
  */
 async function getBoard(boardName) {
-    let boardsResponse = await useAPI(`1/members/me/boards?key=${process.env.TRELLO_API_KEY}&token=${process.env.TRELLO_TOKEN}`, 'get', null);
-    boardsResponse = JSON.parse(boardsResponse);
+  let boardsResponse = await useAPI(
+    `1/members/me/boards?key=${process.env.TRELLO_API_KEY}&token=${process.env.TRELLO_TOKEN}`,
+    "get",
+    null,
+  );
+  boardsResponse = JSON.parse(boardsResponse);
 
-    for (let i = 0; i < boardsResponse.length; i++) {
-        if (boardsResponse[i].name === boardName) {
-            return boardsResponse[i].id;
-        }
+  for (let i = 0; i < boardsResponse.length; i++) {
+    if (boardsResponse[i].name === boardName) {
+      return boardsResponse[i].id;
     }
+  }
 
-    // If board wasn't found, return null
-    return null;
+  // If board wasn't found, return null
+  return null;
 }
 
 /**
@@ -69,20 +77,24 @@ async function getBoard(boardName) {
  * @returns {Promise<*|null>} The list id, or null
  */
 async function getList(boardId, listName) {
-    let listResponse = await useAPI(`1/boards/${boardId}/lists?key=${process.env.TRELLO_API_KEY}&token=${process.env.TRELLO_TOKEN}`, 'get', null);
-    if (!listResponse) {
-        return null;
-    }
-    listResponse = JSON.parse(listResponse);
-
-    for (let i = 0; i < listResponse.length; i++) {
-        if (listResponse[i].name === listName) {
-            return listResponse[i].id;
-        }
-    }
-
-    // If board wasn't found, return null
+  let listResponse = await useAPI(
+    `1/boards/${boardId}/lists?key=${process.env.TRELLO_API_KEY}&token=${process.env.TRELLO_TOKEN}`,
+    "get",
+    null,
+  );
+  if (!listResponse) {
     return null;
+  }
+  listResponse = JSON.parse(listResponse);
+
+  for (let i = 0; i < listResponse.length; i++) {
+    if (listResponse[i].name === listName) {
+      return listResponse[i].id;
+    }
+  }
+
+  // If board wasn't found, return null
+  return null;
 }
 
 /**
@@ -92,26 +104,34 @@ async function getList(boardId, listName) {
  * @returns {Promise<*|null>}
  */
 async function runSearch(query, listId) {
-    let searchQuery = encodeURIComponent(query);
-    let searchResponse = await useAPI(`1/search?query=${searchQuery}&key=${process.env.TRELLO_API_KEY}&token=${process.env.TRELLO_TOKEN}`, 'get', null);
-    searchResponse = JSON.parse(searchResponse);
+  let searchQuery = encodeURIComponent(query);
+  let searchResponse = await useAPI(
+    `1/search?query=${searchQuery}&key=${process.env.TRELLO_API_KEY}&token=${process.env.TRELLO_TOKEN}`,
+    "get",
+    null,
+  );
+  searchResponse = JSON.parse(searchResponse);
 
-    if (searchResponse["cards"].length > 0) {
-        if (listId !== null && listId !== undefined) {
-            for (let i = 0; i < searchResponse["cards"].length; i++) {
-                let card = searchResponse["cards"][i];
-                let listResponse = await useAPI(`1/cards/${card.id}/list?key=${process.env.TRELLO_API_KEY}&token=${process.env.TRELLO_TOKEN}`, 'get', null);
-                listResponse = JSON.parse(listResponse);
-                if (card.idList === listId) {
-                    return card;
-                }
-            }
-        } else {
-            return searchResponse["cards"][0];
+  if (searchResponse["cards"].length > 0) {
+    if (listId !== null && listId !== undefined) {
+      for (let i = 0; i < searchResponse["cards"].length; i++) {
+        let card = searchResponse["cards"][i];
+        let listResponse = await useAPI(
+          `1/cards/${card.id}/list?key=${process.env.TRELLO_API_KEY}&token=${process.env.TRELLO_TOKEN}`,
+          "get",
+          null,
+        );
+        listResponse = JSON.parse(listResponse);
+        if (card.idList === listId) {
+          return card;
         }
+      }
     } else {
-        return null;
+      return searchResponse["cards"][0];
     }
+  } else {
+    return null;
+  }
 }
 
 /**
@@ -123,25 +143,25 @@ async function runSearch(query, listId) {
  * @returns {Promise<void>}
  */
 async function addCard(listId, name, description, address) {
-    let data = {
-        idList: listId,
-        key: process.env.TRELLO_API_KEY,
-        token: process.env.TRELLO_TOKEN,
-        pos: 'top'
-    };
-    // URL encode the data, and add it to the request
-    if (name !== null && name !== undefined) {
-        data.name = name;
-    }
-    if (description !== null && description !== undefined) {
-        data.desc = description;
-    }
-    if (address !== null && address !== undefined) {
-        data.address = address;
-    }
+  let data = {
+    idList: listId,
+    key: process.env.TRELLO_API_KEY,
+    token: process.env.TRELLO_TOKEN,
+    pos: "top",
+  };
+  // URL encode the data, and add it to the request
+  if (name !== null && name !== undefined) {
+    data.name = name;
+  }
+  if (description !== null && description !== undefined) {
+    data.desc = description;
+  }
+  if (address !== null && address !== undefined) {
+    data.address = address;
+  }
 
-    // Send the request to Trello
-    let response = await useAPI('1/cards/', 'post', data);
+  // Send the request to Trello
+  let response = await useAPI("1/cards/", "post", data);
 }
 
 /**
@@ -151,8 +171,12 @@ async function addCard(listId, name, description, address) {
  * @returns {Promise<void>}
  */
 async function moveCard(cardId, listId) {
-    let moveResponse = await useAPI(`1/cards/${cardId}?key=${process.env.TRELLO_API_KEY}&token=${process.env.TRELLO_TOKEN}&idList=${listId}`, 'put', null);
-    moveResponse = JSON.parse(moveResponse);
+  let moveResponse = await useAPI(
+    `1/cards/${cardId}?key=${process.env.TRELLO_API_KEY}&token=${process.env.TRELLO_TOKEN}&idList=${listId}`,
+    "put",
+    null,
+  );
+  moveResponse = JSON.parse(moveResponse);
 }
 
 /**
@@ -161,11 +185,11 @@ async function moveCard(cardId, listId) {
  * @returns {Promise<void>}
  */
 async function addContact(contact) {
-    let boardId = await getBoard(process.env.TRELLO_BOARD_NAME);
-    let listId = await getList(boardId, process.env.TRELLO_LIST_NAME_TODO);
-    await addCard(listId, contact.name, contact.messageToSend(), contact.address);
+  let boardId = await getBoard(process.env.TRELLO_BOARD_NAME);
+  let listId = await getList(boardId, process.env.TRELLO_LIST_NAME_TODO);
+  await addCard(listId, contact.name, contact.messageToSend(), contact.address);
 }
-events.emitter.on('trello-add-contact', addContact);
+events.emitter.on("trello-add-contact", addContact);
 
 /**
  * Moves a contact card to a different list
@@ -174,57 +198,66 @@ events.emitter.on('trello-add-contact', addContact);
  * @returns {Promise<void>}
  */
 async function moveContactCard(message, destinationList) {
-    // Get the board ID
-    let boardId = await getBoard(process.env.TRELLO_BOARD_NAME);
-    let sourceListId;
-    let destinationListId;
-    if (destinationList === process.env.TRELLO_LIST_NAME_WIP) {
-        sourceListId = await getList(boardId, process.env.TRELLO_LIST_NAME_TODO);
-        destinationListId = await getList(boardId, process.env.TRELLO_LIST_NAME_WIP);
-    } else if (destinationList === process.env.TRELLO_LIST_NAME_DONE) {
-        sourceListId = await getList(boardId, process.env.TRELLO_LIST_NAME_WIP);
-        destinationListId = await getList(boardId, process.env.TRELLO_LIST_NAME_DONE);
-    } else if (destinationList === process.env.TRELLO_LIST_NAME_NO_GO) {
-        sourceListId = await getList(boardId, process.env.TRELLO_LIST_NAME_TODO);
-        destinationListId = await getList(boardId, process.env.TRELLO_LIST_NAME_NO_GO);
-    }
+  // Get the board ID
+  let boardId = await getBoard(process.env.TRELLO_BOARD_NAME);
+  let sourceListId;
+  let destinationListId;
+  if (destinationList === process.env.TRELLO_LIST_NAME_WIP) {
+    sourceListId = await getList(boardId, process.env.TRELLO_LIST_NAME_TODO);
+    destinationListId = await getList(
+      boardId,
+      process.env.TRELLO_LIST_NAME_WIP,
+    );
+  } else if (destinationList === process.env.TRELLO_LIST_NAME_DONE) {
+    sourceListId = await getList(boardId, process.env.TRELLO_LIST_NAME_WIP);
+    destinationListId = await getList(
+      boardId,
+      process.env.TRELLO_LIST_NAME_DONE,
+    );
+  } else if (destinationList === process.env.TRELLO_LIST_NAME_NO_GO) {
+    sourceListId = await getList(boardId, process.env.TRELLO_LIST_NAME_TODO);
+    destinationListId = await getList(
+      boardId,
+      process.env.TRELLO_LIST_NAME_NO_GO,
+    );
+  }
 
-    if (!message.includes('Caller: ') && !message.includes('\nAddress: ')) {
-        console.error('Can\'t parse the message.');
-        return;
-    }
-    let caller = message.split('Caller: ')[1].split('\nAddress: ')[0];
-    if (caller.includes('(')) {
-        caller = caller.split('(')[0];
-    }
-    let card = await runSearch(caller, sourceListId);
+  if (!message.includes("Caller: ") && !message.includes("\nAddress: ")) {
+    console.error("Can't parse the message.");
+    return;
+  }
+  let caller = message.split("Caller: ")[1].split("\nAddress: ")[0];
+  if (caller.includes("(")) {
+    caller = caller.split("(")[0];
+  }
+  let card = await runSearch(caller, sourceListId);
 
-    // Determine if the card was found
-    let cardExists = false;
-    if (card !== undefined && card !== null) {
-        if ('id' in card) {
-            cardExists = true;
-        }
+  // Determine if the card was found
+  let cardExists = false;
+  if (card !== undefined && card !== null) {
+    if ("id" in card) {
+      cardExists = true;
     }
+  }
 
-    // Rerun search if it is marked as bad, and no card was found. This is to allow the card to be found in multiple lists.
-    if (!cardExists && destinationList === process.env.TRELLO_LIST_NAME_NO_GO) {
-        sourceListId = await getList(boardId, process.env.TRELLO_LIST_NAME_WIP);
-        card = await runSearch(caller, sourceListId);
-    }
+  // Rerun search if it is marked as bad, and no card was found. This is to allow the card to be found in multiple lists.
+  if (!cardExists && destinationList === process.env.TRELLO_LIST_NAME_NO_GO) {
+    sourceListId = await getList(boardId, process.env.TRELLO_LIST_NAME_WIP);
+    card = await runSearch(caller, sourceListId);
+  }
 
-    // If no card was found, don't move it
-    if (!cardExists) {
-        return;
-    }
-    // Move the card to the destination list
-    console.info(`Moving Trello Card for ${caller} to ${destinationList}`);
-    await moveCard(card.id, destinationListId);
+  // If no card was found, don't move it
+  if (!cardExists) {
+    return;
+  }
+  // Move the card to the destination list
+  console.info(`Moving Trello Card for ${caller} to ${destinationList}`);
+  await moveCard(card.id, destinationListId);
 }
-events.emitter.on('trello-move-contact-card', moveContactCard);
+events.emitter.on("trello-move-contact-card", moveContactCard);
 
 module.exports = {
-    useAPI,
-    getBoard,
-    getList
+  useAPI,
+  getBoard,
+  getList,
 };

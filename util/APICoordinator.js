@@ -7,13 +7,22 @@ const events = require("./events");
  * @returns {Promise<void>}
  */
 async function contactMade(contact, originalMessage) {
-    events.emitter.emit('slackbot-send-message', contact.messageToSend(), `${contact.type} Contact`);
-    events.emitter.emit('mattermost-send-message', contact.messageToSend(), `${contact.type} Contact`);
-    events.emitter.emit('posthog-log-contact', contact, originalMessage);
-    events.emitter.emit('trello-add-contact', contact);
+  events.emitter.emit(
+    "slackbot-send-message",
+    contact.messageToSend(),
+    `${contact.type} Contact`,
+  );
+  events.emitter.emit(
+    "mattermost-send-message",
+    contact.messageToSend(),
+    `${contact.type} Contact`,
+  );
+  events.emitter.emit("posthog-log-contact", contact, originalMessage);
+  events.emitter.emit("trello-add-contact", contact);
 }
-events.emitter.on('contact-made', contactMade);
+
+events.emitter.on("contact-made", contactMade);
 
 module.exports = {
-    contactMade
+  contactMade,
 };
