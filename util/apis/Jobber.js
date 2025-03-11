@@ -135,6 +135,7 @@ async function requestAuthorization() {
         let STATE = crypto.randomBytes(16).toString('hex');
         let message = `Error from the call bot. *Super technical error code*: :robot_face::frowning::thumbsdown:\nI\'ve lost my access to Jobber and I need some help.\nI need an admin in Jobber to click on --><https://api.getjobber.com/api/oauth/authorize?client_id=${process.env.JOBBER_CLIENT_ID}&redirect_uri=${redirect_URI}&state=${STATE}|this link><-- and click \`ALLOW ACCESS\`.`;
         events.emitter.emit('slackbot-send-message', message, 'Call Bot Jobber Authorization');
+        events.emitter.emit('mattermost-send-message', message, 'Call Bot Jobber Authorization');
         console.info('Sent Jobber authorization request to Slack!');
 
         waitingForAuthorization = true;

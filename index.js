@@ -8,8 +8,16 @@ const files = [
     './util/apis/JobberWebHookHandler',
     './util/apis/SasoWebHookHandler',
     './util/apis/VerisaeIngles',
-    './util/apis/WebsiteContact'
+    './util/apis/WebsiteContact',
 ];
 for (let i = 0; i < files.length; i++) {
     let tmp = require(files[i]);
+}
+
+// Import modules
+const modules = [
+    './util/apis/Mattermost.mjs',
+];
+for (let i = 0; i < modules.length; i++) {
+    let tmp = import(modules[i]);
 }

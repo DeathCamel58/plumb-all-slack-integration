@@ -8,6 +8,7 @@ const events = require("./events");
  */
 async function contactMade(contact, originalMessage) {
     events.emitter.emit('slackbot-send-message', contact.messageToSend(), `${contact.type} Contact`);
+    events.emitter.emit('mattermost-send-message', contact.messageToSend(), `${contact.type} Contact`);
     events.emitter.emit('posthog-log-contact', contact, originalMessage);
     events.emitter.emit('trello-add-contact', contact);
 }
