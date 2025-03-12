@@ -30,12 +30,24 @@ class Contact {
       ? DataUtilities.normalizePhoneNumber(phone)
       : phone;
     /**
+     * The digits of the phone number (not standardized)
+     */
+    this.contactPhoneRaw = this.contactPhone
+      ? this.contactPhone.replace(/\D/g, "")
+      : this.contactPhone;
+    /**
      * The alternate phone of the contact
      * NOTE: This is usually the phone number they called from, rather than the phone number they left.
      */
     this.contactAlternatePhone = alternatePhone
       ? DataUtilities.normalizePhoneNumber(alternatePhone)
       : alternatePhone;
+    /**
+     * The digits of the alternate phone number (not standardized)
+     */
+    this.contactAlternatePhoneRaw = this.contactAlternatePhone
+      ? this.contactAlternatePhone.replace(/\D/g, "")
+      : this.contactAlternatePhone;
     /**
      * The email of the contact
      */
@@ -117,9 +129,11 @@ class Contact {
   }
 
   /**
-   * Generates the message to send in Slack
+   * Generates the message to send
+   * @param markdown Whether to return markdown. Defaults to false
+   * @return {string} The message to send
    */
-  messageToSend() {
+  messageToSend(markdown = false) {
     let contactInfoParts = [];
     let message = `=== New ${this.contactType} ===\n`;
 
@@ -130,12 +144,24 @@ class Contact {
       this.contactAlternatePhone !== "" &&
       this.contactAlternatePhone !== this.contactPhone
     ) {
-      contactInfoParts.push(
-        `( Left ${this.contactPhone} but called from: ${this.contactAlternatePhone} )`,
-      );
+      if (!markdown) {
+        contactInfoParts.push(
+          `( Left ${this.contactPhone} but called from: ${this.contactAlternatePhone} )`,
+        );
+      } else {
+        contactInfoParts.push(
+          `( Left [${this.contactPhone}](tel:${this.contactPhoneRaw}) but called from: [${this.contactAlternatePhone}](tel:${this.contactAlternatePhoneRaw}) )`,
+        );
+      }
     } else {
       if (this.contactPhone !== undefined && this.contactPhone !== "") {
-        contactInfoParts.push(`( ${this.contactPhone} )`);
+        if (!markdown) {
+          contactInfoParts.push(`( ${this.contactPhone} )`);
+        } else {
+          contactInfoParts.push(
+            `( [${this.contactPhone}](tel:${this.contactPhoneRaw}) )`,
+          );
+        }
       }
     }
 
@@ -173,7 +199,11 @@ class Contact {
 
     if (isAddress) {
       let fullAddressForLink = queryString.escape(this.contactAddress);
-      message += `Address: <https://www.google.com/maps/search/?api=1&query=${fullAddressForLink}|${this.contactAddress}>\n`;
+      if (!markdown) {
+        message += `Address: <https://www.google.com/maps/search/?api=1&query=${fullAddressForLink}|${this.contactAddress}>\n`;
+      } else {
+        message += `Address: [${this.contactAddress}](https://www.google.com/maps/search/?api=1&query=${fullAddressForLink})\n`;
+      }
     } else {
       message += `Address: Didn't leave one\n`;
     }

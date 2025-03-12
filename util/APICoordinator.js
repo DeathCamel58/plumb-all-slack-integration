@@ -14,7 +14,7 @@ async function contactMade(contact, originalMessage) {
   );
   events.emitter.emit(
     "mattermost-send-message",
-    contact.messageToSend(),
+    contact.messageToSend(true),
     `${contact.type} Contact`,
   );
   events.emitter.emit("posthog-log-contact", contact, originalMessage);

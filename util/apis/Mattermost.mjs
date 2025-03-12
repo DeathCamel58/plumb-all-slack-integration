@@ -86,11 +86,9 @@ async function sendMessage(
       );
     }
 
-    const mattermostFormatted = message.replace(/<(\S+)\|(.*)>/g, "[$2]($1)");
-
     await client.createPost({
       channel_id: channelId,
-      message: mattermostFormatted,
+      message: message,
     });
 
     console.info("    Sent Message to Mattermost!");
