@@ -1,12 +1,7 @@
 import mattermost from "@mattermost/client";
 import Jobber from "./Jobber.js";
-import { interleave } from "../DataUtilities.js";
 import events from "../events.js";
-
-// module.exports = {
-//     verifyWebhook,
-//     event
-// };
+import fetch from 'node-fetch';
 
 const client = new mattermost.Client4();
 
@@ -257,3 +252,56 @@ wsClient.addMessageListener((msg) => {
     findMessageReference(msg).then((output) => console.log("message unfurled"));
   }
 });
+
+
+async function openJobsMessage(req) {
+  console.log("User requests the get open jobs message!");
+
+  // Get the open jobs by user
+  let openJobs = await Jobber.findOpenJobBlame();
+
+  // Now that we have the dict of open jobs by user, build the message someone can copy and paste in Slack
+  let message = "";
+  for (const key in openJobs) {
+    let userSearch = await client.searchUsers(key, {});
+
+    let currentUserMessage = "Do these jobs need to be open @";
+
+    if (userSearch.length > 0) {
+      currentUserMessage += `${userSearch[0].username}? `;
+    } else {
+      currentUserMessage += `${key}? `;
+    }
+
+    for (const job in openJobs[key]) {
+      currentUserMessage += `J#${job} `;
+    }
+
+    currentUserMessage += "\n";
+
+    message += currentUserMessage;
+  }
+
+  try {
+    const data = {
+      response_type: 'in_channel',
+      text: message
+    };
+    const options = {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    };
+    let response = await fetch(req.query.response_url, options)
+
+    if (response.status === 200) {
+      console.log("Open Jobs Message Sent!")
+    }
+  } catch (e) {
+    console.error(`Fetch: Failure in sending openJobsMessage`);
+    console.error(e);
+  }
+}
+events.emitter.on("mattermost-open-jobs", openJobsMessage);
