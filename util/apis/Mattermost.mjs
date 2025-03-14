@@ -33,6 +33,10 @@ wsClient.addCloseListener((event) => {
   console.log(`WebSocket disconnected. Event:\n${JSON.stringify(event)}`);
 });
 
+wsClient.addMissedMessageListener(() => {
+  console.log("Registering missed message listener to work around https://github.com/mattermost/mattermost/issues/30388")
+})
+
 // Handle websocket errors and attempt to reconnect
 
 function wsConnect() {
@@ -42,12 +46,6 @@ function wsConnect() {
 // wsClient.addCloseListener()
 wsClient.addErrorListener((error) => {
   console.error("WebSocket encountered an error:", error);
-  console.log("Attempting to reconnect...");
-
-  setTimeout(() => {
-    console.log("Reconnecting WebSocket...");
-    wsConnect();
-  }, 5000);
 });
 
 // Connect via the websocket client
