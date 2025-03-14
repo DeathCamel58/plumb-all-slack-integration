@@ -34,7 +34,7 @@ wsClient.addCloseListener((event) => {
 });
 
 wsClient.addMissedMessageListener(() => {
-  console.log("Registering missed message listener to work around https://github.com/mattermost/mattermost/issues/30388")
+  console.log("Using missed message listener to work around https://github.com/mattermost/mattermost/issues/30388")
 })
 
 // Handle websocket errors and attempt to reconnect
