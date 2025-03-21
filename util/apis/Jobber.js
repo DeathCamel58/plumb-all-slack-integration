@@ -5,6 +5,7 @@ const fetch = require("node-fetch");
 const crypto = require("crypto");
 const fs = require("fs");
 const events = require("../events");
+const Sentry = require("@sentry/node");
 
 const JOBBER_BASE_URL = "https://api.getjobber.com/api/graphql";
 let JOBBER_ACCESS_TOKEN;
@@ -30,6 +31,7 @@ function saveNewToken(refresh_token) {
     process.env.ENV_LOCATION || "/root/plumb-all-slack-integration/.env";
   fs.readFile(file, "utf8", function (err, data) {
     if (err) {
+      Sentry.captureException(err);
       return console.error(err);
     }
 
@@ -124,6 +126,7 @@ async function setAuthorization(code) {
       }
     } catch (e) {
       console.error(`Fetch: Failure in setAuthorization`);
+      Sentry.captureException(e);
       console.error(e);
     }
   }
@@ -213,6 +216,7 @@ async function getRefreshToken() {
       }
     } catch (e) {
       console.error(`Fetch: Failure in getRefreshToken`);
+      Sentry.captureException(e);
       console.error(e);
     }
   }
@@ -259,6 +263,7 @@ async function refreshAccessToken() {
       }
     } catch (e) {
       console.error(`Fetch: Failure in refreshAccessToken`);
+      Sentry.captureException(e);
       console.error(e);
     }
   }
@@ -307,6 +312,7 @@ async function makeRequest(query) {
       }
     } catch (e) {
       console.error(`Fetch: Failure in makeRequest`);
+      Sentry.captureException(e);
       console.error(e);
     }
   }

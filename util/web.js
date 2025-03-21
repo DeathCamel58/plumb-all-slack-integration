@@ -10,6 +10,7 @@ const bodyParser = require("body-parser");
 const events = require("./events");
 let Jobber = require("./apis/Jobber");
 let Slack = require("./apis/SlackBot");
+const Sentry = require("@sentry/node");
 
 // The app object
 const app = express();
@@ -214,9 +215,9 @@ app.post("/google-ads/form", (req, res) => {
 
     events.emitter.emit("google-ads-form", req);
   } else {
-    console.error(
-      `Webhook for Google Ads didn't have correct key.\n\tReceived: "${data["google_key"]}"\n\tExpected: "${process.env.GOOGLE_ADS_KEY}"`,
-    );
+    const message = `Google Ads Webhook: Incorrect Key. ${data["google_key"]} Expected: "${process.env.GOOGLE_ADS_KEY}`;
+    console.error(message);
+    Sentry.captureException(message);
     res.sendStatus(401);
   }
 });
@@ -234,9 +235,10 @@ app.post("/cloudflare/contactForm", (req, res) => {
 
     events.emitter.emit("cloudflare-contact-form", req);
   } else {
-    console.error(
-      `Webhook for CloudFlare Workers didn't have correct key.\n\tReceived: "${data["cloudflare_key"]}"\n\tExpected: "${process.env.CLOUDFLARE_CONTACT_FORM_KEY}"`,
-    );
+    const message = `Cloudflare Workers Webhook: Incorrect Key. ${data["cloudflare_key"]} Expected: "${process.env.CLOUDFLARE_CONTACT_FORM_KEY}`;
+    console.error(message);
+    Sentry.captureException(message);
+    console.error(message);
     res.sendStatus(401);
   }
 });
@@ -264,9 +266,9 @@ app.post("/verisae/ingles", (req, res) => {
 
     events.emitter.emit("verisae-ingles", data);
   } else {
-    console.error(
-      `Webhook for Verisae (Ingles) didn't come from our organization.\n\tEmail from: "${data.payload.sender}"`,
-    );
+    const message = `Verisae Webhook: Email not from us. From ${data.payload.sender}`;
+    console.error(message);
+    Sentry.captureException(message);
     res.sendStatus(401);
   }
 });

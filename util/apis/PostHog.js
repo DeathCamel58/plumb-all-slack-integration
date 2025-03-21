@@ -7,6 +7,7 @@ const GoogleMaps = require("./GoogleMaps");
 const events = require("../events");
 
 const fetch = require("node-fetch");
+const Sentry = require("@sentry/node");
 
 /**
  * Sends a raw request to PostHog's API
@@ -45,6 +46,7 @@ async function useAPI(url, httpMethod, data) {
     }
   } catch (e) {
     console.error(`Fetch: Failure in PostHog.useAPI`);
+    Sentry.captureException(e);
     console.error(e);
   }
 }
@@ -62,12 +64,18 @@ async function individualSearch(searchQuery, parameter) {
   let url = `https://app.posthog.com/api/projects/${process.env.POSTHOG_PROJECT_ID}/persons/?${parameter ? parameter : "properties"}=${query}`;
   let response = [];
   try {
-    response = await fetch(url, {
-      method: "get",
-      headers: { Authorization: `Bearer ${process.env.POSTHOG_API_TOKEN}` },
-    }).catch((e) => console.error(`Error when making PostHog API call ${e}`));
+    try {
+      response = await fetch(url, {
+        method: "get",
+        headers: { Authorization: `Bearer ${process.env.POSTHOG_API_TOKEN}` },
+      });
+    } catch (e) {
+      console.error(`Error when making PostHog API call ${e}`);
+      Sentry.captureException(e);
+    }
   } catch (e) {
     console.error(`Failed to run a PostHog API search.`);
+    Sentry.captureException(e);
     console.error(e);
   }
 
@@ -80,12 +88,14 @@ async function individualSearch(searchQuery, parameter) {
       );
   } catch (e) {
     console.error(`Fetch: Failure in individualSearch`);
+    Sentry.captureException(e);
     console.error(e);
   }
   try {
     data = JSON.parse(data);
   } catch (e) {
     console.error(`Failed to parse the JSON data with\n${e}`);
+    Sentry.captureException(e);
   }
 
   return data;
@@ -112,6 +122,7 @@ async function searchByKey(key, value) {
         type: "person",
       },
     ];
+    // TODO: Add sentry here
     let results = await individualSearch(query, null).catch((e) =>
       console.error(e),
     );

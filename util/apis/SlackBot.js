@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const Jobber = require("./Jobber");
 const { interleave } = require("../DataUtilities");
 const events = require("../events");
+const Sentry = require("@sentry/node");
 
 module.exports = {
   verifyWebhook,
@@ -50,6 +51,7 @@ async function sendMessage(
 
     console.info("    Sent Message to Slack!");
   } catch (error) {
+    Sentry.captureException(error);
     console.error(error);
   }
 }
@@ -77,6 +79,7 @@ async function sendReplyRawMessageBlocks(event, rawMessage, blocks) {
 
     console.info("Linked references in Slack message!");
   } catch (error) {
+    Sentry.captureException(error);
     console.error(error);
   }
 }
@@ -105,6 +108,7 @@ async function fetchMessage(id, ts) {
     // Return the message
     return result.messages[0];
   } catch (error) {
+    Sentry.captureException(error);
     console.error(error);
   }
 }

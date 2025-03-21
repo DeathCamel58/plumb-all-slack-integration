@@ -2,6 +2,7 @@ require("dotenv").config({
   path: process.env.ENV_LOCATION || "/root/plumb-all-slack-integration/.env",
 });
 const { Client } = require("@googlemaps/google-maps-services-js");
+const Sentry = require("@sentry/node");
 
 const client = new Client();
 
@@ -26,6 +27,7 @@ async function searchPlace(address) {
     return place.data.results;
   } catch (e) {
     console.error(`Fetch: Failure in searchPlace`);
+    Sentry.captureException(e);
     console.error(e);
   }
 

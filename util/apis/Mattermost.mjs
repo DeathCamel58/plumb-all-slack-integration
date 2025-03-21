@@ -2,6 +2,7 @@ import mattermost from "@mattermost/client";
 import Jobber from "./Jobber.js";
 import events from "../events.js";
 import fetch from 'node-fetch';
+import * as Sentry from "@sentry/node";
 
 const client = new mattermost.Client4();
 
@@ -41,6 +42,7 @@ function wsConnect() {
 // wsClient.addCloseListener()
 wsClient.addErrorListener((error) => {
   console.error("WebSocket encountered an error:", error);
+  Sentry.captureException(error);
 });
 
 // Connect via the websocket client

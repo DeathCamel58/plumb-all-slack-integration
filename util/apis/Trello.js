@@ -3,6 +3,7 @@ require("dotenv").config({
 });
 const fetch = require("node-fetch");
 const events = require("../events");
+const Sentry = require("@sentry/node");
 
 const trelloHost = "https://api.trello.com";
 
@@ -35,14 +36,15 @@ async function useAPI(url, httpMethod, data) {
       // HTTP Bad Request
       case 400:
       default:
-        console.error(
-          `Received status ${response.status} from Trello. Body follows.`,
-        );
+        const message = `Received status ${response.status} from Trello. Body follows.`;
+        Sentry.captureMessage(message);
+        console.error(message);
         let text = await response.text();
         console.error(text);
     }
   } catch (e) {
     console.error(`Fetch: Failure in Trello:useAPI`);
+    Sentry.captureException(e);
     console.error(e);
   }
 }

@@ -1,4 +1,5 @@
 require("./util/apis/instrument");
+const Sentry = require("@sentry/node");
 
 // Require files to allow them to register events
 const files = [
@@ -12,11 +13,21 @@ const files = [
   "./util/apis/WebsiteContact",
 ];
 for (let i = 0; i < files.length; i++) {
-  let tmp = require(files[i]);
+  try {
+    let tmp = require(files[i]);
+  } catch (e) {
+    console.error("Failure importing file: " + e);
+    Sentry.captureException(e);
+  }
 }
 
 // Import modules
 const modules = ["./util/apis/Mattermost.mjs"];
 for (let i = 0; i < modules.length; i++) {
-  let tmp = import(modules[i]);
+  try {
+    let tmp = import(modules[i]);
+  } catch (e) {
+    console.error("Failure importing module: " + e);
+    Sentry.captureException(e);
+  }
 }
