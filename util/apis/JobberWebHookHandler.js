@@ -64,7 +64,7 @@ events.emitter.on("jobber-INVOICE_CREATE", invoiceHandle);
 async function clientHandle(req) {
   let body = req.body;
 
-  // Verify authenticity of webhook, then process
+  // Verify the authenticity of webhook, then process
   if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
     // Get client data
     let client = await Jobber.getClientData(
