@@ -16,6 +16,7 @@
     "@googlemaps/google-maps-services-js": "^3.4.0",
     "@mattermost/client": "^10.6.0-0",
     "@mattermost/types": "^10.5.0",
+    "@sentry/node": "^9.8.0",
     "@slack/bolt": "^3.12.2",
     "body-parser": "^1.20.3",
     "dotenv": "^16.4.7",

@@ -1,7 +1,8 @@
-require("./util/web");
+require("./util/apis/instrument");
 
 // Require files to allow them to register events
 const files = [
+  "./util/web",
   "./util/apis/CloudFlareWorkers",
   "./util/apis/FleetSharp",
   "./util/apis/GoogleAds",
