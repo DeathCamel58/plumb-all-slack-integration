@@ -1,3 +1,6 @@
+require("dotenv").config({
+  path: process.env.ENV_LOCATION || "/root/plumb-all-slack-integration/.env",
+});
 const events = require("../events");
 
 /**
@@ -57,13 +60,13 @@ async function AlertHandle(req) {
       "slackbot-send-message",
       message,
       "FleetSharp Alert",
-      "general",
+      process.env.SLACK_CHANNEL_GENERAL,
     );
     events.emitter.emit(
       "mattermost-send-message",
       message,
       "FleetSharp Alert",
-      "general",
+      process.env.MATTERMOST_CHANNEL_GENERAL,
     );
   }
 }
