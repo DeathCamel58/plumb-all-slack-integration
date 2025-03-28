@@ -35,8 +35,10 @@ async function LeadFormHandle(rawData) {
     location = undefined;
   }
 
+  const email = userData["EMAIL"] ? userData["EMAIL"] : undefined;
+
   // Format the name properly
-  let name = userData["FULL_NAME"] ? userData["FULL_NAME"] : "";
+  const name = userData["FULL_NAME"] ? userData["FULL_NAME"] : "";
 
   // Create a contact object
   let contact = new Contact(
@@ -44,7 +46,7 @@ async function LeadFormHandle(rawData) {
     name,
     userData["PHONE_NUMBER"],
     undefined,
-    undefined,
+    email,
     location,
     userData["can_you_describe_your_plumbing_issue?"],
     "Google Ads Lead Form",
