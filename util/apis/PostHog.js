@@ -95,6 +95,7 @@ async function individualSearch(searchQuery, parameter) {
     data = JSON.parse(data);
   } catch (e) {
     console.error(`Failed to parse the JSON data with\n${e}`);
+    console.error(`JSON data was:\n${data}`);
     Sentry.captureException(e);
   }
 
