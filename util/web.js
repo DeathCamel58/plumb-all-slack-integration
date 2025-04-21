@@ -274,6 +274,26 @@ app.post("/verisae/ingles", (req, res) => {
 });
 
 /**
+ * 86 Repairs Notification
+ */
+app.post("/86repairs/call", (req, res) => {
+  req.body = JSON.parse(req.body);
+  let data = req.body;
+
+  if (data.payload.sender.includes("plumb-all.com")) {
+    console.info("Webhook: 86 Repairs email received.");
+    res.sendStatus(200);
+
+    events.emitter.emit("86repairs-call", data);
+  } else {
+    const message = `Webhook: 86 Repairs email not from us. From ${data.payload.sender}`;
+    console.error(message);
+    Sentry.captureException(message);
+    res.sendStatus(401);
+  }
+});
+
+/**
  * Website form Notification
  */
 app.post("/website/contactForm", (req, res) => {

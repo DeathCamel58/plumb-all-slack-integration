@@ -11,6 +11,7 @@ const files = [
   "./util/apis/SasoWebHookHandler",
   "./util/apis/VerisaeIngles",
   "./util/apis/WebsiteContact",
+  "./util/apis/86Repairs",
 ];
 for (let i = 0; i < files.length; i++) {
   try {
