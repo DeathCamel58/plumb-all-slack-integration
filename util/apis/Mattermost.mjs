@@ -198,8 +198,8 @@ async function findMessageReference(event) {
         let dateTime = new Date(needToUnfurl.jobs[i].createdAt);
         data.push({
           dateTime: `${dateTime.toLocaleDateString()} ${dateTime.toLocaleTimeString()}`,
-          total: needToUnfurl.jobs[i].amounts.total,
-          totalToPrint: needToUnfurl.jobs[i].amounts.total.toLocaleString(
+          total: needToUnfurl.jobs[i].total,
+          totalToPrint: needToUnfurl.jobs[i].total.toLocaleString(
             "en-US",
             { style: "currency", currency: "USD" },
           ),

@@ -375,7 +375,7 @@ query InvoiceQuery {
 async function getInvoiceSearchData(filterValue) {
   let query = `
 query InvoiceQuery {
-  invoices (searchTerm: "${filterValue}", first: 1) {
+  invoices (searchTerm: "${filterValue}", first: 1, sort: {key: INVOICE_NUMBER, direction: ASCENDING}) {
     nodes {
       id
       invoiceNumber
@@ -456,7 +456,7 @@ query QuoteQuery {
 async function getQuoteSearchData(filterType, filterValue) {
   let query = `
 query QuoteQuery {
-  quotes (filter: {${filterType}: {eq: ${filterValue}}}, first: 1) {
+  quotes (filter: {${filterType}: {eq: ${filterValue}}}, first: 1, sort: {key: QUOTE_NUMBER, direction: ASCENDING}) {
     nodes {
       id
     }
@@ -512,7 +512,7 @@ query JobQuery {
 async function getJobSearchData(filterValue) {
   let query = `
 query JobQuery {
-  jobs (searchTerm: "${filterValue}", first: 1) {
+  jobs (searchTerm: "${filterValue}", first: 1, sort: {key: JOB_NUMBER, direction: ASCENDING}) {
     nodes {
       id
       jobNumber
