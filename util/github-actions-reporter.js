@@ -19,7 +19,9 @@ class GithubActionsReporter {
           const captureGroup = message.match(/:([0-9]+):([0-9]+)/);
 
           if (!captureGroup) {
-            console.log("Unable to extract line number from call stack");
+            console.log(
+              "Github Actions Reporter: Unable to extract line number from call stack",
+            );
             return;
           }
 

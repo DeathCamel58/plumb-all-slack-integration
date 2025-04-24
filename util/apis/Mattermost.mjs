@@ -22,15 +22,15 @@ const wsClient = new mattermost.WebSocketClient();
 
 // Log connection state changes
 wsClient.addFirstConnectListener(() => {
-  console.log("WebSocket connected successfully");
+  console.log("Mattermost: WebSocket connected successfully");
 });
 
 wsClient.addCloseListener((event) => {
-  console.log(`WebSocket disconnected. Event:\n${JSON.stringify(event)}`);
+  console.log(`Mattermost: WebSocket disconnected. Event:\n${JSON.stringify(event)}`);
 });
 
 wsClient.addMissedMessageListener(() => {
-  console.log("Using missed message listener to work around https://github.com/mattermost/mattermost/issues/30388")
+  console.log("Mattermost: Using missed message listener to work around https://github.com/mattermost/mattermost/issues/30388")
 })
 
 // Handle websocket errors and attempt to reconnect
@@ -41,7 +41,7 @@ function wsConnect() {
 
 // wsClient.addCloseListener()
 wsClient.addErrorListener((error) => {
-  console.error("WebSocket encountered an error:", error);
+  console.error("Mattermost: WebSocket encountered an error:", error);
   Sentry.captureException(error);
 });
 
@@ -77,7 +77,7 @@ async function sendMessage(
     }
     if (!channelId) {
       console.error(
-        `Couldn't determine channel ID for ${channelName}. Found channels are:\n${JSON.stringify(channels)}`,
+        `Mattermost: Couldn't determine channel ID for ${channelName}. Found channels are:\n${JSON.stringify(channels)}`,
       );
     }
 
@@ -86,7 +86,7 @@ async function sendMessage(
       message: message,
     });
 
-    console.info("    Sent Message to Mattermost!");
+    console.info("Mattermost: Sent Message to Mattermost!");
   } catch (error) {
     console.error(error);
   }
@@ -102,7 +102,7 @@ async function sendReplyRawMessageBlocks(event, markdown) {
       root_id: originalPostData.id,
     });
 
-    console.info("Linked references in Mattermost message!");
+    console.info("Mattermost: Linked references in Mattermost message!");
   } catch (error) {
     console.error(error);
   }
@@ -125,7 +125,7 @@ async function findMessageReference(event) {
   const parsed = JSON.parse(event.data.post);
 
   // Don't find references in our own message
-  if (parsed.message.startsWith("Found these Jobber items referenced:")) {
+  if (parsed.message.startsWith("Mattermost: Found these Jobber items referenced:")) {
     return;
   }
 
@@ -160,7 +160,7 @@ async function findMessageReference(event) {
           break;
         default:
           console.warn(
-            `Didn't push unfurl reference into array. String didn't start with [QqJjIi]: ${tmp[i]}`,
+            `Mattermost: Didn't push unfurl reference into array. String didn't start with [QqJjIi]: ${tmp[i]}`,
           );
           break;
       }
@@ -228,7 +228,7 @@ async function findMessageReference(event) {
 
     if (data.length > 0) {
       // The message to send in Mattermost
-      let message = "Found these Jobber items referenced:";
+      let message = "Mattermost: Found these Jobber items referenced:";
 
       for (const item of data) {
         message += `\n\n---\n[**${item.typeNumber}**](${item.link})\n- Client: ${item.name}\n- Total: \`${item.total}\`\n- Date: ${item.dateTime}`;
@@ -236,9 +236,9 @@ async function findMessageReference(event) {
 
       await sendReplyRawMessageBlocks(event, message);
 
-      console.info(`Found references to Jobber item in Mattermost. Linked.`);
+      console.info(`Mattermost: Found references to Jobber item. Linked.`);
     } else {
-      console.info(`No references in Mattermost message. Not linked.`);
+      console.info(`Mattermost: No references in message. Not linked.`);
     }
   }
 }
@@ -246,18 +246,18 @@ async function findMessageReference(event) {
 wsClient.addMessageListener((msg) => {
   if (process.env.DEBUG === "TRUE") {
     console.log(
-      `Message received from WebSocket: ${msg.event}\n${JSON.stringify(msg.data)}`,
+      `Mattermost: Message received from WebSocket: ${msg.event}\n${JSON.stringify(msg.data)}`,
     );
   }
   if (msg.event === "posted") {
-    console.log("New post received", JSON.parse(msg.data.post));
-    findMessageReference(msg).then((output) => console.log("message unfurled"));
+    console.log("Mattermost: New post received", JSON.parse(msg.data.post));
+    findMessageReference(msg).then((output) => console.log("Mattermost: message unfurled"));
   }
 });
 
 
 async function openJobsMessage(req) {
-  console.log("User requests the get open jobs message!");
+  console.log("Mattermost: User requests the get open jobs message!");
 
   // Get the open jobs by user
   let openJobs = await Jobber.findOpenJobBlame();
@@ -299,10 +299,10 @@ async function openJobsMessage(req) {
     let response = await fetch(req.query.response_url, options)
 
     if (response.status === 200) {
-      console.log("Open Jobs Message Sent!")
+      console.log("Mattermost: Open Jobs Message Sent!")
     }
   } catch (e) {
-    console.error(`Fetch: Failure in sending openJobsMessage`);
+    console.error(`Mattermost: Fetch: Failure in sending openJobsMessage`);
     console.error(e);
   }
 }

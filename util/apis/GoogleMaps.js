@@ -26,7 +26,7 @@ async function searchPlace(address) {
 
     return place.data.results;
   } catch (e) {
-    console.error(`Fetch: Failure in searchPlace`);
+    console.error(`GoogleMaps: Failure in searchPlace`);
     Sentry.captureException(e);
     console.error(e);
   }

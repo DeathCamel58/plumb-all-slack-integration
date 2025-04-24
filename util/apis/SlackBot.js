@@ -22,7 +22,7 @@ const app = new App({
   // Start your app
   await app.start(3000);
 
-  console.info("Logged into Slack!");
+  console.info("Slack: Logged into Slack!");
 })();
 
 /**
@@ -49,7 +49,7 @@ async function sendMessage(
         "https://plumb-all.com/wp-content/uploads/2018/08/cropped-icon.png",
     });
 
-    console.info("    Sent Message to Slack!");
+    console.info("Slack: Sent Message to Slack!");
   } catch (error) {
     Sentry.captureException(error);
     console.error(error);
@@ -77,7 +77,7 @@ async function sendReplyRawMessageBlocks(event, rawMessage, blocks) {
         "https://plumb-all.com/wp-content/uploads/2018/08/cropped-icon.png",
     });
 
-    console.info("Linked references in Slack message!");
+    console.info("Slack: Linked references in message!");
   } catch (error) {
     Sentry.captureException(error);
     console.error(error);
@@ -119,7 +119,7 @@ async function fetchMessage(id, ts) {
  * @returns {Promise<void>}
  */
 async function unfurlMessage(event) {
-  console.info(`Message created!\n\t${event.user}\n\t${event.text}`);
+  console.info(`Slack: Message created!\n\t${event.user}\n\t${event.text}`);
 
   // The found Quotes, Jobs, and Invoices get stored here
   let needToUnfurl = {
@@ -170,7 +170,7 @@ async function unfurlMessage(event) {
           break;
         default:
           console.warn(
-            `Didn't push unfurl reference into array. String didn't start with [QqJjIi]: ${tmp[i]}`,
+            `Slack: Didn't push unfurl reference into array. String didn't start with [QqJjIi]: ${tmp[i]}`,
           );
           break;
       }
@@ -279,9 +279,9 @@ async function unfurlMessage(event) {
         blocks,
       );
 
-      console.info(`Found references to Jobber item in Slack. Linked.`);
+      console.info(`Slack: Found references to Jobber item. Linked.`);
     } else {
-      console.info(`No references in Slack message. Not linked.`);
+      console.info(`Slack: No references in message. Not linked.`);
     }
   }
 }
@@ -384,7 +384,7 @@ async function event(req) {
       switch (event.subtype) {
         // If this was a message deletion
         case "message_deleted":
-          console.info(`Message deleted!`);
+          console.info(`Slack: Message deleted!`);
           break;
         // If this was a message created
         case "bot_message":
@@ -398,7 +398,7 @@ async function event(req) {
       // doesn't support searching for items via the URI of the item. This will (hopefully) be added by Jobber.
       // Ref: https://github.com/DeathCamel58/plumb-all-slack-integration/issues/3#issuecomment-1433056300
       console.warn(
-        `Link was shared in message. Can't unfurl due to Jobber API lacking search functionality.`,
+        `Slack: Link was shared in message. Can't unfurl due to Jobber API lacking search functionality.`,
       );
       break;
     case "app_home_opened":
@@ -441,7 +441,7 @@ async function event(req) {
 
       break;
     default:
-      console.info(`Slack sent an unhandled event type: ${event.type}`);
+      console.info(`Slack: Slack sent an unhandled event type: ${event.type}`);
       break;
   }
 }
@@ -462,7 +462,7 @@ async function interactivity(req) {
       for (let action of event.actions) {
         switch (action.action_id) {
           case "get-open-jobs-0":
-            console.log("User requests the get open jobs message!");
+            console.log("Slack: User requests the get open jobs message!");
 
             // Get the open jobs by user
             let openJobs = await Jobber.findOpenJobBlame();
@@ -505,14 +505,16 @@ async function interactivity(req) {
             break;
           default:
             console.warn(
-              `Slack INTERACTIVITY had unhandled action ID ${action.action_id}`,
+              `Slack: Slack INTERACTIVITY had unhandled action ID ${action.action_id}`,
             );
             break;
         }
       }
       break;
     default:
-      console.info(`Slack sent an unhandled INTERACTIVITY type: ${event.type}`);
+      console.info(
+        `Slack: Slack sent an unhandled INTERACTIVITY type: ${event.type}`,
+      );
       break;
   }
 }

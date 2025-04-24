@@ -108,7 +108,7 @@ async function handleMessage(data, type) {
  */
 async function AlertHandle(data) {
   if (process.env.DEBUG === "TRUE") {
-    console.log("Data was");
+    console.log("86 Repairs: Data was");
     console.log(data);
   }
 

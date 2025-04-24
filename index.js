@@ -17,7 +17,7 @@ for (let i = 0; i < files.length; i++) {
   try {
     let tmp = require(files[i]);
   } catch (e) {
-    console.error("Failure importing file: " + e);
+    console.error("Application Index: Failure importing file: " + e);
     Sentry.captureException(e);
   }
 }
@@ -28,7 +28,7 @@ for (let i = 0; i < modules.length; i++) {
   try {
     let tmp = import(modules[i]);
   } catch (e) {
-    console.error("Failure importing module: " + e);
+    console.error("Application Index: Failure importing module: " + e);
     Sentry.captureException(e);
   }
 }

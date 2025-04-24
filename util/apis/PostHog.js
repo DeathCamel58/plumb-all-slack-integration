@@ -39,13 +39,13 @@ async function useAPI(url, httpMethod, data) {
       case 400:
       default:
         console.error(
-          `Received status ${response.status} from PostHog. Body follows.`,
+          `PostHog: Received status ${response.status} from PostHog. Body follows.`,
         );
         let text = await response.text();
         console.error(text);
     }
   } catch (e) {
-    console.error(`Fetch: Failure in PostHog.useAPI`);
+    console.error(`PostHog: Failure in useAPI`);
     Sentry.captureException(e);
     console.error(e);
   }
@@ -70,11 +70,11 @@ async function individualSearch(searchQuery, parameter) {
         headers: { Authorization: `Bearer ${process.env.POSTHOG_API_TOKEN}` },
       });
     } catch (e) {
-      console.error(`Error when making PostHog API call ${e}`);
+      console.error(`PostHog: Error when making API call ${e}`);
       Sentry.captureException(e);
     }
   } catch (e) {
-    console.error(`Failed to run a PostHog API search.`);
+    console.error(`PostHog: Failed to run an API search.`);
     Sentry.captureException(e);
     console.error(e);
   }
@@ -84,18 +84,18 @@ async function individualSearch(searchQuery, parameter) {
     data = await response
       .text()
       .catch((e) =>
-        console.error(`Error when getting text from PostHog API call ${e}`),
+        console.error(`PostHog: Error when getting text from API call ${e}`),
       );
   } catch (e) {
-    console.error(`Fetch: Failure in individualSearch`);
+    console.error(`PostHog: Failure in individualSearch`);
     Sentry.captureException(e);
     console.error(e);
   }
   try {
     data = JSON.parse(data);
   } catch (e) {
-    console.error(`Failed to parse the JSON data with\n${e}`);
-    console.error(`JSON data was:\n${data}`);
+    console.error(`PostHog: Failed to parse the JSON data with\n${e}`);
+    console.error(`PostHog: JSON data was:\n${data}`);
     Sentry.captureException(e);
   }
 
@@ -245,7 +245,9 @@ async function sendClientToPostHog(contact) {
     place = await GoogleMaps.searchPlace(contact.address);
 
     if (place === null) {
-      console.error(`No place found for ${contact.address} on Google Maps.`);
+      console.error(
+        `PostHog: No place found for ${contact.address} on Google Maps.`,
+      );
     }
   }
 
@@ -290,10 +292,10 @@ async function sendClientToPostHog(contact) {
 
   // If this is a new person, add them to PostHog
   if (posthogPerson === undefined) {
-    console.info(`Adding ${contact.name} to PostHog`);
+    console.info(`PostHog: Adding ${contact.name} to PostHog`);
   } else {
     id = posthogPerson;
-    console.info(`Matched ${contact.name} to PostHog ID ${id}`);
+    console.info(`PostHog: Matched ${contact.name} to PostHog ID ${id}`);
 
     // Get the matched person in PostHog
     let fullPostHogPerson = await individualSearch(`${id}`, "distinct_id");
@@ -320,7 +322,9 @@ async function sendClientToPostHog(contact) {
         return id;
       }
     } else {
-      console.error("ERROR: Issue parsing the posthog person. Details follow.");
+      console.error(
+        "PostHog: ERROR: Issue parsing the person. Details follow.",
+      );
       console.info(`\tfullPostHogPerson:\t${fullPostHogPerson}`);
     }
   }

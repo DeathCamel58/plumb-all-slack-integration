@@ -13,7 +13,7 @@ async function AlertHandle(req) {
   let body = JSON.parse(req.body);
 
   if (process.env.DEBUG === "TRUE") {
-    console.log("Data was");
+    console.log("FleetSharp: Data was");
     console.log(body);
   }
 

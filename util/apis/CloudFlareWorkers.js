@@ -12,7 +12,7 @@ async function ContactFormHandle(req) {
   let body = req.body;
 
   if (process.env.DEBUG === "TRUE") {
-    console.log("Data was");
+    console.log("Cloudflare Workers: Data was");
     console.log(body);
   }
 

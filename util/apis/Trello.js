@@ -36,14 +36,14 @@ async function useAPI(url, httpMethod, data) {
       // HTTP Bad Request
       case 400:
       default:
-        const message = `Received status ${response.status} from Trello. Body follows.`;
+        const message = `Trello: Received status ${response.status} from Trello. Body follows.`;
         Sentry.captureMessage(message);
         console.error(message);
         let text = await response.text();
         console.error(text);
     }
   } catch (e) {
-    console.error(`Fetch: Failure in Trello:useAPI`);
+    console.error(`Trello: Failure in useAPI`);
     Sentry.captureException(e);
     console.error(e);
   }
@@ -225,7 +225,7 @@ async function moveContactCard(message, destinationList) {
   }
 
   if (!message.includes("Caller: ") && !message.includes("\nAddress: ")) {
-    console.error("Can't parse the message.");
+    console.error("Trello: Can't parse the message.");
     return;
   }
   let caller = message.split("Caller: ")[1].split("\nAddress: ")[0];
@@ -253,7 +253,7 @@ async function moveContactCard(message, destinationList) {
     return;
   }
   // Move the card to the destination list
-  console.info(`Moving Trello Card for ${caller} to ${destinationList}`);
+  console.info(`Trello: Moving Card for ${caller} to ${destinationList}`);
   await moveCard(card.id, destinationListId);
 }
 events.emitter.on("trello-move-contact-card", moveContactCard);

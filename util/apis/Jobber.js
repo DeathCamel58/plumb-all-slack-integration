@@ -47,7 +47,7 @@ function saveNewToken(refresh_token) {
       fs.renameSync(`${file}2`, file);
     } else {
       console.error(
-        "ERROR: New file is empty. Dumping variables and arguments to assist with debugging.",
+        "Jobber: ERROR: New file is empty. Dumping variables and arguments to assist with debugging.",
       );
       console.info(`\trefresh_token:\t${refresh_token}`);
       console.info(`\tdata:\t${data}`);
@@ -85,7 +85,7 @@ function verifyWebhook(req) {
       return true;
     } else {
       console.warn(
-        `Jobber webhook signature invalid.\n\tExpecting: ${mySignature}\n\tReceived: ${jobberSignature}`,
+        `Jobber: Webhook signature invalid.\n\tExpecting: ${mySignature}\n\tReceived: ${jobberSignature}`,
       );
     }
   }
@@ -120,12 +120,12 @@ async function setAuthorization(code) {
       }
       if (response.status === 401) {
         console.error(
-          `Got ${response.status} while refreshing access token. Requesting authorization!`,
+          `Jobber: Got ${response.status} while refreshing access token. Requesting authorization!`,
         );
         await requestAuthorization();
       }
     } catch (e) {
-      console.error(`Fetch: Failure in setAuthorization`);
+      console.error(`Jobber: Failure in setAuthorization`);
       Sentry.captureException(e);
       console.error(e);
     }
@@ -163,7 +163,7 @@ async function requestAuthorization() {
       message,
       "Call Bot Jobber Authorization",
     );
-    console.info("Sent Jobber authorization request to Slack!");
+    console.info("Jobber: Sent Jobber authorization request to Slack!");
 
     waitingForAuthorization = true;
   }
@@ -171,7 +171,7 @@ async function requestAuthorization() {
   // Wait for the event that's fired when the authorization is updated
   await waitForEvent("jobber-AUTHORIZATION", events.emitter);
 
-  console.log("Got the authorization!");
+  console.log("Jobber: Got the authorization!");
   waitingForAuthorization = false;
 }
 
@@ -203,19 +203,19 @@ async function getRefreshToken() {
           break;
         case 429:
           console.error(
-            `Got 429 while refreshing access token. This is likely because of some sort of limiting!`,
+            `Jobber: Got 429 while refreshing access token. This is likely because of some sort of limiting!`,
           );
           break;
         case 401:
         default:
           console.error(
-            `Got ${response.status} while refreshing access token. Requesting authorization!`,
+            `Jobber: Got ${response.status} while refreshing access token. Requesting authorization!`,
           );
           await requestAuthorization();
           break;
       }
     } catch (e) {
-      console.error(`Fetch: Failure in getRefreshToken`);
+      console.error(`Jobber: Failure in getRefreshToken`);
       Sentry.captureException(e);
       console.error(e);
     }
@@ -250,19 +250,19 @@ async function refreshAccessToken() {
           break;
         case 429:
           console.error(
-            `Got 429 while refreshing access token. This is likely because of some sort of limiting!`,
+            `Jobber: Got 429 while refreshing access token. This is likely because of some sort of limiting!`,
           );
           break;
         case 401:
         default:
           console.error(
-            `Got ${response.status} while refreshing access token. Requesting authorization!`,
+            `Jobber: Got ${response.status} while refreshing access token. Requesting authorization!`,
           );
           await requestAuthorization();
           break;
       }
     } catch (e) {
-      console.error(`Fetch: Failure in refreshAccessToken`);
+      console.error(`Jobber: Failure in refreshAccessToken`);
       Sentry.captureException(e);
       console.error(e);
     }
@@ -297,21 +297,21 @@ async function makeRequest(query) {
         // HTTP: Unauthorized
         case 401:
           console.error(
-            `Got ${response.status} from the Jobber API. Refreshing access token and trying again!`,
+            `Jobber: Got ${response.status} from the Jobber API. Refreshing access token and trying again!`,
           );
           await refreshAccessToken();
           break;
         // HTTP: All Others
         default:
           console.error(
-            `Got ${response.status} while running query. Body follows.`,
+            `Jobber: Got ${response.status} while running query. Body follows.`,
           );
           let text = await response.text();
           console.error(text);
           break;
       }
     } catch (e) {
-      console.error(`Fetch: Failure in makeRequest`);
+      console.error(`Jobber: Failure in makeRequest`);
       Sentry.captureException(e);
       console.error(e);
     }

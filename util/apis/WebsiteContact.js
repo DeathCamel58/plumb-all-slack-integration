@@ -10,7 +10,7 @@ const events = require("../events");
  */
 async function AlertHandle(data) {
   if (process.env.DEBUG === "TRUE") {
-    console.log("Data was");
+    console.log("WebsiteContact: Data was");
     console.log(data);
   }
 

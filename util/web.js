@@ -37,10 +37,10 @@ app.use(express.urlencoded({ extended: true })); // support encoded bodies
  * Log unhandled SASO webhooks
  */
 app.post("/saso/:WEBHOOK_TYPE", (req, res) => {
-  console.log("SASO webhook received!");
+  console.log("Web: SASO webhook received!");
 
   // Log this data *no matter what* so that tracing issues on mission-critical stuff is easier
-  console.log("Data was");
+  console.log("Web: Data was");
   console.log(req.params);
   console.log(req.body);
 
@@ -48,7 +48,7 @@ app.post("/saso/:WEBHOOK_TYPE", (req, res) => {
     req.params["WEBHOOK_TYPE"] &&
     req.params["WEBHOOK_TYPE"].startsWith("lead-source")
   ) {
-    console.log("Got a lead with a source from SASO!");
+    console.log("Web: Got a lead with a source from SASO!");
 
     // Emit Event
     events.emitter.emit("saso-lead", req);
@@ -61,7 +61,7 @@ app.post("/saso/:WEBHOOK_TYPE", (req, res) => {
  * Handle Jobber POST Webhooks
  */
 app.post("/jobber/:WEBHOOK_TYPE", (req, res) => {
-  console.info(`Got a ${req.params.WEBHOOK_TYPE} webhook from Jobber!`);
+  console.info(`Web: Got a ${req.params.WEBHOOK_TYPE} webhook from Jobber!`);
 
   // Set the default response code of 200
   let responseStatus = 200;
@@ -81,7 +81,7 @@ app.post("/jobber/:WEBHOOK_TYPE", (req, res) => {
     if (events.emitter.listenerCount(listenerName) > 0) {
       events.emitter.emit(listenerName, req);
     } else {
-      console.log("Data for unhandled webhook was");
+      console.log("Web: Data for unhandled webhook was");
       console.log(req.body);
       responseStatus = 405;
     }
@@ -120,7 +120,7 @@ app.get("/jobber/authorize", (req, res) => {
       fs.renameSync(`${file}2`, file);
     } else {
       console.error(
-        "ERROR: New file is empty. Dumping variables and arguments to assist with debugging.",
+        "Web: ERROR: New file is empty. Dumping variables and arguments to assist with debugging.",
       );
       console.info(`\toldAuthCode:\t${oldAuthCode}`);
       console.info(`\treq.query.code:\t${req.query.code}`);
@@ -138,7 +138,7 @@ app.get("/jobber/authorize", (req, res) => {
  * Handle Slack Event Webhooks
  */
 app.post("/slack/EVENT", (req, res) => {
-  console.info("Got an EVENT from Slack!");
+  console.info("Web: Got an EVENT from Slack!");
 
   // Verify that the webhook came from Slack
   if (Slack.verifyWebhook(req)) {
@@ -150,7 +150,7 @@ app.post("/slack/EVENT", (req, res) => {
       // Respond with the challenge
       res.send(req.body.challenge);
       console.info(
-        `Received verification token ${req.body.challenge} from Slack.`,
+        `Web: Received verification token ${req.body.challenge} from Slack.`,
       );
     } else {
       res.sendStatus(200);
@@ -168,7 +168,7 @@ app.post("/slack/EVENT", (req, res) => {
  * NOTE: We can't currently parse the web form posts. We don't care either, as it's not used by this.
  */
 app.post("/slack/INTERACTIVITY", (req, res) => {
-  console.info("Got an INTERACTIVITY from Slack!");
+  console.info("Web: Got an INTERACTIVITY from Slack!");
 
   // Verify that the webhook came from Slack
   if (Slack.verifyWebhook(req, true)) {
@@ -186,7 +186,7 @@ app.post("/slack/INTERACTIVITY", (req, res) => {
  * Handle Mattermost request for open jobs
  */
 app.get("/mattermost/jobberOpenJobs", (req, res) => {
-  console.info("Got a request for open jobs from Mattermost!");
+  console.info("Web: Got a request for open jobs from Mattermost!");
 
   // Verify that the webhook came from Slack
   if (req.query.token === process.env.MATTERMOST_WEBHOOK_OPEN_JOBS_TOKEN) {
@@ -210,12 +210,12 @@ app.post("/google-ads/form", (req, res) => {
   let data = JSON.parse(req.body);
 
   if (data["google_key"] === process.env.GOOGLE_ADS_KEY) {
-    console.info("Webhook: Google Ads lead form received.");
+    console.info("Web: Google Ads lead form received.");
     res.sendStatus(200);
 
     events.emitter.emit("google-ads-form", req);
   } else {
-    const message = `Google Ads Webhook: Incorrect Key. ${data["google_key"]} Expected: "${process.env.GOOGLE_ADS_KEY}`;
+    const message = `Web: Google Ads Webhook: Incorrect Key. ${data["google_key"]} Expected: "${process.env.GOOGLE_ADS_KEY}`;
     console.error(message);
     Sentry.captureException(message);
     res.sendStatus(401);
@@ -230,12 +230,12 @@ app.post("/cloudflare/contactForm", (req, res) => {
   let data = req.body;
 
   if (data["cloudflare_key"] === process.env.CLOUDFLARE_CONTACT_FORM_KEY) {
-    console.info("Webhook: CloudFlare Workers contact form received.");
+    console.info("Web: CloudFlare Workers contact form received.");
     res.sendStatus(200);
 
     events.emitter.emit("cloudflare-contact-form", req);
   } else {
-    const message = `Cloudflare Workers Webhook: Incorrect Key. ${data["cloudflare_key"]} Expected: "${process.env.CLOUDFLARE_CONTACT_FORM_KEY}`;
+    const message = `Web: Cloudflare Workers Webhook: Incorrect Key. ${data["cloudflare_key"]} Expected: "${process.env.CLOUDFLARE_CONTACT_FORM_KEY}`;
     console.error(message);
     Sentry.captureException(message);
     console.error(message);
@@ -261,12 +261,12 @@ app.post("/verisae/ingles", (req, res) => {
   let data = req.body;
 
   if (data.payload.sender.includes("plumb-all.com")) {
-    console.info("Webhook: Verisae (Ingles) email received.");
+    console.info("Web: Verisae (Ingles) email received.");
     res.sendStatus(200);
 
     events.emitter.emit("verisae-ingles", data);
   } else {
-    const message = `Verisae Webhook: Email not from us. From ${data.payload.sender}`;
+    const message = `Web: Verisae Webhook: Email not from us. From ${data.payload.sender}`;
     console.error(message);
     Sentry.captureException(message);
     res.sendStatus(401);
@@ -281,12 +281,12 @@ app.post("/86repairs/call", (req, res) => {
   let data = req.body;
 
   if (data.payload.sender.includes("plumb-all.com")) {
-    console.info("Webhook: 86 Repairs email received.");
+    console.info("Web: 86 Repairs email received.");
     res.sendStatus(200);
 
     events.emitter.emit("86repairs-call", data);
   } else {
-    const message = `Webhook: 86 Repairs email not from us. From ${data.payload.sender}`;
+    const message = `Web: 86 Repairs email not from us. From ${data.payload.sender}`;
     console.error(message);
     Sentry.captureException(message);
     res.sendStatus(401);
@@ -300,10 +300,10 @@ app.post("/website/contactForm", (req, res) => {
   req.body = JSON.parse(req.body);
   let data = req.body;
 
-  console.info("Webhook: Website contact form received.");
+  console.info("Web: Website contact form received.");
 
   // Log this data *no matter what* so that tracing issues on mission-critical stuff is easier
-  console.log("Data was");
+  console.log("Web: Data was");
   console.log(req.params);
   console.log(req.body);
 
@@ -321,5 +321,5 @@ app.get("/openapi.yaml", (req, res) => {
 });
 
 app.listen(port, "0.0.0.0", () =>
-  console.info(`Node.js server started on port ${port}.`),
+  console.info(`Web: Node.js server started on port ${port}.`),
 );
