@@ -14,15 +14,24 @@ async function handleMessage(data, type) {
     .split("・ Address: ")[1]
     .split("\r\n")[0];
 
-  // NOTE: This is only going to get the first bullet point (unsure if there is ever multiple). Looked back and didn't
-  // see any
   let mainMessagePart = "";
+  let contactNumber = undefined;
+
+  // Get the parts of the mail that change based on the type of contact
   if (type === "New Service") {
+    // NOTE: This is only going to get the first bullet point (unsure if there is ever multiple). Looked back and didn't
+    // see any
     mainMessagePart = data.payload["body-plain"]
       .split("Reported Issue:\r\n・ ")[1]
       .split("\r\n")[0];
+    contactNumber = data.payload["body-plain"]
+      .split("call/text ")[1]
+      .split(".\r\n")[0];
   } else if (type === "Quote Approved") {
     mainMessagePart = `Quote Approved for ${data.payload["body-plain"].split("Your quote for ")[1].split(" has been approved by")[0]}`;
+    contactNumber = data.payload["body-plain"]
+      .split("call/text ")[1]
+      .split(".\r\n")[0];
   } else if (type === "Contact Regarding Service") {
     const messageLines = data.payload["body-plain"]
       .split("Email not displaying correctly?")[1]
@@ -36,6 +45,9 @@ async function handleMessage(data, type) {
         mainMessagePart += " ";
       }
     }
+    contactNumber = data.payload["body-plain"]
+      .split("Call/Text ")[1]
+      .split("\r\n")[0];
   } else {
     const error = "86 Repairs: Failed to parse the email";
     Sentry.captureMessage(error);
@@ -77,7 +89,7 @@ async function handleMessage(data, type) {
   let contact = new Contact(
     "86 Repairs Call",
     clientName,
-    undefined,
+    contactNumber,
     undefined,
     undefined,
     clientAddress,
