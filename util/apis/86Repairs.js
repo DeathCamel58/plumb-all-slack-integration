@@ -32,7 +32,7 @@ async function handleMessage(data, type) {
     contactNumber = data.payload["body-plain"]
       .split("call/text ")[1]
       .split(".\r\n")[0];
-  } else if (type === "Contact Regarding Service") {
+  } else if (type === "Follow Up On Service") {
     const messageLines = data.payload["body-plain"]
       .split("Email not displaying correctly?")[1]
       .split("Customer Service Specialist")[0]
@@ -114,7 +114,7 @@ async function AlertHandle(data) {
 
   if (data.payload["body-plain"].includes("Customer Service Specialist")) {
     // Reply to service call
-    await handleMessage(data, "Contact Regarding Service");
+    await handleMessage(data, "Follow Up On Service");
   } else if (
     data.payload["body-plain"].includes("The service visit is scheduled for:")
   ) {
@@ -124,7 +124,8 @@ async function AlertHandle(data) {
     data.payload["body-plain"].includes("has been approved by the customer")
   ) {
     // Quote approval
-    await handleMessage(data, "Quote Approved");
+    // We're ignoring quote approvals per management request
+    // await handleMessage(data, "Quote Approved");
   } else {
     // New service
     await handleMessage(data, "New Service");
