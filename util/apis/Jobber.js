@@ -387,7 +387,7 @@ query InvoiceQuery {
   let invoiceResponse = await makeRequest(query);
 
   if (
-    invoiceResponse != undefined &&
+    invoiceResponse !== undefined &&
     invoiceResponse.invoices.nodes.length > 0 &&
     invoiceResponse.invoices.nodes[0].invoiceNumber.toString() ===
       filterValue.toString()
@@ -466,7 +466,11 @@ query QuoteQuery {
 
   let quoteResponse = await makeRequest(query);
 
-  if (quoteResponse.quotes.nodes.length > 0) {
+  if (
+    quoteResponse !== undefined &&
+    "quotes" in quoteResponse &&
+    quoteResponse.quotes.nodes.length > 0
+  ) {
     quoteResponse = await getQuoteData(quoteResponse.quotes.nodes[0].id);
   } else {
     return null;
@@ -524,7 +528,7 @@ query JobQuery {
   let jobResponse = await makeRequest(query);
 
   if (
-    jobResponse != undefined &&
+    jobResponse !== undefined &&
     jobResponse.jobs.nodes.length > 0 &&
     jobResponse.jobs.nodes[0].jobNumber.toString() === filterValue.toString()
   ) {
