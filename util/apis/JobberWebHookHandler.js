@@ -377,7 +377,7 @@ async function requestCreateHandle(req) {
       null,
       request.client.emails[0].address,
       address,
-      `[${request.jobberWebUri}](Details in Jobber) (You may have to hold on that link, copy it, and paste it into your web browser to access it)`,
+      `[${request.jobberWebUri}](${request.jobberWebUri}) (You may have to hold on that link, copy it, and paste it into your web browser to access it)`,
       "Jobber",
     );
     await APICoordinator.contactMade(contact, JSON.stringify(body));
