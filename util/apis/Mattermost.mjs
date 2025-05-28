@@ -203,7 +203,7 @@ async function findMessageReference(event) {
             "en-US",
             { style: "currency", currency: "USD" },
           ),
-          typeNumber: `Quote #${needToUnfurl.jobs[i].jobNumber}`,
+          typeNumber: `Job #${needToUnfurl.jobs[i].jobNumber}`,
           link: needToUnfurl.jobs[i].jobberWebUri,
           name: needToUnfurl.jobs[i].client.name,
         });
@@ -219,7 +219,7 @@ async function findMessageReference(event) {
             "en-US",
             { style: "currency", currency: "USD" },
           ),
-          typeNumber: `Quote #${needToUnfurl.invoices[i].invoiceNumber}`,
+          typeNumber: `Invoice #${needToUnfurl.invoices[i].invoiceNumber}`,
           link: needToUnfurl.invoices[i].jobberWebUri,
           name: needToUnfurl.invoices[i].client.name,
         });
