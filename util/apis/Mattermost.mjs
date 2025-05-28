@@ -99,7 +99,7 @@ async function sendReplyRawMessageBlocks(event, markdown) {
     await client.createPost({
       channel_id: originalPostData.channel_id,
       message: markdown,
-      root_id: originalPostData.id,
+      root_id: originalPostData.root_id ? originalPostData.root_id : originalPostData.id,
     });
 
     console.info("Mattermost: Linked references in Mattermost message!");
