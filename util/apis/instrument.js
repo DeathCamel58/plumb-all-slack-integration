@@ -12,5 +12,6 @@ if (process.env.SENTRY_DSN) {
       process.env.ENV_LOCATION === "./.env_development"
         ? "development"
         : "production",
+    enabled: process.env.NODE_ENV === "production",
   });
 }
