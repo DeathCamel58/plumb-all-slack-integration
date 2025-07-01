@@ -202,6 +202,8 @@ model User {
   name                 String
   phone                String
   status               String
+  earnsCommission      Boolean   @default(false)
+  commissionPercent    Float     @default(0)
   expensesEntered      Expense[] @relation("expensesEnteredByTousers")
   expensesPaid         Expense[] @relation("expensesPaidByToUsers")
   expensesReimbursable Expense[] @relation("expensesReimbursableToUsers")
