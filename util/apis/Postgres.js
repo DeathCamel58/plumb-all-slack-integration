@@ -267,6 +267,7 @@ async function jobDestroy(id) {
   });
   console.log("Postgres: Destroyed job");
 }
+events.emitter.on("db-JOB_DESTROY", invoiceDestroy);
 
 async function ensureJobExists(id) {
   const job = await prisma.user.findMany({ where: { id: { equals: id } } });
@@ -435,6 +436,14 @@ async function propertyCreateUpdate(data) {
 }
 events.emitter.on("db-PROPERTY_CREATE_UPDATE", propertyCreateUpdate);
 
+async function propertyDestroy(id) {
+  await prisma.property.deleteMany({
+    where: { id: id },
+  });
+  console.log("Postgres: Destroyed property");
+}
+events.emitter.on("db-EXPENSE_DESTROY", propertyDestroy);
+
 async function expenseCreateUpdate(data) {
   let userReferences = [data.enteredBy.id];
   if (data.paidBy) {
@@ -480,3 +489,61 @@ async function expenseDestroy(id) {
   console.log("Postgres: Destroyed expense");
 }
 events.emitter.on("db-EXPENSE_DESTROY", expenseDestroy);
+
+async function timesheetCreateUpdate(data) {
+  if (data.approvedBy) {
+    await ensureUserExists(data.approvedBy.id);
+  }
+  if (data.client) {
+    await ensureClientExists(data.client.id);
+  }
+  if (data.job) {
+    await ensureJobExists(data.job.id);
+  }
+  if (data.paidBy) {
+    await ensureUserExists(data.paidBy.id);
+  }
+  if (data.user) {
+    await ensureUserExists(data.user.id);
+  }
+  // if (data.visit) {
+  //   await ensureVisitExists(data.visit.id);
+  // }
+
+  const row = {
+    approved: data.approved,
+    approvedByUser: data.approvedBy
+      ? { connect: { id: data.approvedBy.id } }
+      : undefined,
+    createdAt: new Date(data.createdAt),
+    endAt: new Date(data.endAt),
+    finalDuration: data.finalDuration,
+    id: data.id,
+    jobs: data.job ? { connect: { id: data.job.id } } : undefined,
+    label: data.label,
+    laborRate: data.labourRate,
+    note: data.note,
+    paidByUser: data.paidBy ? { connect: { id: data.paidBy.id } } : undefined,
+    startAt: new Date(data.startAt),
+    ticking: data.ticking,
+    updatedAt: data.updatedAt,
+    users: data.user ? { connect: { id: data.user.id } } : undefined,
+    // visits: data.visit ? { connect: { id: data.visit.id } } : undefined,
+    visitDurationTotal: data.visitDurationTotal,
+  };
+  await prisma.timeSheetEntry.upsert({
+    where: { id: data.id },
+    update: { ...row },
+    create: { ...row },
+  });
+  console.log("Postgres: Upserted timesheet");
+}
+events.emitter.on("db-TIMESHEET_CREATE_UPDATE", timesheetCreateUpdate);
+
+async function timesheetDestroy(id) {
+  await prisma.timeSheetEntry.deleteMany({
+    where: { id: id },
+  });
+  console.log("Postgres: Destroyed timesheet");
+}
+events.emitter.on("db-TIMESHEET_DESTROY", timesheetDestroy);

@@ -14,24 +14,25 @@ datasource db {
 // }
 
 model Client {
-  companyName  String?
-  createdAt    DateTime
-  firstName    String?
-  id           String     @id
-  isArchivable Boolean
-  isArchived   Boolean
-  isCompany    Boolean
-  isLead       Boolean
-  lastName     String?
-  name         String?
-  title        String?
-  updatedAt    DateTime
-  jobberWebUri String?
-  invoices     Invoice[]
-  jobs         Job[]
-  quotes       Quote[]
-  payments     Payment[]
-  property     Property[]
+  companyName      String?
+  createdAt        DateTime
+  firstName        String?
+  id               String           @id
+  isArchivable     Boolean
+  isArchived       Boolean
+  isCompany        Boolean
+  isLead           Boolean
+  lastName         String?
+  name             String?
+  title            String?
+  updatedAt        DateTime
+  jobberWebUri     String?
+  invoices         Invoice[]
+  jobs             Job[]
+  quotes           Quote[]
+  payments         Payment[]
+  property         Property[]
+  timeSheetEntries TimeSheetEntry[] @relation("TimeSheetEntryToClient")
 }
 
 model Expense {
@@ -114,6 +115,7 @@ model Job {
   clients                          Client           @relation(fields: [clientId], references: [id])
   properties                       Property         @relation(fields: [property], references: [id])
   users                            User?            @relation(fields: [salesperson], references: [id])
+  timeSheetEntry                   TimeSheetEntry[]
 }
 
 model QuotesOnJobs {
@@ -196,18 +198,49 @@ model Property {
 model User {
   createdAt            DateTime
   email                String
-  id                   String    @id
+  id                   String           @id
   isAccountAdmin       Boolean
   isAccountOwner       Boolean
   name                 String
   phone                String
   status               String
-  earnsCommission      Boolean   @default(false)
-  commissionPercent    Float     @default(0)
-  expensesEntered      Expense[] @relation("expensesEnteredByTousers")
-  expensesPaid         Expense[] @relation("expensesPaidByToUsers")
-  expensesReimbursable Expense[] @relation("expensesReimbursableToUsers")
+  earnsCommission      Boolean          @default(false)
+  commissionPercent    Float            @default(0)
+  hourlyRate           Float?
+  expensesEntered      Expense[]        @relation("expensesEnteredByTousers")
+  expensesPaid         Expense[]        @relation("expensesPaidByToUsers")
+  expensesReimbursable Expense[]        @relation("expensesReimbursableToUsers")
   invoices             Invoice[]
   jobs                 Job[]
   quotes               Quote[]
+  timeSheets           TimeSheetEntry[] @relation("TimeSheetEntryUserToUser")
+  timeSheetPaidBy      TimeSheetEntry[] @relation("PaidByUserToUser")
+  timeSheetApprovedBy  TimeSheetEntry[] @relation("ApprovedByToUsers")
+}
+
+model TimeSheetEntry {
+  approved           Boolean?
+  approvedBy         String?
+  approvedByUser     User?     @relation("ApprovedByToUsers", fields: [approvedBy], references: [id])
+  client             String?
+  clients            Client?   @relation("TimeSheetEntryToClient", fields: [client], references: [id])
+  createdAt          DateTime?
+  endAt              DateTime
+  finalDuration      Int
+  id                 String    @id
+  job                String?
+  jobs               Job?      @relation(fields: [job], references: [id])
+  label              String?
+  laborRate          Float?
+  note               String
+  paidBy             String?
+  paidByUser         User?     @relation("PaidByUserToUser", fields: [paidBy], references: [id])
+  startAt            DateTime?
+  ticking            Boolean?
+  updatedAt          DateTime?
+  user               String?
+  users              User?     @relation("TimeSheetEntryUserToUser", fields: [user], references: [id])
+  visit              String?
+  // visits        Visit?    @relation(fields: [visit], references: [id])
+  visitDurationTotal Int?
 }

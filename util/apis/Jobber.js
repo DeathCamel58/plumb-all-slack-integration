@@ -872,7 +872,7 @@ query VisitQuery {
 /**
  * Runs Jobber request query for given itemID, and returns the data
  * @param itemID The itemID in the webhook
- * @returns {Promise<*>} The data for the visit
+ * @returns {Promise<*>} The data for the request
  */
 async function getRequestData(itemID) {
   let query = `
@@ -916,6 +916,54 @@ query RequestQuery {
   );
 
   return requestResponse["request"];
+}
+
+/**
+ * Runs Jobber timesheet query for given itemID, and returns the data
+ * @param itemID The itemID in the webhook
+ * @returns {Promise<*>} The data for the timesheet
+ */
+async function getTimesheetData(itemID) {
+  let query = `
+query RequestQuery {
+    timeSheetEntry (id: "${itemID}") {
+        approved
+        approvedBy {
+          id
+        }
+        client {
+          id
+        }
+        createdAt
+        endAt
+        finalDuration
+        id
+        job {
+          id
+        }
+        label
+        labourRate
+        note
+        paidBy {
+          id
+        }
+        startAt
+        ticking
+        updatedAt
+        user {
+          id
+        }
+        visit {
+          id
+        }
+        visitDurationTotal
+    }
+}
+        `;
+
+  let timesheetResponse = await makeRequest(query);
+
+  return timesheetResponse["timeSheetEntry"];
 }
 
 /**
@@ -1177,4 +1225,5 @@ module.exports = {
   getUserData,
   findOpenJobBlame,
   getRefreshToken,
+  getTimesheetData,
 };

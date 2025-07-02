@@ -244,6 +244,7 @@ async function jobUpdateHandle(req) {
   }
 }
 events.emitter.on("jobber-JOB_UPDATE", jobUpdateHandle);
+events.emitter.on("jobber-JOB_CLOSE", jobUpdateHandle);
 
 /**
  * Adds job destroy event
@@ -413,6 +414,25 @@ async function propertyUpdateHandle(req) {
   }
 }
 events.emitter.on("jobber-PROPERTY_UPDATE", propertyUpdateHandle);
+
+/**
+ * Adds property destroy event
+ * @param req The incoming web data
+ * @returns {Promise<void>}
+ */
+async function propertyDestroyHandle(req) {
+  let body = req.body;
+
+  // Verify authenticity of webhook, then process
+  if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
+    // Destroy property
+    events.emitter.emit(
+      "db-PROPERTY_DESTROY",
+      body.data["webHookEvent"]["itemId"],
+    );
+  }
+}
+events.emitter.on("jobber-PROPERTY_DESTROY", propertyDestroyHandle);
 
 /**
  * Adds new visit event
@@ -608,3 +628,43 @@ async function requestUpdateHandle(req) {
   }
 }
 events.emitter.on("jobber-REQUEST_UPDATE", requestUpdateHandle);
+
+/**
+ * Adds timesheet create/update event
+ * @param req The incoming web data
+ * @returns {Promise<void>}
+ */
+async function timesheetUpdateHandle(req) {
+  let body = req.body;
+
+  // Verify authenticity of webhook, then process
+  if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
+    // Get timesheet data
+    let timesheet = await Jobber.getTimesheetData(
+      body.data["webHookEvent"]["itemId"],
+    );
+    // Insert timesheet
+    events.emitter.emit("db-TIMESHEET_CREATE_UPDATE", timesheet);
+  }
+}
+events.emitter.on("jobber-TIMESHEET_CREATE", timesheetUpdateHandle);
+events.emitter.on("jobber-TIMESHEET_UPDATE", timesheetUpdateHandle);
+
+/**
+ * Adds timesheet destroy event
+ * @param req The incoming web data
+ * @returns {Promise<void>}
+ */
+async function timesheetDestroyHandle(req) {
+  let body = req.body;
+
+  // Verify authenticity of webhook, then process
+  if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
+    // Destroy timesheet
+    events.emitter.emit(
+      "db-TIMESHEET_DESTROY",
+      body.data["webHookEvent"]["itemId"],
+    );
+  }
+}
+events.emitter.on("jobber-TIMESHEET_DESTROY", timesheetDestroyHandle);
