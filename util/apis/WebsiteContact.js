@@ -16,12 +16,12 @@ async function AlertHandle(data) {
 
   let contact = new Contact(
     "Message From Website",
-    data["form_data"]["name"],
-    data["form_data"]["phone"],
+    data["name"],
+    data["phone"],
     undefined,
-    data["form_data"]["email"],
-    data["form_data"]["address"],
-    data["form_data"]["message"],
+    data["email"],
+    data["address"],
+    data["message"],
     "Website",
   );
 
