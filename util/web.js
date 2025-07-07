@@ -294,32 +294,31 @@ app.post("/86repairs/call", (req, res) => {
   }
 });
 
+const corsOptions = {
+  origin: "https://plumb-all.com",
+  methods: ["POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type"],
+};
+
 /**
  * Website form Notification
  */
-app.post(
-  "/website/contactForm",
-  cors({
-    origin: "https://plumb-all.com",
-    methods: ["POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type"],
-  }),
-  (req, res) => {
-    req.body = JSON.parse(req.body);
-    let data = req.body;
+app.options("/website/contactForm", cors(corsOptions));
+app.post("/website/contactForm", cors(corsOptions), (req, res) => {
+  req.body = JSON.parse(req.body);
+  let data = req.body;
 
-    console.info("Web: Website contact form received.");
+  console.info("Web: Website contact form received.");
 
-    // Log this data *no matter what* so that tracing issues on mission-critical stuff is easier
-    console.log("Web: Data was");
-    console.log(req.params);
-    console.log(req.body);
+  // Log this data *no matter what* so that tracing issues on mission-critical stuff is easier
+  console.log("Web: Data was");
+  console.log(req.params);
+  console.log(req.body);
 
-    res.sendStatus(200);
+  res.sendStatus(200);
 
-    events.emitter.emit("website-contact", data);
-  },
-);
+  events.emitter.emit("website-contact", data);
+});
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "../assets/index.html"));
