@@ -3,7 +3,7 @@ const APICoordinator = require("../APICoordinator");
 const events = require("../events");
 
 /**
- * Processes a Verisae Ingles webhook
+ * Processes a website contact form webhook
  * @param data The incoming web data
  * @returns {Promise<void>}
  * @constructor
