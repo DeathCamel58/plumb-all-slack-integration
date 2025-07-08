@@ -284,7 +284,7 @@ async function makeRequest(query) {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${JOBBER_ACCESS_TOKEN}`,
-          "X-JOBBER-GRAPHQL-VERSION": "2023-11-15",
+          "X-JOBBER-GRAPHQL-VERSION": "2025-01-20",
         },
         body: `{"query":${JSON.stringify(query)}}`,
       });
@@ -332,26 +332,74 @@ async function getInvoiceData(itemID) {
   let query = `
 query InvoiceQuery {
     invoice (id: "${itemID}") {
-        client {
-            id
-        }
-        subject
-        invoiceNumber
         amounts {
             depositAmount
             discountAmount
             invoiceBalance
             paymentsTotal
             subtotal
-            tipsTotal
             total
         }
+        # billingAddress {
+        #     city
+        #     postalCode
+        #     province
+        #     street
+        #     street1
+        #     street2
+        # }
+        client {
+            id
+        }
         createdAt
-        jobberWebUri
         customFields {
             ... on CustomFieldText {
                 label
                 valueText
+            }
+        }
+        dueDate
+        id
+        invoiceNet
+        invoiceNumber
+        invoiceStatus
+        issuedDate
+        jobberWebUri
+        jobs {
+            nodes {
+                id
+            }
+        }
+        # lineItems {
+        #     nodes {
+        #         id
+        #     }
+        # }
+        message
+        # paymentRecords {
+        #     nodes {
+        #         amount
+        #         entryDate
+        #         id
+        #     }
+        # }
+        properties {
+            nodes {
+                id
+            }
+        }
+        receivedDate
+        salesperson {
+            id
+        }
+        subject
+        # taxRate {
+        #     id
+        # }
+        updatedAt
+        visits {
+            nodes {
+                id
             }
         }
     }
@@ -411,23 +459,50 @@ async function getQuoteData(itemID) {
   let query = `
 query QuoteQuery {
     quote (id: "${itemID}") {
+        amounts {
+            depositAmount
+            discountAmount
+            nonTaxAmount
+            outstandingDepositAmount
+            subtotal
+            taxAmount
+            total
+        }
         client {
             id
         }
+        clientHubUri
+        clientHubViewedAt
+        contractDisclaimer
+        createdAt
+        depositAmountUnallocated
+        id
         jobberWebUri
+        jobs {
+            nodes {
+                id
+            }
+        }
+        lastTransitioned {
+            approvedAt
+            changesRequestedAt
+            convertedAt
+        }
+        message
+        property {
+            id
+        }
         quoteNumber
         quoteStatus
-        title
-        amounts {
-          depositAmount
-          discountAmount
-          nonTaxAmount
-          outstandingDepositAmount
-          subtotal
-          taxAmount
-          total
+        # request
+        salesperson {
+            id
         }
-        createdAt
+        taxDetails {
+            totalTaxAmount
+        }
+        title
+        updatedAt
         customFields {
             ... on CustomFieldText {
                 label
@@ -488,22 +563,69 @@ async function getJobData(itemID) {
   let query = `
 query JobQuery {
     job (id: "${itemID}") {
+        allowReviewRequest
+        #arrivalWindow
+        #billingType
+        #bookingConfirmationSentAt
         client {
             id
         }
-        jobberWebUri
+        completedAt
+        createdAt
+        #customFields
+        #defaultVisitTitle
+        endAt
+        #expenses
+        id
+        instructions
+        invoices {
+            nodes {
+                id
+            }
+        }
+        #invoiceSchedule
+        #invoicedTotal
+        #jobs
+        #jobBalanceTotals
         jobNumber
         jobStatus
+        jobType
+        jobberWebUri
+        #lineItems
+        #nextDateToSendReviewSms
+        #noteAttachments
+        #notes
+        #paymentRecords
+        property {
+            id
+        }
+        #quote
+        #request
+        salesperson {
+            id
+        }
+        #source
+        startAt
+        #timeSheetEntries
         title
         total
-        createdAt
+        uninvoicedTotal
+        updatedAt
+        #visitSchedule
+        #visits
+        #visitsInfo
+        willClientBeAutomaticallyCharged
     }
 }
         `;
 
   let jobResponse = await makeRequest(query);
 
-  jobResponse["job"].client = await getClientData(jobResponse["job"].client.id);
+  if (jobResponse["job"]) {
+    jobResponse["job"].client = await getClientData(
+      jobResponse["job"].client.id,
+    );
+  }
 
   return jobResponse["job"];
 }
@@ -551,6 +673,7 @@ query ClientQuery {
   client (id: "${itemID}") {
     name
     companyName
+    createdAt
     defaultEmails
     phones {
       number
@@ -561,8 +684,13 @@ query ClientQuery {
       primary
     }
     firstName
-    lastName
+    isArchivable
+    isArchived
     isCompany
+    id
+    isLead
+    lastName
+    name
     jobberWebUri
     secondaryName
     title
@@ -573,6 +701,7 @@ query ClientQuery {
       postalCode
       country
     }
+    updatedAt
   }
 }
         `;
@@ -591,14 +720,24 @@ async function getPaymentData(itemID) {
   let query = `
 query PaymentQuery {
     paymentRecord (id: "${itemID}") {
+        adjustmentType
+        amount
+        canEdit
         client {
             id
         }
-        adjustmentType
-        amount
         details
+        entryDate
+        id
+        invoice {
+            id
+        }
         paymentOrigin
         paymentType
+        quote {
+            id
+        }
+        sentAt
     }
 }
         `;
@@ -632,6 +771,7 @@ query PayoutQuery {
         payoutMethod
         status
         type
+        id
     }
 }
         `;
@@ -651,11 +791,21 @@ async function getPropertyData(itemID) {
 query PropertyQuery {
     property (id: "${itemID}") {
         address {
+            city
+            coordinates {
+                latitude
+                longitude
+            }
+            country
             id
+            postalCode
+            province
+            street
         }
         client {
             id
         }
+        id
         isBillingAddress
         jobberWebUri
         routingOrder
@@ -705,6 +855,7 @@ query VisitQuery {
         startAt
         title
         visitStatus
+        id
     }
 }
         `;
@@ -721,7 +872,7 @@ query VisitQuery {
 /**
  * Runs Jobber request query for given itemID, and returns the data
  * @param itemID The itemID in the webhook
- * @returns {Promise<*>} The data for the visit
+ * @returns {Promise<*>} The data for the request
  */
 async function getRequestData(itemID) {
   let query = `
@@ -753,6 +904,7 @@ query RequestQuery {
         source
         title
         updatedAt
+        id
     }
 }
         `;
@@ -764,6 +916,54 @@ query RequestQuery {
   );
 
   return requestResponse["request"];
+}
+
+/**
+ * Runs Jobber timesheet query for given itemID, and returns the data
+ * @param itemID The itemID in the webhook
+ * @returns {Promise<*>} The data for the timesheet
+ */
+async function getTimesheetData(itemID) {
+  let query = `
+query RequestQuery {
+    timeSheetEntry (id: "${itemID}") {
+        approved
+        approvedBy {
+          id
+        }
+        client {
+          id
+        }
+        createdAt
+        endAt
+        finalDuration
+        id
+        job {
+          id
+        }
+        label
+        labourRate
+        note
+        paidBy {
+          id
+        }
+        startAt
+        ticking
+        updatedAt
+        user {
+          id
+        }
+        visit {
+          id
+        }
+        visitDurationTotal
+    }
+}
+        `;
+
+  let timesheetResponse = await makeRequest(query);
+
+  return timesheetResponse["timeSheetEntry"];
 }
 
 /**
@@ -1025,4 +1225,5 @@ module.exports = {
   getUserData,
   findOpenJobBlame,
   getRefreshToken,
+  getTimesheetData,
 };

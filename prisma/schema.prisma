@@ -1,0 +1,246 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DB_URL")
+}
+
+// datasource db {
+//   provider = "sqlite"
+//   url      = "file:./jobberdata"
+// }
+
+model Client {
+  companyName      String?
+  createdAt        DateTime
+  firstName        String?
+  id               String           @id
+  isArchivable     Boolean
+  isArchived       Boolean
+  isCompany        Boolean
+  isLead           Boolean
+  lastName         String?
+  name             String?
+  title            String?
+  updatedAt        DateTime
+  jobberWebUri     String?
+  invoices         Invoice[]
+  jobs             Job[]
+  quotes           Quote[]
+  payments         Payment[]
+  property         Property[]
+  timeSheetEntries TimeSheetEntry[] @relation("TimeSheetEntryToClient")
+}
+
+model Expense {
+  createdAt        DateTime
+  date             DateTime
+  description      String?
+  enteredBy        String?
+  id               String   @id
+  linkedJob        String?
+  paidBy           String?
+  reimbursableTo   String?
+  title            String?
+  total            Float
+  updatedAt        DateTime
+  userEntered      User?    @relation("expensesEnteredByTousers", fields: [enteredBy], references: [id])
+  jobs             Job?     @relation(fields: [linkedJob], references: [id])
+  userPaid         User?    @relation("expensesPaidByToUsers", fields: [paidBy], references: [id])
+  userReimbursable User?    @relation("expensesReimbursableToUsers", fields: [reimbursableTo], references: [id])
+}
+
+model Invoice {
+  depositAmount  Float
+  discountAmount Float
+  invoiceBalance Float
+  paymentsTotal  Float
+  subtotal       Float
+  total          Float
+  clientId       String
+  createdAt      DateTime
+  dueDate        DateTime?
+  id             String           @id
+  invoiceNet     Int?
+  invoiceNumber  Int
+  invoiceStatus  String
+  issuedDate     DateTime?
+  jobberWebUri   String?
+  message        String?
+  receivedDate   DateTime?
+  salesperson    String?
+  subject        String
+  updatedAt      DateTime
+  clients        Client           @relation(fields: [clientId], references: [id])
+  users          User?            @relation(fields: [salesperson], references: [id])
+  jobs           JobsOnInvoices[]
+  payments       Payment[]
+}
+
+model JobsOnInvoices {
+  invoice   Invoice @relation(fields: [invoiceId], references: [id])
+  invoiceId String
+  job       Job     @relation(fields: [jobId], references: [id])
+  jobId     String
+
+  @@id([invoiceId, jobId])
+}
+
+model Job {
+  allowReviewRequest               Boolean
+  clientId                         String
+  completedAt                      DateTime
+  createdAt                        DateTime
+  endAt                            DateTime
+  id                               String           @id
+  instructions                     String?
+  jobNumber                        Int              @unique(map: "jobs_pk")
+  jobStatus                        String?
+  jobType                          String?
+  jobberWebUri                     String?
+  property                         String
+  salesperson                      String?
+  startAt                          DateTime
+  title                            String?
+  total                            Float
+  uninvoicedTotal                  Float
+  updatedAt                        DateTime
+  willClientBeAutomaticallyCharged Boolean
+  expenses                         Expense[]
+  invoices                         JobsOnInvoices[]
+  quotes                           QuotesOnJobs[]
+  clients                          Client           @relation(fields: [clientId], references: [id])
+  properties                       Property         @relation(fields: [property], references: [id])
+  users                            User?            @relation(fields: [salesperson], references: [id])
+  timeSheetEntry                   TimeSheetEntry[]
+}
+
+model QuotesOnJobs {
+  quote   Quote  @relation(fields: [quoteId], references: [id])
+  quoteId String
+  job     Job    @relation(fields: [jobId], references: [id])
+  jobId   String
+
+  @@id([jobId, quoteId])
+}
+
+model Quote {
+  depositAmount            Float?
+  discountAmount           Float?
+  nonTaxAmount             Float?
+  outstandingDepositAmount Float?
+  subtotal                 Float?
+  taxAmount                Float?
+  total                    Float?
+  clientId                 String
+  client                   Client         @relation(fields: [clientId], references: [id])
+  clientHubUri             String
+  clientHubViewedAt        DateTime?
+  contractDisclaimer       String
+  createdAt                DateTime
+  depositAmountUnallocated Float
+  id                       String         @id
+  jobberWebUri             String
+  // jobs Job?
+  jobs                     QuotesOnJobs[]
+  approvedAt               DateTime?
+  changesRequestedAt       DateTime?
+  convertedAt              DateTime?
+  message                  String?
+  propertyId               String
+  property                 Property       @relation(fields: [propertyId], references: [id])
+  quoteNumber              Int            @unique(map: "quotes_pk")
+  quoteStatus              String
+  // request
+  salespersonId            String?
+  salesperson              User?          @relation(fields: [salespersonId], references: [id])
+  totalTaxAmount           Float?
+  title                    String?
+  updatedAt                DateTime
+}
+
+model Payment {
+  adjustmentType String
+  amount         Float
+  canEdit        Boolean
+  client         String
+  details        String
+  entryDate      DateTime
+  id             String    @id
+  invoice        String?
+  paymentOrigin  String
+  sentAt         DateTime?
+  paymentType    String?
+  clients        Client    @relation(fields: [client], references: [id])
+  invoices       Invoice?  @relation(fields: [invoice], references: [id])
+}
+
+model Property {
+  city             String?
+  country          String?
+  id               String  @id
+  latitude         Float?
+  longitude        Float?
+  postalCode       String?
+  province         String?
+  street           String?
+  isBillingAddress Boolean
+  jobberWebUri     String
+  jobs             Job[]
+  client           String
+  clients          Client  @relation(fields: [client], references: [id])
+  quotes           Quote[]
+}
+
+model User {
+  createdAt            DateTime
+  email                String
+  id                   String           @id
+  isAccountAdmin       Boolean
+  isAccountOwner       Boolean
+  name                 String
+  phone                String
+  status               String
+  earnsCommission      Boolean          @default(false)
+  commissionPercent    Float            @default(0)
+  hourlyRate           Float?
+  expensesEntered      Expense[]        @relation("expensesEnteredByTousers")
+  expensesPaid         Expense[]        @relation("expensesPaidByToUsers")
+  expensesReimbursable Expense[]        @relation("expensesReimbursableToUsers")
+  invoices             Invoice[]
+  jobs                 Job[]
+  quotes               Quote[]
+  timeSheets           TimeSheetEntry[] @relation("TimeSheetEntryUserToUser")
+  timeSheetPaidBy      TimeSheetEntry[] @relation("PaidByUserToUser")
+  timeSheetApprovedBy  TimeSheetEntry[] @relation("ApprovedByToUsers")
+}
+
+model TimeSheetEntry {
+  approved           Boolean?
+  approvedBy         String?
+  approvedByUser     User?     @relation("ApprovedByToUsers", fields: [approvedBy], references: [id])
+  client             String?
+  clients            Client?   @relation("TimeSheetEntryToClient", fields: [client], references: [id])
+  createdAt          DateTime?
+  endAt              DateTime
+  finalDuration      Int
+  id                 String    @id
+  job                String?
+  jobs               Job?      @relation(fields: [job], references: [id])
+  label              String?
+  laborRate          Float?
+  note               String
+  paidBy             String?
+  paidByUser         User?     @relation("PaidByUserToUser", fields: [paidBy], references: [id])
+  startAt            DateTime?
+  ticking            Boolean?
+  updatedAt          DateTime?
+  user               String?
+  users              User?     @relation("TimeSheetEntryUserToUser", fields: [user], references: [id])
+  visit              String?
+  // visits        Visit?    @relation(fields: [visit], references: [id])
+  visitDurationTotal Int?
+}
