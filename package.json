@@ -7,8 +7,7 @@
   "author": "Dylan Corrales",
   "license": "ISC",
   "scripts": {
-    "generateprisma": "prisma generate",
-    "start": "npm run generateprisma; node index.js",
+    "start": "node index.js",
     "test": "jest",
     "test:ci": "jest --ci --reporters='default' --reporters='./util/github-actions-reporter' --testPathIgnorePatterns='./tests/apis/(GoogleMaps|PostHog).js'",
     "prepare": "husky install"
