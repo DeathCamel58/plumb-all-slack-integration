@@ -1,4 +1,4 @@
-let NODE_VERSION = "18.14.1";
+let NODE_VERSION = "22.17.0";
 
 module.exports = {
   apps: [
