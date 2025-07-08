@@ -1,6 +1,10 @@
 const Contact = require("../contact");
 const APICoordinator = require("../APICoordinator");
 const events = require("../events");
+const fetch = require("node-fetch");
+
+const recaptchaSecretKey = process.env.RECAPTCHA_SECRET_KEY;
+const recaptchaEndpoint = `https://www.google.com/recaptcha/api/siteverify?secret=${recaptchaSecretKey}`;
 
 /**
  * Processes a website contact form webhook
@@ -14,17 +18,25 @@ async function AlertHandle(data) {
     console.log(data);
   }
 
-  let contact = new Contact(
-    "Message From Website",
-    data["name"],
-    data["phone"],
-    undefined,
-    data["email"],
-    data["address"],
-    data["message"],
-    "Website",
-  );
+  if ("recaptchaToken" in data) {
+    const token = data["recaptchaToken"];
+    let response = await fetch(`${recaptchaEndpoint}&response=${token}`);
+    console.log(response.json);
 
-  await APICoordinator.contactMade(contact, JSON.stringify(data));
+    let contact = new Contact(
+      "Message From Website",
+      data["name"],
+      data["phone"],
+      undefined,
+      data["email"],
+      data["address"],
+      data["message"],
+      "Website",
+    );
+
+    await APICoordinator.contactMade(contact, JSON.stringify(data));
+  } else {
+    console.error("WebsiteContact: Missing recaptchaToken!");
+  }
 }
 events.emitter.on("website-contact", AlertHandle);
