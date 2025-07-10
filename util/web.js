@@ -64,6 +64,11 @@ app.post("/saso/:WEBHOOK_TYPE", (req, res) => {
 app.post("/jobber/:WEBHOOK_TYPE", (req, res) => {
   console.info(`Web: Got a ${req.params.WEBHOOK_TYPE} webhook from Jobber!`);
 
+  if (process.env.DEBUG === "TRUE") {
+    console.log("Jobber Webhook: Data was");
+    console.log(req.body);
+  }
+
   // Set the default response code of 200
   let responseStatus = 200;
 
