@@ -70,15 +70,15 @@ async function propertyUpsert(data) {
   console.log("Postgres: Upserted property");
 }
 
-async function ensurePropertyExists(propertyData) {
+async function ensurePropertyExists(id) {
   const property = await prisma.property.findMany({
-    where: { id: { equals: propertyData.id } },
+    where: { id: { equals: id } },
   });
 
   // Query the API for the property and insert it
   if (property.length === 0) {
     // Create the property
-    const apiResponse = await getPropertyData(propertyData.id);
+    const apiResponse = await getPropertyData(id);
     await propertyUpsert(apiResponse);
   }
 }
@@ -220,7 +220,7 @@ async function jobCreateUpdate(data) {
     await ensureUserExists(data.salesperson ? data.salesperson.id : null);
   }
   await clientCreateUpdate(data.client);
-  await ensurePropertyExists(data.property);
+  await ensurePropertyExists(data.property.id);
 
   for (const invoice of data.invoices.nodes) {
     console.log("Job has linked invoice!");
