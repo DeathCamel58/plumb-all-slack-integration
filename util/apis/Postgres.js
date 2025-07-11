@@ -109,8 +109,29 @@ async function clientCreateUpdate(data) {
 events.emitter.on("db-CLIENT_CREATE_UPDATE", clientCreateUpdate);
 
 async function clientDestroy(id) {
-  await prisma.client.deleteMany({
-    where: { id: id },
+  // Delete all related quotes
+  await prisma.quote.deleteMany({
+    where: { clientId: id },
+  });
+
+  // Delete all related jobs
+  await prisma.job.deleteMany({
+    where: { clientId: id },
+  });
+
+  // Delete all related invoices
+  await prisma.invoice.deleteMany({
+    where: { clientId: id },
+  });
+
+  // Delete all related properties
+  await prisma.property.deleteMany({
+    where: { client: id },
+  });
+
+  // Now safely delete the client
+  await prisma.client.delete({
+    where: { id },
   });
   console.log("Postgres: Destroyed client");
 }
@@ -377,6 +398,10 @@ async function quoteCreateUpdate(data) {
 events.emitter.on("db-QUOTE_CREATE_UPDATE", quoteCreateUpdate);
 
 async function quoteDestroy(id) {
+  await prisma.quotesOnJobs.deleteMany({
+    where: { quoteId: id },
+  });
+
   await prisma.quote.deleteMany({
     where: { id: id },
   });
