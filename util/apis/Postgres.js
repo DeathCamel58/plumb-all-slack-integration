@@ -280,9 +280,14 @@ async function jobCreateUpdate(data) {
 events.emitter.on("db-JOB_CREATE_UPDATE", jobCreateUpdate);
 
 async function jobDestroy(id) {
+  await prisma.quotesOnJobs.deleteMany({
+    where: { jobId: id },
+  });
+
   await prisma.jobsOnInvoices.deleteMany({
     where: { jobId: id },
   });
+
   await prisma.job.deleteMany({
     where: { id: id },
   });
