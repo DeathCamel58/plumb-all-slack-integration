@@ -315,10 +315,11 @@ app.post("/website/contactForm", cors(corsOptions), (req, res) => {
 
   console.info("Web: Website contact form received.");
 
-  // Log this data *no matter what* so that tracing issues on mission-critical stuff is easier
-  console.log("Web: Data was");
-  console.log(req.params);
-  console.log(req.body);
+  if (process.env.DEBUG === "TRUE") {
+    console.log("Web: Data was");
+    console.log(req.params);
+    console.log(req.body);
+  }
 
   res.sendStatus(200);
 
