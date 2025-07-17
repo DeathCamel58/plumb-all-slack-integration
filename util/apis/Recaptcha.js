@@ -11,7 +11,7 @@ const recaptchaScoreThreshold = process.env.RECAPTCHA_SCORE_THRESHOLD;
  * @param token The recaptcha token
  * @param action The expected recaptcha action
  */
-export async function CheckRecaptcha(token, action) {
+async function CheckRecaptcha(token, action) {
   let response = await fetch(`${recaptchaEndpoint}&response=${token}`);
   const recaptchaResponse = await response.json();
 
@@ -34,3 +34,5 @@ export async function CheckRecaptcha(token, action) {
 
   return false;
 }
+
+module.exports = { CheckRecaptcha };
