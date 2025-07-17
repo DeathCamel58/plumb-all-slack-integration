@@ -320,6 +320,21 @@ app.post("/website/contactForm", cors(corsOptions), (req, res) => {
   events.emitter.emit("website-contact", data);
 });
 
+/**
+ * Website negative feedback form Notification
+ */
+app.options("/website/negativeFeedback", cors(corsOptions));
+app.post("/website/negativeFeedback", cors(corsOptions), (req, res) => {
+  req.body = JSON.parse(req.body);
+  let data = req.body;
+
+  console.info("Web: Website negative feedback form received.");
+
+  res.sendStatus(200);
+
+  events.emitter.emit("website-negative-feedback", data);
+});
+
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "../assets/index.html"));
 });

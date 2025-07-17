@@ -35,3 +35,29 @@ async function WebsiteContactHandle(data) {
   }
 }
 events.emitter.on("website-contact", WebsiteContactHandle);
+
+/**
+ * Processes a website negative feedback form webhook
+ * @param data The incoming web data
+ * @returns {Promise<void>}
+ * @constructor
+ */
+async function WebsiteFeedbackHandle(data) {
+  if (process.env.DEBUG === "TRUE") {
+    console.log("WebsiteFeedback: Data was");
+    console.log(data);
+  }
+
+  if ("recaptchaToken" in data) {
+    if (await CheckRecaptcha(data["recaptchaToken"], "feedback_form")) {
+      await APICoordinator.feedbackMade(
+        data["name"],
+        data["phone"],
+        data["message"],
+      );
+    } else {
+      console.error("WebsiteContact: Bad recaptcha");
+    }
+  }
+}
+events.emitter.on("website-negative-feedback", WebsiteFeedbackHandle);
