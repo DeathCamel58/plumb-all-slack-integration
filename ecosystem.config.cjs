@@ -13,7 +13,7 @@ module.exports = {
       },
       // TODO: PM2 does not see a defined development environment
       // > pm2 deploy development
-      // development environment is not defined in ecosystem.config.js file
+      // development environment is not defined in ecosystem.config.cjs file
       env_development: {
         NODE_ENV: "development",
         ENV_LOCATION: "/home/admin/plumb-all-slack-integration/.env",
