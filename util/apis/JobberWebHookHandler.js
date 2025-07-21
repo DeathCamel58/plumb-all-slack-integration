@@ -53,6 +53,7 @@ async function invoiceHandle(req) {
     let clientID = await PostHog.logClient(invoice.client);
     // Insert/Update Invoice
     events.emitter.emit("db-INVOICE_CREATE_UPDATE", invoice);
+    events.emitter.emit("mailchimp-INVOICE_CREATE_UPDATE", invoice);
     await PostHog.logInvoice(invoice, clientID);
   }
 }
