@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 let Jobber = require("./Jobber");
+let Mailchimp = require("./Mailchimp");
 let PostHog = require("./PostHog");
 let Postgres = require("./Postgres");
 const Contact = require("../contact");
