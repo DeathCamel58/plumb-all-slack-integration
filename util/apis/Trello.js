@@ -11,7 +11,7 @@ const trelloHost = "https://api.trello.com";
  * @param data The data to send to the endpoint
  * @returns {Promise<void>}
  */
-async function useAPI(url, httpMethod, data) {
+export async function useAPI(url, httpMethod, data) {
   let query = JSON.stringify(data);
   let response = [];
   try {
@@ -51,7 +51,7 @@ async function useAPI(url, httpMethod, data) {
  * @param boardName The board name to search for
  * @returns {Promise<*|null>} The board id, or null
  */
-async function getBoard(boardName) {
+export async function getBoard(boardName) {
   let boardsResponse = await useAPI(
     `1/members/me/boards?key=${process.env.TRELLO_API_KEY}&token=${process.env.TRELLO_TOKEN}`,
     "get",
@@ -75,7 +75,7 @@ async function getBoard(boardName) {
  * @param listName The list name to search for
  * @returns {Promise<*|null>} The list id, or null
  */
-async function getList(boardId, listName) {
+export async function getList(boardId, listName) {
   let listResponse = await useAPI(
     `1/boards/${boardId}/lists?key=${process.env.TRELLO_API_KEY}&token=${process.env.TRELLO_TOKEN}`,
     "get",
@@ -254,9 +254,3 @@ async function moveContactCard(message, destinationList) {
   await moveCard(card.id, destinationListId);
 }
 events.on("trello-move-contact-card", moveContactCard);
-
-module.exports = {
-  useAPI,
-  getBoard,
-  getList,
-};

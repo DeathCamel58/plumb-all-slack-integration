@@ -1,8 +1,8 @@
-const assert = require("assert");
-const { expect, test, describe } = require("@jest/globals");
-const PostHog = require("../../util/apis/PostHog.js");
-const Contact = require("../../util/contact.js");
-require("dotenv").config({
+import { expect, test, describe } from "@jest/globals";
+import * as PostHog from "../../util/apis/PostHog.js";
+import Contact from "../../util/contact.js";
+import dotenv from "dotenv";
+dotenv.config({
   path: process.env.ENV_LOCATION || "/root/plumb-all-slack-integration/.env",
 });
 
@@ -118,7 +118,7 @@ describe("PostHog", () => {
           contact,
           "MESSAGE WAS FROM CI/CD PIPELINE: TEST MESSAGE FROM CI",
         ),
-      ).resolves.not.toThrowError();
+      ).resolves.not.toThrow();
     });
 
     test("Log Client", async () => {
@@ -137,7 +137,7 @@ describe("PostHog", () => {
         billingAddress: null,
       };
 
-      await expect(PostHog.logClient(client)).resolves.not.toThrowError();
+      await expect(PostHog.logClient(client)).resolves.not.toThrow();
     });
 
     test("Log Quote", async () => {
@@ -180,7 +180,7 @@ describe("PostHog", () => {
 
       await expect(
         PostHog.logQuote(quote, clientId),
-      ).resolves.not.toThrowError();
+      ).resolves.not.toThrow();
     });
 
     test("Log Quote Update", async () => {
@@ -223,7 +223,7 @@ describe("PostHog", () => {
 
       await expect(
         PostHog.logQuoteUpdate(quote, clientId),
-      ).resolves.not.toThrowError();
+      ).resolves.not.toThrow();
     });
 
     test("Log Job", async () => {
@@ -256,7 +256,7 @@ describe("PostHog", () => {
       };
       let clientId = "ac72f523deeaac10c22b817d67016273";
 
-      await expect(PostHog.logJob(job, clientId)).resolves.not.toThrowError();
+      await expect(PostHog.logJob(job, clientId)).resolves.not.toThrow();
     });
 
     test("Log Invoice", async () => {
@@ -297,7 +297,7 @@ describe("PostHog", () => {
 
       await expect(
         PostHog.logInvoice(invoice, clientId),
-      ).resolves.not.toThrowError();
+      ).resolves.not.toThrow();
     });
 
     test("Log Payment", async () => {
@@ -332,7 +332,7 @@ describe("PostHog", () => {
 
       await expect(
         PostHog.logPayment(payment, clientId),
-      ).resolves.not.toThrowError();
+      ).resolves.not.toThrow();
     });
   });
 });

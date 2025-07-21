@@ -1,6 +1,6 @@
-const assert = require("assert");
-const Contact = require("../util/contact.js");
-const { describe, it } = require("@jest/globals");
+import assert from "assert";
+import Contact from "../util/contact.js";
+import { describe, it } from "@jest/globals";
 
 // We can group similar tests inside a `describe` block
 describe("Contact Class", () => {

@@ -1,6 +1,6 @@
-const assert = require("assert");
-const DataUtilities = require("../util/DataUtilities.js");
-const { describe, it, expect } = require("@jest/globals");
+import assert from "assert";
+import * as DataUtilities from "../util/DataUtilities.js";
+import { describe, it, expect } from "@jest/globals";
 
 // We can group similar tests inside a `describe` block
 describe("Data Utilities", () => {

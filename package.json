@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node index.js",
     "test": "jest",
-    "test:ci": "jest --ci --reporters='default' --reporters='./util/github-actions-reporter' --testPathIgnorePatterns='./tests/apis/(GoogleMaps|PostHog).js'",
+    "test:ci": "jest --ci --reporters='default' --reporters='./util/github-actions-reporter' --testPathIgnorePatterns='./tests/apis/(GoogleMaps|PostHog).mjs'",
     "prepare": "husky install"
   },
   "dependencies": {
