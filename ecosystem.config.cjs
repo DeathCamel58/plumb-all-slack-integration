@@ -35,7 +35,7 @@ module.exports = {
       ref: "origin/master",
       repo: "https://github.com/DeathCamel58/plumb-all-slack-integration.git",
       path: "/home/admin/plumb-all-slack-integration",
-      "post-deploy": `source $HOME/.nvm/nvm.sh; nvm use v${NODE_VERSION}; npm install; npx prisma generate; pm2 startOrRestart ecosystem.config.js --env production`,
+      "post-deploy": `source $HOME/.nvm/nvm.sh; nvm use v${NODE_VERSION}; npm install; npx prisma generate; pm2 startOrRestart ecosystem.config.cjs --env production`,
     },
   },
 };
