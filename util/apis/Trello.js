@@ -1,9 +1,6 @@
-require("dotenv").config({
-  path: process.env.ENV_LOCATION || "/root/plumb-all-slack-integration/.env",
-});
-const fetch = require("node-fetch");
-const events = require("../events");
-const Sentry = require("@sentry/node");
+import fetch from "node-fetch";
+import events from "../events.js";
+import * as Sentry from "@sentry/node";
 
 const trelloHost = "https://api.trello.com";
 
@@ -191,7 +188,7 @@ async function addContact(contact) {
   let listId = await getList(boardId, process.env.TRELLO_LIST_NAME_TODO);
   await addCard(listId, contact.name, contact.messageToSend(), contact.address);
 }
-events.emitter.on("trello-add-contact", addContact);
+events.on("trello-add-contact", addContact);
 
 /**
  * Moves a contact card to a different list
@@ -256,7 +253,7 @@ async function moveContactCard(message, destinationList) {
   console.info(`Trello: Moving Card for ${caller} to ${destinationList}`);
   await moveCard(card.id, destinationListId);
 }
-events.emitter.on("trello-move-contact-card", moveContactCard);
+events.on("trello-move-contact-card", moveContactCard);
 
 module.exports = {
   useAPI,

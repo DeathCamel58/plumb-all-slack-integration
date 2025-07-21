@@ -1,7 +1,7 @@
 const assert = require("assert");
 const { expect, test, describe } = require("@jest/globals");
-const PostHog = require("../../util/apis/PostHog");
-const Contact = require("../../util/contact");
+const PostHog = require("../../util/apis/PostHog.js");
+const Contact = require("../../util/contact.js");
 require("dotenv").config({
   path: process.env.ENV_LOCATION || "/root/plumb-all-slack-integration/.env",
 });

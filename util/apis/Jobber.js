@@ -1,11 +1,8 @@
-require("dotenv").config({
-  path: process.env.ENV_LOCATION || "/root/plumb-all-slack-integration/.env",
-});
-const fetch = require("node-fetch");
-const crypto = require("crypto");
-const fs = require("fs");
-const events = require("../events");
-const Sentry = require("@sentry/node");
+import fetch from "node-fetch";
+import crypto from "crypto";
+import fs from "fs";
+import events from "../events.js";
+import * as Sentry from "@sentry/node";
 
 const JOBBER_BASE_URL = "https://api.getjobber.com/api/graphql";
 let JOBBER_ACCESS_TOKEN;
@@ -15,7 +12,7 @@ let JOBBER_ACCESS_TOKEN;
  * @param ms The number of milliseconds to do nothing for.
  * @returns {Promise<unknown>}
  */
-function sleep(ms) {
+export function sleep(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
@@ -25,7 +22,7 @@ function sleep(ms) {
  * Saves the new refresh token to file
  * @param refresh_token The new refresh token
  */
-function saveNewToken(refresh_token) {
+export function saveNewToken(refresh_token) {
   // Save the refresh token to file
   let file =
     process.env.ENV_LOCATION || "/root/plumb-all-slack-integration/.env";
@@ -60,7 +57,7 @@ function saveNewToken(refresh_token) {
  * @param req The request
  * @returns {boolean} Is the webhook authentic?
  */
-function verifyWebhook(req) {
+export function verifyWebhook(req) {
   if (process.env.DEBUG === "TRUE") {
     return true;
   }
@@ -98,7 +95,7 @@ function verifyWebhook(req) {
  * Sets the JOBBER_AUTHORIZATION_CODE
  * @param code The new authorization code
  */
-async function setAuthorization(code) {
+export async function setAuthorization(code) {
   process.env.JOBBER_AUTHORIZATION_CODE = code;
   let success = false;
   while (!success) {
@@ -132,7 +129,7 @@ async function setAuthorization(code) {
   }
 }
 
-function waitForEvent(eventName, emitter) {
+export function waitForEvent(eventName, emitter) {
   return new Promise((resolve) => {
     emitter.once(eventName, (data) => {
       resolve(data);
@@ -146,19 +143,18 @@ let waitingForAuthorization = false;
  * Sends a message to slack that the user can click on to get authorization
  * @returns {Promise<void>}
  */
-async function requestAuthorization() {
+export async function requestAuthorization() {
   if (!waitingForAuthorization) {
-    const SlackBot = require("./SlackBot");
     let redirect_URI = `${process.env.WEB_URL}/jobber/authorize`;
     redirect_URI = encodeURIComponent(redirect_URI);
     let STATE = crypto.randomBytes(16).toString("hex");
     let message = `Error from the call bot. *Super technical error code*: :robot_face::frowning::thumbsdown:\nI\'ve lost my access to Jobber and I need some help.\nI need an admin in Jobber to click on --><https://api.getjobber.com/api/oauth/authorize?client_id=${process.env.JOBBER_CLIENT_ID}&redirect_uri=${redirect_URI}&state=${STATE}|this link><-- and click \`ALLOW ACCESS\`.`;
-    events.emitter.emit(
+    events.emit(
       "slackbot-send-message",
       message,
       "Call Bot Jobber Authorization",
     );
-    events.emitter.emit(
+    events.emit(
       "mattermost-send-message",
       message,
       "Call Bot Jobber Authorization",
@@ -169,7 +165,7 @@ async function requestAuthorization() {
   }
 
   // Wait for the event that's fired when the authorization is updated
-  await waitForEvent("jobber-AUTHORIZATION", events.emitter);
+  await waitForEvent("jobber-AUTHORIZATION", events);
 
   console.log("Jobber: Got the authorization!");
   waitingForAuthorization = false;
@@ -179,7 +175,7 @@ async function requestAuthorization() {
  * Updates the access token when it's found to be invalid.
  * @returns {Promise<void>}
  */
-async function getRefreshToken() {
+export async function getRefreshToken() {
   let success = false;
   let data;
   while (!success) {
@@ -226,7 +222,7 @@ async function getRefreshToken() {
  * Updates the access token when it's found to be invalid.
  * @returns {Promise<void>}
  */
-async function refreshAccessToken() {
+export async function refreshAccessToken() {
   let success = false;
   let data;
   while (!success) {
@@ -274,7 +270,7 @@ async function refreshAccessToken() {
  * @param query The query to make
  * @returns {Promise<*>} The GraphQL query data
  */
-async function makeRequest(query) {
+export async function makeRequest(query) {
   let success = false;
   let response;
   while (!success) {
@@ -328,7 +324,7 @@ async function makeRequest(query) {
  * @param itemID The itemID in the webhook
  * @returns {Promise<*>} The data for the invoice
  */
-async function getInvoiceData(itemID) {
+export async function getInvoiceData(itemID) {
   let query = `
 query InvoiceQuery {
     invoice (id: "${itemID}") {
@@ -420,7 +416,7 @@ query InvoiceQuery {
  * @param filterValue The invoice number to filter by
  * @returns {Promise<*>} The data for the invoice
  */
-async function getInvoiceSearchData(filterValue) {
+export async function getInvoiceSearchData(filterValue) {
   let query = `
 query InvoiceQuery {
   invoices (searchTerm: "${filterValue}", first: 1, sort: {key: INVOICE_NUMBER, direction: ASCENDING}) {
@@ -455,7 +451,7 @@ query InvoiceQuery {
  * @param itemID The itemID in the webhook
  * @returns {Promise<*>} The data for the quote
  */
-async function getQuoteData(itemID) {
+export async function getQuoteData(itemID) {
   let query = `
 query QuoteQuery {
     quote (id: "${itemID}") {
@@ -528,7 +524,7 @@ query QuoteQuery {
  * @param filterValue The filter attribute value
  * @returns {Promise<*>} The data for the quote
  */
-async function getQuoteSearchData(filterType, filterValue) {
+export async function getQuoteSearchData(filterType, filterValue) {
   let query = `
 query QuoteQuery {
   quotes (filter: {${filterType}: {eq: ${filterValue}}}, first: 1, sort: {key: QUOTE_NUMBER, direction: ASCENDING}) {
@@ -559,7 +555,7 @@ query QuoteQuery {
  * @param itemID The itemID in the webhook
  * @returns {Promise<*>} The data for the job
  */
-async function getJobData(itemID) {
+export async function getJobData(itemID) {
   let query = `
 query JobQuery {
     job (id: "${itemID}") {
@@ -635,7 +631,7 @@ query JobQuery {
  * @param filterValue The job number to filter by
  * @returns {Promise<*>} The data for the job
  */
-async function getJobSearchData(filterValue) {
+export async function getJobSearchData(filterValue) {
   let query = `
 query JobQuery {
   jobs (searchTerm: "${filterValue}", first: 1, sort: {key: JOB_NUMBER, direction: ASCENDING}) {
@@ -667,7 +663,7 @@ query JobQuery {
  * @param itemID The itemID in the webhook
  * @returns {Promise<*>} The data for the client
  */
-async function getClientData(itemID) {
+export async function getClientData(itemID) {
   let query = `
 query ClientQuery {
   client (id: "${itemID}") {
@@ -716,7 +712,7 @@ query ClientQuery {
  * @param itemID The itemID in the webhook
  * @returns {Promise<*>} The data for the payment
  */
-async function getPaymentData(itemID) {
+export async function getPaymentData(itemID) {
   let query = `
 query PaymentQuery {
     paymentRecord (id: "${itemID}") {
@@ -756,7 +752,7 @@ query PaymentQuery {
  * @param itemID The itemID in the webhook
  * @returns {Promise<*>} The data for the payment
  */
-async function getPayoutData(itemID) {
+export async function getPayoutData(itemID) {
   let query = `
 query PayoutQuery {
     payoutRecord (id: "${itemID}") {
@@ -786,7 +782,7 @@ query PayoutQuery {
  * @param itemID The itemID in the webhook
  * @returns {Promise<*>} The data for the property
  */
-async function getPropertyData(itemID) {
+export async function getPropertyData(itemID) {
   let query = `
 query PropertyQuery {
     property (id: "${itemID}") {
@@ -830,7 +826,7 @@ query PropertyQuery {
  * @param itemID The itemID in the webhook
  * @returns {Promise<*>} The data for the visit
  */
-async function getVisitData(itemID) {
+export async function getVisitData(itemID) {
   let query = `
 query VisitQuery {
     visit (id: "${itemID}") {
@@ -874,7 +870,7 @@ query VisitQuery {
  * @param itemID The itemID in the webhook
  * @returns {Promise<*>} The data for the request
  */
-async function getRequestData(itemID) {
+export async function getRequestData(itemID) {
   let query = `
 query RequestQuery {
     request (id: "${itemID}") {
@@ -923,7 +919,7 @@ query RequestQuery {
  * @param itemID The itemID in the webhook
  * @returns {Promise<*>} The data for the timesheet
  */
-async function getTimesheetData(itemID) {
+export async function getTimesheetData(itemID) {
   let query = `
 query RequestQuery {
     timeSheetEntry (id: "${itemID}") {
@@ -971,7 +967,7 @@ query RequestQuery {
  * @param itemID The itemID in the webhook
  * @returns {Promise<*>} The data for the payment
  */
-async function getExpenseData(itemID) {
+export async function getExpenseData(itemID) {
   let query = `
 query ExpenseQuery {
     expense (id: "${itemID}") {
@@ -1031,7 +1027,7 @@ query ExpenseQuery {
  * @param itemID The user ID
  * @returns {Promise<*>} The data for the payment
  */
-async function getUserData(itemID) {
+export async function getUserData(itemID) {
   let query = `
 query UserQuery {
     user (id: "${itemID}") {
@@ -1070,7 +1066,7 @@ query UserQuery {
 /**
  * Queries the Jobber API to get a list of open jobs, and performs tasks necessary to assign blame to people
  */
-async function findOpenJobBlame() {
+export async function findOpenJobBlame() {
   let jobs = {};
   let openJobStatusTypes = [
     // 'requires_invoicing',
@@ -1205,25 +1201,3 @@ query OpenJobQuery {
 
   return jobs;
 }
-
-module.exports = {
-  verifyWebhook,
-  setAuthorization,
-  getInvoiceData,
-  getInvoiceSearchData,
-  getQuoteData,
-  getQuoteSearchData,
-  getJobData,
-  getJobSearchData,
-  getClientData,
-  getPaymentData,
-  getPayoutData,
-  getPropertyData,
-  getVisitData,
-  getRequestData,
-  getExpenseData,
-  getUserData,
-  findOpenJobBlame,
-  getRefreshToken,
-  getTimesheetData,
-};

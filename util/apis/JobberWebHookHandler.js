@@ -1,11 +1,9 @@
-const crypto = require("crypto");
-let Jobber = require("./Jobber");
-let Mailchimp = require("./Mailchimp");
-let PostHog = require("./PostHog");
-let Postgres = require("./Postgres");
-const Contact = require("../contact");
-const APICoordinator = require("../APICoordinator");
-const events = require("../events");
+import crypto from "crypto";
+import * as Jobber from "./Jobber.js";
+import * as PostHog from "./PostHog.js";
+import Contact from "../contact.js";
+import * as APICoordinator from "../APICoordinator.js";
+import events from "../events.js";
 
 /**
  * Checks if the HMAC was valid to ensure the Webhook came from Jobber
@@ -53,12 +51,12 @@ async function invoiceHandle(req) {
     // Insert/Update client
     let clientID = await PostHog.logClient(invoice.client);
     // Insert/Update Invoice
-    events.emitter.emit("db-INVOICE_CREATE_UPDATE", invoice);
-    events.emitter.emit("mailchimp-INVOICE_CREATE_UPDATE", invoice);
+    events.emit("db-INVOICE_CREATE_UPDATE", invoice);
+    events.emit("mailchimp-INVOICE_CREATE_UPDATE", invoice);
     await PostHog.logInvoice(invoice, clientID);
   }
 }
-events.emitter.on("jobber-INVOICE_CREATE", invoiceHandle);
+events.on("jobber-INVOICE_CREATE", invoiceHandle);
 
 /**
  * Creates an invoice update event
@@ -75,10 +73,10 @@ async function invoiceUpdateHandle(req) {
       body.data["webHookEvent"]["itemId"],
     );
     // Insert/Update Invoice
-    events.emitter.emit("db-INVOICE_CREATE_UPDATE", invoice);
+    events.emit("db-INVOICE_CREATE_UPDATE", invoice);
   }
 }
-events.emitter.on("jobber-INVOICE_UPDATE", invoiceUpdateHandle);
+events.on("jobber-INVOICE_UPDATE", invoiceUpdateHandle);
 
 /**
  * Creates an invoice destroy event
@@ -91,13 +89,10 @@ async function invoiceDestroyHandle(req) {
   // Verify authenticity of webhook, then process
   if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
     // Destroy Invoice
-    events.emitter.emit(
-      "db-INVOICE_DESTROY",
-      body.data["webHookEvent"]["itemId"],
-    );
+    events.emit("db-INVOICE_DESTROY", body.data["webHookEvent"]["itemId"]);
   }
 }
-events.emitter.on("jobber-INVOICE_DESTROY", invoiceDestroyHandle);
+events.on("jobber-INVOICE_DESTROY", invoiceDestroyHandle);
 
 /**
  * Adds/Updates client
@@ -114,12 +109,12 @@ async function clientHandle(req) {
       body.data["webHookEvent"]["itemId"],
     );
     // Insert/Update client
-    events.emitter.emit("db-CLIENT_CREATE_UPDATE", client);
+    events.emit("db-CLIENT_CREATE_UPDATE", client);
     await PostHog.logClient(client);
   }
 }
-events.emitter.on("jobber-CLIENT_CREATE", clientHandle);
-events.emitter.on("jobber-CLIENT_UPDATE", clientHandle);
+events.on("jobber-CLIENT_CREATE", clientHandle);
+events.on("jobber-CLIENT_UPDATE", clientHandle);
 
 /**
  * Creates a client destroy event
@@ -132,13 +127,10 @@ async function clientDestroyHandle(req) {
   // Verify authenticity of webhook, then process
   if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
     // Destroy Invoice
-    events.emitter.emit(
-      "db-CLIENT_DESTROY",
-      body.data["webHookEvent"]["itemId"],
-    );
+    events.emit("db-CLIENT_DESTROY", body.data["webHookEvent"]["itemId"]);
   }
 }
-events.emitter.on("jobber-CLIENT_DESTROY", clientDestroyHandle);
+events.on("jobber-CLIENT_DESTROY", clientDestroyHandle);
 
 /**
  * Adds quote event
@@ -155,11 +147,11 @@ async function quoteCreateHandle(req) {
     // Insert/Update client
     let clientID = await PostHog.logClient(quote.client);
     // Insert quote
-    events.emitter.emit("db-QUOTE_CREATE_UPDATE", quote);
+    events.emit("db-QUOTE_CREATE_UPDATE", quote);
     await PostHog.logQuote(quote, clientID);
   }
 }
-events.emitter.on("jobber-QUOTE_CREATE", quoteCreateHandle);
+events.on("jobber-QUOTE_CREATE", quoteCreateHandle);
 
 /**
  * Adds quote acceptance event
@@ -176,11 +168,11 @@ async function quoteUpdateHandle(req) {
     // Insert/Update client
     let clientID = await PostHog.logClient(quote.client);
     // Update quote
-    events.emitter.emit("db-QUOTE_CREATE_UPDATE", quote);
+    events.emit("db-QUOTE_CREATE_UPDATE", quote);
     await PostHog.logQuoteUpdate(quote, clientID);
   }
 }
-events.emitter.on("jobber-QUOTE_UPDATE", quoteUpdateHandle);
+events.on("jobber-QUOTE_UPDATE", quoteUpdateHandle);
 
 /**
  * Creates a quote destroy event
@@ -193,13 +185,10 @@ async function quoteDestroyHandle(req) {
   // Verify authenticity of webhook, then process
   if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
     // Destroy Invoice
-    events.emitter.emit(
-      "db-QUOTE_DESTROY",
-      body.data["webHookEvent"]["itemId"],
-    );
+    events.emit("db-QUOTE_DESTROY", body.data["webHookEvent"]["itemId"]);
   }
 }
-events.emitter.on("jobber-QUOTE_DESTROY", quoteDestroyHandle);
+events.on("jobber-QUOTE_DESTROY", quoteDestroyHandle);
 
 /**
  * Adds job create event
@@ -216,11 +205,11 @@ async function jobCreateHandle(req) {
     // Insert/Update client
     let clientID = await PostHog.logClient(job.client);
     // Insert job
-    events.emitter.emit("db-JOB_CREATE_UPDATE", job);
+    events.emit("db-JOB_CREATE_UPDATE", job);
     await PostHog.logJob(job, clientID);
   }
 }
-events.emitter.on("jobber-JOB_CREATE", jobCreateHandle);
+events.on("jobber-JOB_CREATE", jobCreateHandle);
 
 /**
  * Adds job update event
@@ -240,13 +229,13 @@ async function jobUpdateHandle(req) {
       // Insert/Update client
       let clientID = await PostHog.logClient(job.client);
       // Insert job
-      events.emitter.emit("db-JOB_CREATE_UPDATE", job);
+      events.emit("db-JOB_CREATE_UPDATE", job);
       await PostHog.logJobUpdate(job, clientID);
     }
   }
 }
-events.emitter.on("jobber-JOB_UPDATE", jobUpdateHandle);
-events.emitter.on("jobber-JOB_CLOSE", jobUpdateHandle);
+events.on("jobber-JOB_UPDATE", jobUpdateHandle);
+events.on("jobber-JOB_CLOSE", jobUpdateHandle);
 
 /**
  * Adds job destroy event
@@ -259,10 +248,10 @@ async function jobDestroyHandle(req) {
   // Verify authenticity of webhook, then process
   if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
     // Destroy job
-    events.emitter.emit("db-JOB_DESTROY", body.data["webHookEvent"]["itemId"]);
+    events.emit("db-JOB_DESTROY", body.data["webHookEvent"]["itemId"]);
   }
 }
-events.emitter.on("jobber-JOB_DESTROY", jobDestroyHandle);
+events.on("jobber-JOB_DESTROY", jobDestroyHandle);
 
 /**
  * Adds new payment event
@@ -281,11 +270,11 @@ async function paymentCreateHandle(req) {
     // Insert/Update client
     let clientID = await PostHog.logClient(payment.client);
     // Insert payment
-    events.emitter.emit("db-PAYMENT_CREATE_UPDATE", payment);
+    events.emit("db-PAYMENT_CREATE_UPDATE", payment);
     await PostHog.logPayment(payment, clientID);
   }
 }
-events.emitter.on("jobber-PAYMENT_CREATE", paymentCreateHandle);
+events.on("jobber-PAYMENT_CREATE", paymentCreateHandle);
 
 /**
  * Adds payment update event
@@ -304,11 +293,11 @@ async function paymentUpdateHandle(req) {
     // Insert/Update client
     let clientID = await PostHog.logClient(payment.client);
     // Insert payment
-    events.emitter.emit("db-PAYMENT_CREATE_UPDATE", payment);
+    events.emit("db-PAYMENT_CREATE_UPDATE", payment);
     await PostHog.logPaymentUpdate(payment, clientID);
   }
 }
-events.emitter.on("jobber-PAYMENT_UPDATE", paymentUpdateHandle);
+events.on("jobber-PAYMENT_UPDATE", paymentUpdateHandle);
 
 /**
  * Adds payment destroy event
@@ -321,13 +310,10 @@ async function paymentDestroyHandle(req) {
   // Verify authenticity of webhook, then process
   if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
     // Destroy payment
-    events.emitter.emit(
-      "db-PAYMENT_DESTROY",
-      body.data["webHookEvent"]["itemId"],
-    );
+    events.emit("db-PAYMENT_DESTROY", body.data["webHookEvent"]["itemId"]);
   }
 }
-events.emitter.on("jobber-PAYMENT_DESTROY", paymentDestroyHandle);
+events.on("jobber-PAYMENT_DESTROY", paymentDestroyHandle);
 
 /**
  * Adds payout create event
@@ -348,7 +334,7 @@ async function payoutCreateHandle(req) {
     await PostHog.logPayout(payout);
   }
 }
-events.emitter.on("jobber-PAYOUT_CREATE", payoutCreateHandle);
+events.on("jobber-PAYOUT_CREATE", payoutCreateHandle);
 
 /**
  * Adds payout updated event
@@ -369,7 +355,7 @@ async function payoutUpdateHandle(req) {
     await PostHog.logPayoutUpdate(payout);
   }
 }
-events.emitter.on("jobber-PAYOUT_UPDATE", payoutUpdateHandle);
+events.on("jobber-PAYOUT_UPDATE", payoutUpdateHandle);
 
 /**
  * Adds new property event
@@ -388,11 +374,11 @@ async function propertyCreateHandle(req) {
     // Insert/Update client
     let clientID = await PostHog.logClient(property.client);
     // Insert property
-    events.emitter.emit("db-PROPERTY_CREATE_UPDATE", property);
+    events.emit("db-PROPERTY_CREATE_UPDATE", property);
     await PostHog.logProperty(property, clientID);
   }
 }
-events.emitter.on("jobber-PROPERTY_CREATE", propertyCreateHandle);
+events.on("jobber-PROPERTY_CREATE", propertyCreateHandle);
 
 /**
  * Adds property update event
@@ -411,11 +397,11 @@ async function propertyUpdateHandle(req) {
     // Insert/Update client
     let clientID = await PostHog.logClient(property.client);
     // Insert property
-    events.emitter.emit("db-PROPERTY_CREATE_UPDATE", property);
+    events.emit("db-PROPERTY_CREATE_UPDATE", property);
     await PostHog.logPropertyUpdate(property, clientID);
   }
 }
-events.emitter.on("jobber-PROPERTY_UPDATE", propertyUpdateHandle);
+events.on("jobber-PROPERTY_UPDATE", propertyUpdateHandle);
 
 /**
  * Adds property destroy event
@@ -428,13 +414,10 @@ async function propertyDestroyHandle(req) {
   // Verify authenticity of webhook, then process
   if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
     // Destroy property
-    events.emitter.emit(
-      "db-PROPERTY_DESTROY",
-      body.data["webHookEvent"]["itemId"],
-    );
+    events.emit("db-PROPERTY_DESTROY", body.data["webHookEvent"]["itemId"]);
   }
 }
-events.emitter.on("jobber-PROPERTY_DESTROY", propertyDestroyHandle);
+events.on("jobber-PROPERTY_DESTROY", propertyDestroyHandle);
 
 /**
  * Adds new visit event
@@ -455,7 +438,7 @@ async function visitCreateHandle(req) {
     await PostHog.logVisit(visit, clientID);
   }
 }
-events.emitter.on("jobber-VISIT_CREATE", visitCreateHandle);
+events.on("jobber-VISIT_CREATE", visitCreateHandle);
 
 /**
  * Adds visit update event
@@ -476,7 +459,7 @@ async function visitUpdateHandle(req) {
     await PostHog.logVisitUpdate(visit, clientID);
   }
 }
-events.emitter.on("jobber-VISIT_UPDATE", visitUpdateHandle);
+events.on("jobber-VISIT_UPDATE", visitUpdateHandle);
 
 /**
  * Adds visit complete event
@@ -497,7 +480,7 @@ async function visitCompleteHandle(req) {
     await PostHog.logVisitComplete(visit, clientID);
   }
 }
-events.emitter.on("jobber-VISIT_COMPLETE", visitCompleteHandle);
+events.on("jobber-VISIT_COMPLETE", visitCompleteHandle);
 
 /**
  * Adds new request create event
@@ -537,7 +520,7 @@ async function requestCreateHandle(req) {
     await APICoordinator.contactMade(contact, JSON.stringify(body));
   }
 }
-events.emitter.on("jobber-REQUEST_CREATE", requestCreateHandle);
+events.on("jobber-REQUEST_CREATE", requestCreateHandle);
 
 /**
  * Adds expense create event
@@ -558,11 +541,11 @@ async function expenseCreateHandle(req) {
     await PostHog.logEmployee(expense.enteredBy);
 
     // Insert expense
-    events.emitter.emit("db-EXPENSE_CREATE_UPDATE", expense);
+    events.emit("db-EXPENSE_CREATE_UPDATE", expense);
     await PostHog.logExpenseCreate(expense, expense.enteredBy.uuid);
   }
 }
-events.emitter.on("jobber-EXPENSE_CREATE", expenseCreateHandle);
+events.on("jobber-EXPENSE_CREATE", expenseCreateHandle);
 
 /**
  * Adds expense update event
@@ -583,11 +566,11 @@ async function expenseUpdateHandle(req) {
     await PostHog.logEmployee(expense.enteredBy);
 
     // Insert expense
-    events.emitter.emit("db-EXPENSE_CREATE_UPDATE", expense);
+    events.emit("db-EXPENSE_CREATE_UPDATE", expense);
     await PostHog.logExpenseUpdate(expense, expense.enteredBy.uuid);
   }
 }
-events.emitter.on("jobber-EXPENSE_UPDATE", expenseUpdateHandle);
+events.on("jobber-EXPENSE_UPDATE", expenseUpdateHandle);
 
 /**
  * Adds expense destroy event
@@ -600,13 +583,10 @@ async function expenseDestroyHandle(req) {
   // Verify authenticity of webhook, then process
   if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
     // Destroy expense
-    events.emitter.emit(
-      "db-EXPENSE_DESTROY",
-      body.data["webHookEvent"]["itemId"],
-    );
+    events.emit("db-EXPENSE_DESTROY", body.data["webHookEvent"]["itemId"]);
   }
 }
-events.emitter.on("jobber-EXPENSE_DESTROY", expenseDestroyHandle);
+events.on("jobber-EXPENSE_DESTROY", expenseDestroyHandle);
 
 /**
  * Adds request update event
@@ -629,7 +609,7 @@ async function requestUpdateHandle(req) {
     await PostHog.logRequestUpdate(request, clientID);
   }
 }
-events.emitter.on("jobber-REQUEST_UPDATE", requestUpdateHandle);
+events.on("jobber-REQUEST_UPDATE", requestUpdateHandle);
 
 /**
  * Adds timesheet create/update event
@@ -646,11 +626,11 @@ async function timesheetUpdateHandle(req) {
       body.data["webHookEvent"]["itemId"],
     );
     // Insert timesheet
-    events.emitter.emit("db-TIMESHEET_CREATE_UPDATE", timesheet);
+    events.emit("db-TIMESHEET_CREATE_UPDATE", timesheet);
   }
 }
-events.emitter.on("jobber-TIMESHEET_CREATE", timesheetUpdateHandle);
-events.emitter.on("jobber-TIMESHEET_UPDATE", timesheetUpdateHandle);
+events.on("jobber-TIMESHEET_CREATE", timesheetUpdateHandle);
+events.on("jobber-TIMESHEET_UPDATE", timesheetUpdateHandle);
 
 /**
  * Adds timesheet destroy event
@@ -663,10 +643,7 @@ async function timesheetDestroyHandle(req) {
   // Verify authenticity of webhook, then process
   if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
     // Destroy timesheet
-    events.emitter.emit(
-      "db-TIMESHEET_DESTROY",
-      body.data["webHookEvent"]["itemId"],
-    );
+    events.emit("db-TIMESHEET_DESTROY", body.data["webHookEvent"]["itemId"]);
   }
 }
-events.emitter.on("jobber-TIMESHEET_DESTROY", timesheetDestroyHandle);
+events.on("jobber-TIMESHEET_DESTROY", timesheetDestroyHandle);

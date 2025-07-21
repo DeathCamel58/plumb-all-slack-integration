@@ -1,10 +1,10 @@
-const DataUtilities = require("./DataUtilities");
-const queryString = require("querystring");
+import * as DataUtilities from "./DataUtilities.js";
+import queryString from "querystring";
 
 /**
  * A contact from a client
  */
-class Contact {
+export default class Contact {
   constructor(
     type,
     name,
@@ -218,5 +218,3 @@ class Contact {
     return message;
   }
 }
-
-module.exports = Contact;

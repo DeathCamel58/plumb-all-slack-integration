@@ -1,7 +1,4 @@
-require("dotenv").config({
-  path: process.env.ENV_LOCATION || "/root/plumb-all-slack-integration/.env",
-});
-const Sentry = require("@sentry/node");
+import * as Sentry from "@sentry/node";
 
 // Use sentry if DSN is configured
 if (process.env.SENTRY_DSN) {

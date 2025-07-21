@@ -1,7 +1,7 @@
 import mattermost from "@mattermost/client";
-import Jobber from "./Jobber.js";
+import * as Jobber from "./Jobber.js";
 import events from "../events.js";
-import fetch from 'node-fetch';
+import fetch from "node-fetch";
 import * as Sentry from "@sentry/node";
 
 const client = new mattermost.Client4();
@@ -26,12 +26,16 @@ wsClient.addFirstConnectListener(() => {
 });
 
 wsClient.addCloseListener((event) => {
-  console.log(`Mattermost: WebSocket disconnected. Event:\n${JSON.stringify(event)}`);
+  console.log(
+    `Mattermost: WebSocket disconnected. Event:\n${JSON.stringify(event)}`,
+  );
 });
 
 wsClient.addMissedMessageListener(() => {
-  console.log("Mattermost: Using missed message listener to work around https://github.com/mattermost/mattermost/issues/30388")
-})
+  console.log(
+    "Mattermost: Using missed message listener to work around https://github.com/mattermost/mattermost/issues/30388",
+  );
+});
 
 // Handle websocket errors and attempt to reconnect
 
@@ -91,7 +95,7 @@ async function sendMessage(
     console.error(error);
   }
 }
-events.emitter.on("mattermost-send-message", sendMessage);
+events.on("mattermost-send-message", sendMessage);
 
 async function sendReplyRawMessageBlocks(event, markdown) {
   try {
@@ -99,7 +103,9 @@ async function sendReplyRawMessageBlocks(event, markdown) {
     await client.createPost({
       channel_id: originalPostData.channel_id,
       message: markdown,
-      root_id: originalPostData.root_id ? originalPostData.root_id : originalPostData.id,
+      root_id: originalPostData.root_id
+        ? originalPostData.root_id
+        : originalPostData.id,
     });
 
     console.info("Mattermost: Linked references in Mattermost message!");
@@ -125,7 +131,11 @@ async function findMessageReference(event) {
   const parsed = JSON.parse(event.data.post);
 
   // Don't find references in our own message
-  if (parsed.message.startsWith("Mattermost: Found these Jobber items referenced:")) {
+  if (
+    parsed.message.startsWith(
+      "Mattermost: Found these Jobber items referenced:",
+    )
+  ) {
     return;
   }
 
@@ -199,10 +209,10 @@ async function findMessageReference(event) {
         data.push({
           dateTime: `${dateTime.toLocaleDateString()} ${dateTime.toLocaleTimeString()}`,
           total: needToUnfurl.jobs[i].total,
-          totalToPrint: needToUnfurl.jobs[i].total.toLocaleString(
-            "en-US",
-            { style: "currency", currency: "USD" },
-          ),
+          totalToPrint: needToUnfurl.jobs[i].total.toLocaleString("en-US", {
+            style: "currency",
+            currency: "USD",
+          }),
           typeNumber: `Job #${needToUnfurl.jobs[i].jobNumber}`,
           link: needToUnfurl.jobs[i].jobberWebUri,
           name: needToUnfurl.jobs[i].client.name,
@@ -251,10 +261,11 @@ wsClient.addMessageListener((msg) => {
   }
   if (msg.event === "posted") {
     console.log("Mattermost: New post received", JSON.parse(msg.data.post));
-    findMessageReference(msg).then((output) => console.log("Mattermost: message unfurled"));
+    findMessageReference(msg).then((output) =>
+      console.log("Mattermost: message unfurled"),
+    );
   }
 });
-
 
 async function openJobsMessage(req) {
   console.log("Mattermost: User requests the get open jobs message!");
@@ -286,24 +297,24 @@ async function openJobsMessage(req) {
 
   try {
     const data = {
-      response_type: 'in_channel',
-      text: message
+      response_type: "in_channel",
+      text: message,
     };
     const options = {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json'
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify(data)
+      body: JSON.stringify(data),
     };
-    let response = await fetch(req.query.response_url, options)
+    let response = await fetch(req.query.response_url, options);
 
     if (response.status === 200) {
-      console.log("Mattermost: Open Jobs Message Sent!")
+      console.log("Mattermost: Open Jobs Message Sent!");
     }
   } catch (e) {
     console.error(`Mattermost: Fetch: Failure in sending openJobsMessage`);
     console.error(e);
   }
 }
-events.emitter.on("mattermost-open-jobs", openJobsMessage);
+events.on("mattermost-open-jobs", openJobsMessage);

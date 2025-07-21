@@ -1,7 +1,7 @@
-const Contact = require("../contact");
-const APICoordinator = require("../APICoordinator");
-const events = require("../events");
-const { CheckRecaptcha } = require("./Recaptcha");
+import Contact from "../contact.js";
+import * as APICoordinator from "../APICoordinator.js";
+import events from "../events.js";
+import { CheckRecaptcha } from "./Recaptcha.js";
 
 /**
  * Processes a website contact form webhook
@@ -34,7 +34,7 @@ async function WebsiteContactHandle(data) {
     }
   }
 }
-events.emitter.on("website-contact", WebsiteContactHandle);
+events.on("website-contact", WebsiteContactHandle);
 
 /**
  * Processes a website negative feedback form webhook
@@ -60,4 +60,4 @@ async function WebsiteFeedbackHandle(data) {
     }
   }
 }
-events.emitter.on("website-negative-feedback", WebsiteFeedbackHandle);
+events.on("website-negative-feedback", WebsiteFeedbackHandle);

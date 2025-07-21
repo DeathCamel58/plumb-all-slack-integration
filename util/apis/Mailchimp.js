@@ -1,6 +1,6 @@
-const Jobber = require("./Jobber");
-const events = require("../events");
-const mailchimp = require("@mailchimp/mailchimp_marketing");
+import * as Jobber from "./Jobber.js";
+import events from "../events.js";
+import mailchimp from "@mailchimp/mailchimp_marketing";
 
 mailchimp.setConfig({
   apiKey: process.env.MAILCHIMP_API_KEY,
@@ -28,4 +28,4 @@ async function mailchimpSendEvent(data) {
     console.error(e);
   }
 }
-events.emitter.on("mailchimp-INVOICE_CREATE_UPDATE", mailchimpSendEvent);
+events.on("mailchimp-INVOICE_CREATE_UPDATE", mailchimpSendEvent);

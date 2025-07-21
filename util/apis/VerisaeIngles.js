@@ -1,7 +1,7 @@
-const Contact = require("../contact");
-const APICoordinator = require("../APICoordinator");
-const HTMLParser = require("node-html-parser");
-const events = require("../events");
+import Contact from "../contact.js";
+import * as APICoordinator from "../APICoordinator.js";
+import HTMLParser from "node-html-parser";
+import events from "../events.js";
 
 /**
  * Processes a Verisae Ingles webhook
@@ -65,4 +65,4 @@ async function AlertHandle(data) {
 
   await APICoordinator.contactMade(contact, JSON.stringify(data));
 }
-events.emitter.on("verisae-ingles", AlertHandle);
+events.on("verisae-ingles", AlertHandle);

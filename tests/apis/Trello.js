@@ -1,7 +1,7 @@
 const assert = require("assert");
 const { expect, test, describe } = require("@jest/globals");
-const Trello = require("../../util/apis/Trello");
-const APICoordinator = require("../../util/APICoordinator");
+const Trello = require("../../util/apis/Trello.js");
+const APICoordinator = require("../../util/APICoordinator.js");
 require("dotenv").config({
   path: process.env.ENV_LOCATION || "/root/plumb-all-slack-integration/.env",
 });

@@ -1,18 +1,15 @@
-require("dotenv").config({
-  path: process.env.ENV_LOCATION || "/root/plumb-all-slack-integration/.env",
-});
-const events = require("../events");
-const Sentry = require("@sentry/node");
+import events from "../events.js";
+import * as Sentry from "@sentry/node";
 
-const PrismaClient = require("../../generated/prisma");
-const {
+import { PrismaClient } from "../../generated/prisma/index.js";
+import {
   getUserData,
   getPropertyData,
   getJobData,
   getInvoiceData,
   getClientData,
-} = require("./Jobber");
-const prisma = new PrismaClient.PrismaClient();
+} from "./Jobber.js";
+const prisma = new PrismaClient();
 
 async function userUpsert(data) {
   const row = {
@@ -106,7 +103,7 @@ async function clientCreateUpdate(data) {
   });
   console.log("Postgres: Upserted client");
 }
-events.emitter.on("db-CLIENT_CREATE_UPDATE", clientCreateUpdate);
+events.on("db-CLIENT_CREATE_UPDATE", clientCreateUpdate);
 
 async function clientDestroy(id) {
   // Delete all related quotes
@@ -135,7 +132,7 @@ async function clientDestroy(id) {
   });
   console.log("Postgres: Destroyed client");
 }
-events.emitter.on("db-CLIENT_DESTROY", clientDestroy);
+events.on("db-CLIENT_DESTROY", clientDestroy);
 
 async function invoiceCreateUpdate(data) {
   if (data.salesperson) {
@@ -210,7 +207,7 @@ async function invoiceCreateUpdate(data) {
 
   console.log("Postgres: Upserted invoice");
 }
-events.emitter.on("db-INVOICE_CREATE_UPDATE", invoiceCreateUpdate);
+events.on("db-INVOICE_CREATE_UPDATE", invoiceCreateUpdate);
 
 async function invoiceDestroy(id) {
   await prisma.jobsOnInvoices.deleteMany({
@@ -221,7 +218,7 @@ async function invoiceDestroy(id) {
   });
   console.log("Postgres: Destroyed invoice");
 }
-events.emitter.on("db-INVOICE_DESTROY", invoiceDestroy);
+events.on("db-INVOICE_DESTROY", invoiceDestroy);
 
 async function ensureInvoiceExists(id) {
   const invoice = await prisma.invoice.findMany({
@@ -277,7 +274,7 @@ async function jobCreateUpdate(data) {
   });
   console.log("Postgres: Upserted job");
 }
-events.emitter.on("db-JOB_CREATE_UPDATE", jobCreateUpdate);
+events.on("db-JOB_CREATE_UPDATE", jobCreateUpdate);
 
 async function jobDestroy(id) {
   await prisma.quotesOnJobs.deleteMany({
@@ -293,7 +290,7 @@ async function jobDestroy(id) {
   });
   console.log("Postgres: Destroyed job");
 }
-events.emitter.on("db-JOB_DESTROY", invoiceDestroy);
+events.on("db-JOB_DESTROY", invoiceDestroy);
 
 async function ensureJobExists(id) {
   const job = await prisma.user.findMany({ where: { id: { equals: id } } });
@@ -400,7 +397,7 @@ async function quoteCreateUpdate(data) {
 
   console.log("Postgres: Upserted quote");
 }
-events.emitter.on("db-QUOTE_CREATE_UPDATE", quoteCreateUpdate);
+events.on("db-QUOTE_CREATE_UPDATE", quoteCreateUpdate);
 
 async function quoteDestroy(id) {
   await prisma.quotesOnJobs.deleteMany({
@@ -412,7 +409,7 @@ async function quoteDestroy(id) {
   });
   console.log("Postgres: Destroyed quote");
 }
-events.emitter.on("db-QUOTE_DESTROY", quoteDestroy);
+events.on("db-QUOTE_DESTROY", quoteDestroy);
 
 async function paymentCreateUpdate(data) {
   await clientCreateUpdate(data.client);
@@ -448,7 +445,7 @@ async function paymentCreateUpdate(data) {
   });
   console.log("Postgres: Upserted payment");
 }
-events.emitter.on("db-PAYMENT_CREATE_UPDATE", paymentCreateUpdate);
+events.on("db-PAYMENT_CREATE_UPDATE", paymentCreateUpdate);
 
 // TODO: Figure payment destroys
 // This is having an issue, as the Jobber API doesn't give us the payment ID they used initially
@@ -458,13 +455,13 @@ async function paymentDestroy(id) {
   });
   console.log("Postgres: Destroyed payment");
 }
-// events.emitter.on("db-PAYMENT_DESTROY", paymentDestroy);
+// events.on("db-PAYMENT_DESTROY", paymentDestroy);
 
 async function propertyCreateUpdate(data) {
   await clientCreateUpdate(data.client);
   await propertyUpsert(data);
 }
-events.emitter.on("db-PROPERTY_CREATE_UPDATE", propertyCreateUpdate);
+events.on("db-PROPERTY_CREATE_UPDATE", propertyCreateUpdate);
 
 async function propertyDestroy(id) {
   await prisma.property.deleteMany({
@@ -472,7 +469,7 @@ async function propertyDestroy(id) {
   });
   console.log("Postgres: Destroyed property");
 }
-events.emitter.on("db-EXPENSE_DESTROY", propertyDestroy);
+events.on("db-EXPENSE_DESTROY", propertyDestroy);
 
 async function expenseCreateUpdate(data) {
   let userReferences = [data.enteredBy.id];
@@ -510,7 +507,7 @@ async function expenseCreateUpdate(data) {
   });
   console.log("Postgres: Upserted expense");
 }
-events.emitter.on("db-EXPENSE_CREATE_UPDATE", expenseCreateUpdate);
+events.on("db-EXPENSE_CREATE_UPDATE", expenseCreateUpdate);
 
 async function expenseDestroy(id) {
   await prisma.expense.deleteMany({
@@ -518,7 +515,7 @@ async function expenseDestroy(id) {
   });
   console.log("Postgres: Destroyed expense");
 }
-events.emitter.on("db-EXPENSE_DESTROY", expenseDestroy);
+events.on("db-EXPENSE_DESTROY", expenseDestroy);
 
 async function timesheetCreateUpdate(data) {
   if (data.approvedBy) {
@@ -568,7 +565,7 @@ async function timesheetCreateUpdate(data) {
   });
   console.log("Postgres: Upserted timesheet");
 }
-events.emitter.on("db-TIMESHEET_CREATE_UPDATE", timesheetCreateUpdate);
+events.on("db-TIMESHEET_CREATE_UPDATE", timesheetCreateUpdate);
 
 async function timesheetDestroy(id) {
   await prisma.timeSheetEntry.deleteMany({
@@ -576,4 +573,4 @@ async function timesheetDestroy(id) {
   });
   console.log("Postgres: Destroyed timesheet");
 }
-events.emitter.on("db-TIMESHEET_DESTROY", timesheetDestroy);
+events.on("db-TIMESHEET_DESTROY", timesheetDestroy);

@@ -1,18 +1,13 @@
-const { App } = require("@slack/bolt");
-const crypto = require("crypto");
-const Jobber = require("./Jobber");
-const { interleave } = require("../DataUtilities");
-const events = require("../events");
-const Sentry = require("@sentry/node");
-
-module.exports = {
-  verifyWebhook,
-  event,
-};
+import Slack from "@slack/bolt";
+import * as crypto from "crypto";
+import * as Jobber from "./Jobber.js";
+import { interleave } from "../DataUtilities.js";
+import events from "../events.js";
+import * as Sentry from "@sentry/node";
 
 const slackCallChannelName = process.env.SLACK_CHANNEL || "calls";
 
-const app = new App({
+const app = new Slack.App({
   signingSecret: process.env.SLACK_SIGNING_SECRET || "",
   token: process.env.SLACK_TOKEN || "",
 });
@@ -55,7 +50,7 @@ async function sendMessage(
     console.error(error);
   }
 }
-events.emitter.on("slackbot-send-message", sendMessage);
+events.on("slackbot-send-message", sendMessage);
 
 async function sendReplyRawMessageBlocks(event, rawMessage, blocks) {
   try {
@@ -292,7 +287,7 @@ async function unfurlMessage(event) {
  * @param doYouLikeItRaw Should we validate signature using the raw body?
  * @returns {boolean} Is the webhook authentic?
  */
-function verifyWebhook(req, doYouLikeItRaw = false) {
+export function verifyWebhook(req, doYouLikeItRaw = false) {
   if (process.env.DEBUG === "TRUE") {
     return true;
   }
@@ -340,7 +335,7 @@ function verifyWebhook(req, doYouLikeItRaw = false) {
  * @param req
  * @returns {Promise<void>}
  */
-async function event(req) {
+export async function event(req) {
   let event = req.body.event;
 
   // Do stuff based on type of event
@@ -351,7 +346,7 @@ async function event(req) {
 
       // If this was a thumbs up reaction
       if (event.reaction.includes("+1")) {
-        events.emitter.emit(
+        events.emit(
           "trello-move-contact-card",
           message.text,
           process.env.TRELLO_LIST_NAME_WIP,
@@ -360,7 +355,7 @@ async function event(req) {
 
       // If this was a thumbs up reaction
       if (event.reaction.includes("check_mark")) {
-        events.emitter.emit(
+        events.emit(
           "trello-move-contact-card",
           message.text,
           process.env.TRELLO_LIST_NAME_DONE,
@@ -373,7 +368,7 @@ async function event(req) {
         event.reaction.includes("-1") ||
         event.reaction.includes("call_me")
       ) {
-        events.emitter.emit(
+        events.emit(
           "trello-move-contact-card",
           message.text,
           process.env.TRELLO_LIST_NAME_NO_GO,
@@ -445,7 +440,7 @@ async function event(req) {
       break;
   }
 }
-events.emitter.on("slack-EVENT", event);
+events.on("slack-EVENT", event);
 
 /**
  * Takes in a Slack webhook for an INTERACTIVITY event, and processes it
@@ -518,4 +513,4 @@ async function interactivity(req) {
       break;
   }
 }
-events.emitter.on("slack-INTERACTIVITY", interactivity);
+events.on("slack-INTERACTIVITY", interactivity);

@@ -1,6 +1,6 @@
-const Contact = require("../contact");
-const APICoordinator = require("../APICoordinator");
-const events = require("../events");
+import Contact from "../contact.js";
+import * as APICoordinator from "../APICoordinator.js";
+import events from "../events.js";
 
 /**
  * Takes in a lead from SASO,
@@ -35,4 +35,4 @@ async function leadHandle(req) {
   // Send the request to where it needs to go
   await APICoordinator.contactMade(contact, JSON.stringify(body));
 }
-events.emitter.on("saso-lead", leadHandle);
+events.on("saso-lead", leadHandle);

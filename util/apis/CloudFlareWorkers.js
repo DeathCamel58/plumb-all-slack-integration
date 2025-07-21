@@ -1,6 +1,6 @@
-const Contact = require("../contact");
-const APICoordinator = require("../APICoordinator");
-const events = require("../events");
+import Contact from "../contact.js";
+import * as APICoordinator from "../APICoordinator.js";
+import events from "../events.js";
 
 /**
  * Processes a CloudFlare Contact form webhook
@@ -30,4 +30,4 @@ async function ContactFormHandle(req) {
   // Send the request to where it needs to go
   await APICoordinator.contactMade(contact, JSON.stringify(body));
 }
-events.emitter.on("cloudflare-contact-form", ContactFormHandle);
+events.on("cloudflare-contact-form", ContactFormHandle);
