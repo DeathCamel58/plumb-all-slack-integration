@@ -9,7 +9,10 @@ import * as Jobber from "./apis/Jobber.js";
 import * as Slack from "./apis/SlackBot.js";
 import * as Sentry from "@sentry/node";
 import cors from "cors";
-import { dirname } from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // The app object
 const app = express();
@@ -334,11 +337,11 @@ app.post("/website/negativeFeedback", cors(corsOptions), (req, res) => {
 });
 
 app.get("/", (req, res) => {
-  res.sendFile(path.join(dirname(__filename), "../assets/index.html"));
+  res.sendFile(path.join(__dirname, "../assets/index.html"));
 });
 
 app.get("/openapi.yaml", (req, res) => {
-  res.sendFile(path.join(dirname(__filename), "../assets/openapi.yaml"));
+  res.sendFile(path.join(__dirname, "../assets/openapi.yaml"));
 });
 
 app.listen(port, "0.0.0.0", () =>
