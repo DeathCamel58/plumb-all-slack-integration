@@ -1,7 +1,4 @@
-require("dotenv").config({
-  path: process.env.ENV_LOCATION || "/root/plumb-all-slack-integration/.env",
-});
-const events = require("../events");
+import events from "../events.js";
 
 /**
  * Processes a FleetSharp Alert webhook
@@ -56,13 +53,13 @@ async function AlertHandle(req) {
 
   if (message !== undefined) {
     // Send the request to where it needs to go
-    events.emitter.emit(
+    events.emit(
       "slackbot-send-message",
       message,
       "FleetSharp Alert",
       process.env.SLACK_CHANNEL_GENERAL,
     );
-    events.emitter.emit(
+    events.emit(
       "mattermost-send-message",
       message,
       "FleetSharp Alert",
@@ -70,4 +67,4 @@ async function AlertHandle(req) {
     );
   }
 }
-events.emitter.on("fleetsharp-alert", AlertHandle);
+events.on("fleetsharp-alert", AlertHandle);

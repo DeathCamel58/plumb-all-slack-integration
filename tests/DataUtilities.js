@@ -1,5 +1,5 @@
 const assert = require("assert");
-const DataUtilities = require("../util/DataUtilities");
+const DataUtilities = require("../util/DataUtilities.js");
 const { describe, it, expect } = require("@jest/globals");
 
 // We can group similar tests inside a `describe` block

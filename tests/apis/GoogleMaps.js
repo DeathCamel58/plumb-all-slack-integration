@@ -1,6 +1,6 @@
 const assert = require("assert");
 const { expect, test, describe } = require("@jest/globals");
-const GoogleMaps = require("../../util/apis/GoogleMaps");
+const GoogleMaps = require("../../util/apis/GoogleMaps.js");
 require("dotenv").config({
   path: process.env.ENV_LOCATION || "/root/plumb-all-slack-integration/.env",
 });

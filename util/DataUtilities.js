@@ -3,7 +3,7 @@
  * @param phone Unparsed phone number
  * @returns {null|*} Parsed Phone Number
  */
-function normalizePhoneNumber(phone) {
+export function normalizePhoneNumber(phone) {
   //normalize string and remove all unnecessary characters
   phone = phone.replace(/\D/g, "");
 
@@ -27,7 +27,7 @@ function normalizePhoneNumber(phone) {
  * @param value The item to add in between elements
  * @returns {*} The array with the additional elements
  */
-const interleave = (arr, value) => {
+export const interleave = (arr, value) => {
   return arr.reduce((result, element, index, array) => {
     // Push the current element from the original array into the new one
     result.push(element);
@@ -39,9 +39,4 @@ const interleave = (arr, value) => {
 
     return result;
   }, []);
-};
-
-module.exports = {
-  normalizePhoneNumber,
-  interleave,
 };

@@ -1,17 +1,14 @@
 // noinspection JSIgnoredPromiseFromCall
 
-require("dotenv").config({
-  path: process.env.ENV_LOCATION || "/root/plumb-all-slack-integration/.env",
-});
-let fs = require("fs");
-const path = require("path");
-const express = require("express");
-const bodyParser = require("body-parser");
-const events = require("./events");
-let Jobber = require("./apis/Jobber");
-let Slack = require("./apis/SlackBot");
-const Sentry = require("@sentry/node");
-const cors = require("cors");
+import fs from "fs";
+import path from "path";
+import express from "express";
+import bodyParser from "body-parser";
+import events from "./events.js";
+import * as Jobber from "./apis/Jobber.js";
+import * as Slack from "./apis/SlackBot.js";
+import * as Sentry from "@sentry/node";
+import cors from "cors";
 
 // The app object
 const app = express();
@@ -52,7 +49,7 @@ app.post("/saso/:WEBHOOK_TYPE", (req, res) => {
     console.log("Web: Got a lead with a source from SASO!");
 
     // Emit Event
-    events.emitter.emit("saso-lead", req);
+    events.emit("saso-lead", req);
   }
 
   res.sendStatus(200);
@@ -84,8 +81,8 @@ app.post("/jobber/:WEBHOOK_TYPE", (req, res) => {
     // Process Request
     // This checks if the given webhook type has listeners, and if so, we fire that event
     const listenerName = `jobber-${req.params.WEBHOOK_TYPE}`;
-    if (events.emitter.listenerCount(listenerName) > 0) {
-      events.emitter.emit(listenerName, req);
+    if (events.listenerCount(listenerName) > 0) {
+      events.emit(listenerName, req);
     } else {
       console.log("Web: Data for unhandled webhook was");
       console.log(req.body);
@@ -137,7 +134,7 @@ app.get("/jobber/authorize", (req, res) => {
 
   Jobber.getRefreshToken();
 
-  events.emitter.emit("jobber-AUTHORIZATION", req);
+  events.emit("jobber-AUTHORIZATION", req);
 });
 
 /**
@@ -161,7 +158,7 @@ app.post("/slack/EVENT", (req, res) => {
     } else {
       res.sendStatus(200);
 
-      events.emitter.emit("slack-EVENT", req);
+      events.emit("slack-EVENT", req);
     }
   } else {
     // Webhook signature invalid. Send 401.
@@ -181,7 +178,7 @@ app.post("/slack/INTERACTIVITY", (req, res) => {
     // Webhook was valid.
     req.body.payload = JSON.parse(req.body.payload);
 
-    events.emitter.emit("slack-INTERACTIVITY", req);
+    events.emit("slack-INTERACTIVITY", req);
   } else {
     // Webhook signature invalid. Send 401.
     res.sendStatus(401);
@@ -197,7 +194,7 @@ app.get("/mattermost/jobberOpenJobs", (req, res) => {
   // Verify that the webhook came from Slack
   if (req.query.token === process.env.MATTERMOST_WEBHOOK_OPEN_JOBS_TOKEN) {
     // Webhook was valid.
-    events.emitter.emit("mattermost-open-jobs", req);
+    events.emit("mattermost-open-jobs", req);
     const returnedData = {
       response_type: "ephemeral",
       text: ":gear: Generating Open Jobs List :gear:",
@@ -219,7 +216,7 @@ app.post("/google-ads/form", (req, res) => {
     console.info("Web: Google Ads lead form received.");
     res.sendStatus(200);
 
-    events.emitter.emit("google-ads-form", req);
+    events.emit("google-ads-form", req);
   } else {
     const message = `Web: Google Ads Webhook: Incorrect Key. ${data["google_key"]} Expected: "${process.env.GOOGLE_ADS_KEY}`;
     console.error(message);
@@ -239,7 +236,7 @@ app.post("/cloudflare/contactForm", (req, res) => {
     console.info("Web: CloudFlare Workers contact form received.");
     res.sendStatus(200);
 
-    events.emitter.emit("cloudflare-contact-form", req);
+    events.emit("cloudflare-contact-form", req);
   } else {
     const message = `Web: Cloudflare Workers Webhook: Incorrect Key. ${data["cloudflare_key"]} Expected: "${process.env.CLOUDFLARE_CONTACT_FORM_KEY}`;
     console.error(message);
@@ -256,7 +253,7 @@ app.post("/fleetsharp/alerts", (req, res) => {
   // Return a `201`, as this is what the documentation specifies as our response
   res.sendStatus(201);
 
-  events.emitter.emit("fleetsharp-alert", req);
+  events.emit("fleetsharp-alert", req);
 });
 
 /**
@@ -270,7 +267,7 @@ app.post("/verisae/ingles", (req, res) => {
     console.info("Web: Verisae (Ingles) email received.");
     res.sendStatus(200);
 
-    events.emitter.emit("verisae-ingles", data);
+    events.emit("verisae-ingles", data);
   } else {
     const message = `Web: Verisae Webhook: Email not from us. From ${data.payload.sender}`;
     console.error(message);
@@ -290,7 +287,7 @@ app.post("/86repairs/call", (req, res) => {
     console.info("Web: 86 Repairs email received.");
     res.sendStatus(200);
 
-    events.emitter.emit("86repairs-call", data);
+    events.emit("86repairs-call", data);
   } else {
     const message = `Web: 86 Repairs email not from us. From ${data.payload.sender}`;
     console.error(message);
@@ -317,7 +314,7 @@ app.post("/website/contactForm", cors(corsOptions), (req, res) => {
 
   res.sendStatus(200);
 
-  events.emitter.emit("website-contact", data);
+  events.emit("website-contact", data);
 });
 
 /**
@@ -332,7 +329,7 @@ app.post("/website/negativeFeedback", cors(corsOptions), (req, res) => {
 
   res.sendStatus(200);
 
-  events.emitter.emit("website-negative-feedback", data);
+  events.emit("website-negative-feedback", data);
 });
 
 app.get("/", (req, res) => {

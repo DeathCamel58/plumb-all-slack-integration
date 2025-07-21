@@ -1,4 +1,4 @@
-const fetch = require("node-fetch");
+import fetch from "node-fetch";
 
 const recaptchaSecretKey = process.env.RECAPTCHA_SECRET_KEY;
 const recaptchaEndpoint = `https://www.google.com/recaptcha/api/siteverify?secret=${recaptchaSecretKey}`;
@@ -11,7 +11,7 @@ const recaptchaScoreThreshold = process.env.RECAPTCHA_SCORE_THRESHOLD;
  * @param token The recaptcha token
  * @param action The expected recaptcha action
  */
-async function CheckRecaptcha(token, action) {
+export async function CheckRecaptcha(token, action) {
   if (process.env.NODE_ENV === "development") {
     return true;
   }
@@ -38,5 +38,3 @@ async function CheckRecaptcha(token, action) {
 
   return false;
 }
-
-module.exports = { CheckRecaptcha };

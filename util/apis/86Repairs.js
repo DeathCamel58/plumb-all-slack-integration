@@ -1,7 +1,7 @@
-const Contact = require("../contact");
-const APICoordinator = require("../APICoordinator");
-const events = require("../events");
-const Sentry = require("@sentry/node");
+import Contact from "../contact.js";
+import * as APICoordinator from "../APICoordinator.js";
+import events from "../events.js";
+import * as Sentry from "@sentry/node";
 
 async function handleMessage(data, type) {
   const messageParts = [];
@@ -132,4 +132,4 @@ async function AlertHandle(data) {
   }
 }
 
-events.emitter.on("86repairs-call", AlertHandle);
+events.on("86repairs-call", AlertHandle);

@@ -1,7 +1,7 @@
-const Contact = require("../contact");
-const GoogleMaps = require("./GoogleMaps");
-const APICoordinator = require("../APICoordinator");
-const events = require("../events");
+import Contact from "../contact.js";
+import * as GoogleMaps from "./GoogleMaps.js";
+import * as APICoordinator from "../APICoordinator.js";
+import events from "../events.js";
 
 /**
  * Processes a Google Ads Lead form webhook
@@ -54,4 +54,4 @@ async function LeadFormHandle(rawData) {
 
   await APICoordinator.contactMade(contact, JSON.stringify(data));
 }
-events.emitter.on("google-ads-form", LeadFormHandle);
+events.on("google-ads-form", LeadFormHandle);

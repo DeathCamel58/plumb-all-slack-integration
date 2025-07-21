@@ -6,6 +6,7 @@
   "keywords": [],
   "author": "Dylan Corrales",
   "license": "ISC",
+  "type": "module",
   "scripts": {
     "start": "node index.js",
     "test": "jest",
@@ -26,7 +27,7 @@
     "express": "^5.1.0",
     "isomorphic-fetch": "^3.0.0",
     "lodash": "^4.17.21",
-    "node-fetch": "^2.7.0",
+    "node-fetch": "^3.3.2",
     "node-html-parser": "^7.0.1",
     "ws": "^8.18.3"
   },

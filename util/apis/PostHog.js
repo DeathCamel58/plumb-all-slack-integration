@@ -1,13 +1,10 @@
-require("dotenv").config({
-  path: process.env.ENV_LOCATION || "/root/plumb-all-slack-integration/.env",
-});
-const crypto = require("crypto");
-let Contact = require("../contact");
-const GoogleMaps = require("./GoogleMaps");
-const events = require("../events");
+import crypto from "crypto";
+import Contact from "../contact.js";
+import * as GoogleMaps from "./GoogleMaps.js";
+import events from "../events.js";
 
-const fetch = require("node-fetch");
-const Sentry = require("@sentry/node");
+import fetch from "node-fetch";
+import * as Sentry from "@sentry/node";
 
 /**
  * Sends a raw request to PostHog's API
@@ -16,7 +13,7 @@ const Sentry = require("@sentry/node");
  * @param data The data to send to the endpoint
  * @returns {Promise<void>}
  */
-async function useAPI(url, httpMethod, data) {
+export async function useAPI(url, httpMethod, data) {
   let query = JSON.stringify(data);
   let response = [];
   try {
@@ -57,7 +54,7 @@ async function useAPI(url, httpMethod, data) {
  * @param parameter The parameter to use in the URL. Defaults to `properties`.
  * @returns {Promise<*>} The parsed API response
  */
-async function individualSearch(searchQuery, parameter) {
+export async function individualSearch(searchQuery, parameter) {
   let query = parameter
     ? searchQuery
     : encodeURIComponent(JSON.stringify(searchQuery));
@@ -108,7 +105,7 @@ async function individualSearch(searchQuery, parameter) {
  * @param value The value to search for
  * @returns {Promise<*|null>} Matched users, null if none
  */
-async function searchByKey(key, value) {
+export async function searchByKey(key, value) {
   if (value !== null && value !== undefined) {
     /*
           TODO: Figure out how to do a case-insensitive search
@@ -146,7 +143,7 @@ async function searchByKey(key, value) {
  * @param contact The contact to search for
  * @returns {undefined|string} The id of the first matching PostHog Person, or `undefined` if none
  */
-async function searchForUser(contact) {
+export async function searchForUser(contact) {
   // If contact doesn't have data to search with, return undefined
   if (
     contact.name === undefined &&
@@ -216,7 +213,7 @@ async function searchForUser(contact) {
  * @param key Key to get value from
  * @returns {string} The data, or empty string
  */
-function getPlaceLocationPart(place, addressComponentIndex, key) {
+export function getPlaceLocationPart(place, addressComponentIndex, key) {
   // Check that the index exists in address_components
   if (place[0].address_components.length > addressComponentIndex) {
     // Check if we should return long_name or short_name
@@ -234,7 +231,7 @@ function getPlaceLocationPart(place, addressComponentIndex, key) {
  * @param contact The client to log to PostHog
  * @returns {Promise<string>} The ID of the client in PostHog
  */
-async function sendClientToPostHog(contact) {
+export async function sendClientToPostHog(contact) {
   // If the contact has an address, resolve it to a place object using Google Maps
   let place;
   if (
@@ -353,7 +350,7 @@ async function sendClientToPostHog(contact) {
  * @param contact The Contact that was parsed
  * @param originalMessage The message that was parsed into a contact.
  */
-async function logContact(contact, originalMessage) {
+export async function logContact(contact, originalMessage) {
   let id = await sendClientToPostHog(contact);
 
   // Create an event for the person in PostHog
@@ -372,13 +369,13 @@ async function logContact(contact, originalMessage) {
 
   // Send all queued data to PostHog
 }
-events.emitter.on("posthog-log-contact", logContact);
+events.on("posthog-log-contact", logContact);
 
 /**
  * Logs a created client in Jobber to PostHog
  * @param jobberClient The Contact that was parsed
  */
-async function logClient(jobberClient) {
+export async function logClient(jobberClient) {
   let defaultEmail;
   if ("emails" in jobberClient) {
     for (let i = 0; i < jobberClient.emails.length; i++) {
@@ -434,7 +431,7 @@ async function logClient(jobberClient) {
  * Logs a user in Jobber to PostHog
  * @param jobberUser The user in Jobber
  */
-async function logEmployee(jobberUser) {
+export async function logEmployee(jobberUser) {
   // Identify the user to allow PostHog to display employee details properly
   let userData = {
     name: jobberUser.name.full,
@@ -461,7 +458,7 @@ async function logEmployee(jobberUser) {
  * @param jobberInvoice The Invoice that was parsed
  * @param clientID The client ID to use for the event
  */
-async function logInvoice(jobberInvoice, clientID) {
+export async function logInvoice(jobberInvoice, clientID) {
   // Create an event for invoice in PostHog
   let captureData = {
     api_key: process.env.POSTHOG_TOKEN,
@@ -486,7 +483,7 @@ async function logInvoice(jobberInvoice, clientID) {
  * @param jobberQuote The quote that was parsed
  * @param clientID The client ID to use for the event
  */
-async function logQuote(jobberQuote, clientID) {
+export async function logQuote(jobberQuote, clientID) {
   // Create an event for quote in PostHog
   let captureData = {
     api_key: process.env.POSTHOG_TOKEN,
@@ -510,7 +507,7 @@ async function logQuote(jobberQuote, clientID) {
  * @param jobberQuote The quote that was parsed
  * @param clientID The client ID to use for the event
  */
-async function logQuoteUpdate(jobberQuote, clientID) {
+export async function logQuoteUpdate(jobberQuote, clientID) {
   // Check if the quote is not accepted
   if (jobberQuote.quoteStatus === "approved") {
     // Create an event for quote in PostHog
@@ -538,7 +535,7 @@ async function logQuoteUpdate(jobberQuote, clientID) {
  * @param jobberJob The job that was parsed
  * @param clientID The client ID to use for the event
  */
-async function logJob(jobberJob, clientID) {
+export async function logJob(jobberJob, clientID) {
   // Create an event for job in PostHog
   let captureData = {
     api_key: process.env.POSTHOG_TOKEN,
@@ -559,7 +556,7 @@ async function logJob(jobberJob, clientID) {
  * @param jobberJob The job that was parsed
  * @param clientID The client ID to use for the event
  */
-async function logJobUpdate(jobberJob, clientID) {
+export async function logJobUpdate(jobberJob, clientID) {
   // Create an event for job in PostHog
   let captureData = {
     api_key: process.env.POSTHOG_TOKEN,
@@ -580,7 +577,7 @@ async function logJobUpdate(jobberJob, clientID) {
  * @param jobberPayment The payment that was parsed
  * @param clientID The client ID to use for the event
  */
-async function logPayment(jobberPayment, clientID) {
+export async function logPayment(jobberPayment, clientID) {
   // Create an event for payment in PostHog
   let captureData = {
     api_key: process.env.POSTHOG_TOKEN,
@@ -602,7 +599,7 @@ async function logPayment(jobberPayment, clientID) {
  * @param jobberPayment The payment that was parsed
  * @param clientID The client ID to use for the event
  */
-async function logPaymentUpdate(jobberPayment, clientID) {
+export async function logPaymentUpdate(jobberPayment, clientID) {
   // Create an event for payment in PostHog
   let captureData = {
     api_key: process.env.POSTHOG_TOKEN,
@@ -623,7 +620,7 @@ async function logPaymentUpdate(jobberPayment, clientID) {
  * Logs a created payout in Jobber to PostHog
  * @param jobberPayout The payout that was parsed
  */
-async function logPayout(jobberPayout) {
+export async function logPayout(jobberPayout) {
   // Create an event for payout in PostHog
   let captureData = {
     api_key: process.env.POSTHOG_TOKEN,
@@ -650,7 +647,7 @@ async function logPayout(jobberPayout) {
  * Logs a payout update in Jobber to PostHog
  * @param jobberPayout The payout that was parsed
  */
-async function logPayoutUpdate(jobberPayout) {
+export async function logPayoutUpdate(jobberPayout) {
   // Create an event for payout in PostHog
   let captureData = {
     api_key: process.env.POSTHOG_TOKEN,
@@ -678,7 +675,7 @@ async function logPayoutUpdate(jobberPayout) {
  * @param jobberProperty The property that was parsed
  * @param clientID The client ID to use for the event
  */
-async function logProperty(jobberProperty, clientID) {
+export async function logProperty(jobberProperty, clientID) {
   // Create an event for property in PostHog
   let captureData = {
     api_key: process.env.POSTHOG_TOKEN,
@@ -699,7 +696,7 @@ async function logProperty(jobberProperty, clientID) {
  * @param jobberProperty The property that was parsed
  * @param clientID The client ID to use for the event
  */
-async function logPropertyUpdate(jobberProperty, clientID) {
+export async function logPropertyUpdate(jobberProperty, clientID) {
   // Create an event for property in PostHog
   let captureData = {
     api_key: process.env.POSTHOG_TOKEN,
@@ -720,7 +717,7 @@ async function logPropertyUpdate(jobberProperty, clientID) {
  * @param jobberVisit The visit that was parsed
  * @param clientID The client ID to use for the event
  */
-async function logVisit(jobberVisit, clientID) {
+export async function logVisit(jobberVisit, clientID) {
   // Create an event for visit in PostHog
 
   let name;
@@ -762,7 +759,7 @@ async function logVisit(jobberVisit, clientID) {
  * @param jobberVisit The visit that was parsed
  * @param clientID The client ID to use for the event
  */
-async function logVisitUpdate(jobberVisit, clientID) {
+export async function logVisitUpdate(jobberVisit, clientID) {
   // Create an event for visit in PostHog
 
   let name;
@@ -804,7 +801,7 @@ async function logVisitUpdate(jobberVisit, clientID) {
  * @param jobberVisit The visit that was parsed
  * @param clientID The client ID to use for the event
  */
-async function logVisitComplete(jobberVisit, clientID) {
+export async function logVisitComplete(jobberVisit, clientID) {
   // Create an event for visit in PostHog
 
   let name;
@@ -846,7 +843,7 @@ async function logVisitComplete(jobberVisit, clientID) {
  * @param jobberExpense The expense that was parsed
  * @param userID The user ID to use for the event
  */
-async function logExpenseCreate(jobberExpense, userID) {
+export async function logExpenseCreate(jobberExpense, userID) {
   let captureData = {
     api_key: process.env.POSTHOG_TOKEN,
     event: "expense created",
@@ -874,7 +871,7 @@ async function logExpenseCreate(jobberExpense, userID) {
  * @param jobberExpense The expense that was parsed
  * @param userID The user ID to use for the event
  */
-async function logExpenseUpdate(jobberExpense, userID) {
+export async function logExpenseUpdate(jobberExpense, userID) {
   let captureData = {
     api_key: process.env.POSTHOG_TOKEN,
     event: "expense updated",
@@ -902,7 +899,7 @@ async function logExpenseUpdate(jobberExpense, userID) {
  * @param jobberRequest The request that was parsed
  * @param clientID The client ID to use for the event
  */
-async function logRequestUpdate(jobberRequest, clientID) {
+export async function logRequestUpdate(jobberRequest, clientID) {
   // Create an event for request in PostHog
 
   let name;
@@ -951,29 +948,3 @@ async function logRequestUpdate(jobberRequest, clientID) {
   };
   await useAPI("capture/", "post", captureData);
 }
-
-module.exports = {
-  individualSearch,
-  searchForUser,
-  sendClientToPostHog,
-  logContact,
-  logClient,
-  logEmployee,
-  logInvoice,
-  logQuote,
-  logQuoteUpdate,
-  logJob,
-  logJobUpdate,
-  logPayment,
-  logPaymentUpdate,
-  logPayout,
-  logPayoutUpdate,
-  logProperty,
-  logPropertyUpdate,
-  logVisit,
-  logVisitUpdate,
-  logVisitComplete,
-  logExpenseCreate,
-  logExpenseUpdate,
-  logRequestUpdate,
-};

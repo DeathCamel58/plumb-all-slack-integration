@@ -1,5 +1,5 @@
 const assert = require("assert");
-const Contact = require("../util/contact");
+const Contact = require("../util/contact.js");
 const { describe, it } = require("@jest/globals");
 
 // We can group similar tests inside a `describe` block
