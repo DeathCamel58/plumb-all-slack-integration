@@ -12,6 +12,10 @@ const recaptchaScoreThreshold = process.env.RECAPTCHA_SCORE_THRESHOLD;
  * @param action The expected recaptcha action
  */
 async function CheckRecaptcha(token, action) {
+  if (process.env.NODE_ENV === "development") {
+    return true;
+  }
+
   let response = await fetch(`${recaptchaEndpoint}&response=${token}`);
   const recaptchaResponse = await response.json();
 
