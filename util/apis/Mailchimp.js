@@ -18,14 +18,14 @@ async function mailchimpSendEvent(data) {
   }
 
   try {
-    const response = await client.lists.createListMemberEvent(
+    const response = await mailchimp.lists.createListMemberEvent(
       process.env.MAILCHIMP_LIST_ID,
       email,
       { name: "invoice_made" },
     );
     console.log("Mailchimp: Sent invoice_made event");
   } catch (e) {
-    console.error(e);
+    console.error(e, `email: ${email}`, `client: ${JSON.stringify(client)}`);
   }
 }
 events.on("mailchimp-INVOICE_CREATE_UPDATE", mailchimpSendEvent);
