@@ -510,9 +510,9 @@ async function requestCreateHandle(req) {
     let contact = new Contact(
       "Jobber Request",
       request.client.name,
-      request.client.phones[0].number,
+      request.client.phones[0] ? request.client.phones[0].number : null,
       null,
-      request.client.emails[0].address,
+      request.client.emails[0] ? request.client.emails[0].address : null,
       address,
       `<${request.jobberWebUri}> (You may have to hold on that link, copy it, and paste it into your web browser to access it)`,
       "Jobber",
