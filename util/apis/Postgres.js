@@ -22,10 +22,14 @@ async function userUpsert(data) {
     phone: data.phone.friendly,
     status: data.status,
   };
+  // Separate the data for update and create operations
+  // The create operation should not include the id field as it's already in the where clause
+  const { id, ...createData } = row;
+
   await prisma.user.upsert({
     where: { id: data.id },
     update: { ...row },
-    create: { ...row },
+    create: { ...createData },
   });
   console.log("Postgres: Upserted user");
 }
@@ -59,10 +63,14 @@ async function propertyUpsert(data) {
     jobberWebUri: data.jobberWebUri,
     client: data.client.id,
   };
+  // Separate the data for update and create operations
+  // The create operation should not include the id field as it's already in the where clause
+  const { id, ...createData } = row;
+
   await prisma.property.upsert({
     where: { id: data.id },
     update: { ...row },
-    create: { ...row },
+    create: { ...createData },
   });
   console.log("Postgres: Upserted property");
 }
@@ -96,10 +104,14 @@ async function clientCreateUpdate(data) {
     updatedAt: new Date(data.updatedAt),
     jobberWebUri: data.jobberWebUri,
   };
+  // Separate the data for update and create operations
+  // The create operation should not include the id field as it's already in the where clause
+  const { id, ...createData } = row;
+
   await prisma.client.upsert({
     where: { id: data.id },
     update: { ...row },
-    create: { ...row },
+    create: { ...createData },
   });
   console.log("Postgres: Upserted client");
 }
@@ -167,10 +179,14 @@ async function invoiceCreateUpdate(data) {
 
   // TODO: Handle multiple properties
 
+  // Separate the data for update and create operations
+  // The create operation should not include the id field as it's already in the where clause
+  const { id, ...createData } = row;
+
   await prisma.invoice.upsert({
     where: { id: data.id },
     update: { ...row },
-    create: { ...row },
+    create: { ...createData },
   });
 
   // Create the necessary relations
@@ -267,10 +283,14 @@ async function jobCreateUpdate(data) {
     willClientBeAutomaticallyCharged: data.willClientBeAutomaticallyCharged,
   };
 
+  // Separate the data for update and create operations
+  // The create operation should not include the id field as it's already in the where clause
+  const { id, ...createData } = row;
+
   await prisma.job.upsert({
     where: { id: data.id },
     update: { ...row },
-    create: { ...row },
+    create: { ...createData },
   });
   console.log("Postgres: Upserted job");
 }
@@ -357,10 +377,14 @@ async function quoteCreateUpdate(data) {
     updatedAt: new Date(data.updatedAt),
   };
 
+  // Separate the data for update and create operations
+  // The create operation should not include the id field as it's already in the where clause
+  const { id, ...createData } = row;
+
   await prisma.quote.upsert({
     where: { id: data.id },
     update: { ...row },
-    create: { ...row },
+    create: { ...createData },
   });
 
   // Create the necessary relations
@@ -438,10 +462,14 @@ async function paymentCreateUpdate(data) {
     invoices: data.invoice ? { connect: { id: data.invoice.id } } : undefined,
   };
 
+  // Separate the data for update and create operations
+  // The create operation should not include the id field as it's already in the where clause
+  const { id, ...createData } = row;
+
   await prisma.payment.upsert({
     where: { id: data.id },
     update: { ...row },
-    create: { ...row },
+    create: { ...createData },
   });
   console.log("Postgres: Upserted payment");
 }
@@ -500,10 +528,14 @@ async function expenseCreateUpdate(data) {
     total: data.total,
     updatedAt: new Date(data.updatedAt),
   };
+  // Separate the data for update and create operations
+  // The create operation should not include the id field as it's already in the where clause
+  const { id, ...createData } = row;
+
   await prisma.expense.upsert({
     where: { id: data.id },
     update: { ...row },
-    create: { ...row },
+    create: { ...createData },
   });
   console.log("Postgres: Upserted expense");
 }
@@ -558,10 +590,14 @@ async function timesheetCreateUpdate(data) {
     // visits: data.visit ? { connect: { id: data.visit.id } } : undefined,
     visitDurationTotal: data.visitDurationTotal,
   };
+  // Separate the data for update and create operations
+  // The create operation should not include the id field as it's already in the where clause
+  const { id, ...createData } = row;
+
   await prisma.timeSheetEntry.upsert({
     where: { id: data.id },
     update: { ...row },
-    create: { ...row },
+    create: { ...createData },
   });
   console.log("Postgres: Upserted timesheet");
 }
