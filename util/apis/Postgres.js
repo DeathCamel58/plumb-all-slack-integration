@@ -23,13 +23,13 @@ async function userUpsert(data) {
     status: data.status,
   };
   // Separate the data for update and create operations
-  // The create operation should not include the id field as it's already in the where clause
-  const { id, ...createData } = row;
+  // The update operation should not include the id field as it's already in the where clause
+  const { id, ...updateData } = row;
 
   await prisma.user.upsert({
     where: { id: data.id },
-    update: { ...row },
-    create: { ...createData },
+    update: { ...updateData },
+    create: { ...row },
   });
   console.log("Postgres: Upserted user");
 }
@@ -64,13 +64,13 @@ async function propertyUpsert(data) {
     client: data.client.id,
   };
   // Separate the data for update and create operations
-  // The create operation should not include the id field as it's already in the where clause
-  const { id, ...createData } = row;
+  // The update operation should not include the id field as it's already in the where clause
+  const { id, ...updateData } = row;
 
   await prisma.property.upsert({
     where: { id: data.id },
-    update: { ...row },
-    create: { ...createData },
+    update: { ...updateData },
+    create: { ...row },
   });
   console.log("Postgres: Upserted property");
 }
@@ -105,13 +105,13 @@ async function clientCreateUpdate(data) {
     jobberWebUri: data.jobberWebUri,
   };
   // Separate the data for update and create operations
-  // The create operation should not include the id field as it's already in the where clause
-  const { id, ...createData } = row;
+  // The update operation should not include the id field as it's already in the where clause
+  const { id, ...updateData } = row;
 
   await prisma.client.upsert({
     where: { id: data.id },
-    update: { ...row },
-    create: { ...createData },
+    update: { ...updateData },
+    create: { ...row },
   });
   console.log("Postgres: Upserted client");
 }
@@ -180,13 +180,13 @@ async function invoiceCreateUpdate(data) {
   // TODO: Handle multiple properties
 
   // Separate the data for update and create operations
-  // The create operation should not include the id field as it's already in the where clause
-  const { id, ...createData } = row;
+  // The update operation should not include the id field as it's already in the where clause
+  const { id, ...updateData } = row;
 
   await prisma.invoice.upsert({
     where: { id: data.id },
-    update: { ...row },
-    create: { ...createData },
+    update: { ...updateData },
+    create: { ...row },
   });
 
   // Create the necessary relations
@@ -284,13 +284,13 @@ async function jobCreateUpdate(data) {
   };
 
   // Separate the data for update and create operations
-  // The create operation should not include the id field as it's already in the where clause
-  const { id, ...createData } = row;
+  // The update operation should not include the id field as it's already in the where clause
+  const { id, ...updateData } = row;
 
   await prisma.job.upsert({
     where: { id: data.id },
-    update: { ...row },
-    create: { ...createData },
+    update: { ...updateData },
+    create: { ...row },
   });
   console.log("Postgres: Upserted job");
 }
@@ -378,13 +378,13 @@ async function quoteCreateUpdate(data) {
   };
 
   // Separate the data for update and create operations
-  // The create operation should not include the id field as it's already in the where clause
-  const { id, ...createData } = row;
+  // The update operation should not include the id field as it's already in the where clause
+  const { id, ...updateData } = row;
 
   await prisma.quote.upsert({
     where: { id: data.id },
-    update: { ...row },
-    create: { ...createData },
+    update: { ...updateData },
+    create: { ...row },
   });
 
   // Create the necessary relations
@@ -463,13 +463,13 @@ async function paymentCreateUpdate(data) {
   };
 
   // Separate the data for update and create operations
-  // The create operation should not include the id field as it's already in the where clause
-  const { id, ...createData } = row;
+  // The update operation should not include the id field as it's already in the where clause
+  const { id, ...updateData } = row;
 
   await prisma.payment.upsert({
     where: { id: data.id },
-    update: { ...row },
-    create: { ...createData },
+    update: { ...updateData },
+    create: { ...row },
   });
   console.log("Postgres: Upserted payment");
 }
@@ -529,13 +529,13 @@ async function expenseCreateUpdate(data) {
     updatedAt: new Date(data.updatedAt),
   };
   // Separate the data for update and create operations
-  // The create operation should not include the id field as it's already in the where clause
-  const { id, ...createData } = row;
+  // The update operation should not include the id field as it's already in the where clause
+  const { id, ...updateData } = row;
 
   await prisma.expense.upsert({
     where: { id: data.id },
-    update: { ...row },
-    create: { ...createData },
+    update: { ...updateData },
+    create: { ...row },
   });
   console.log("Postgres: Upserted expense");
 }
@@ -591,13 +591,13 @@ async function timesheetCreateUpdate(data) {
     visitDurationTotal: data.visitDurationTotal,
   };
   // Separate the data for update and create operations
-  // The create operation should not include the id field as it's already in the where clause
-  const { id, ...createData } = row;
+  // The update operation should not include the id field as it's already in the where clause
+  const { id, ...updateData } = row;
 
   await prisma.timeSheetEntry.upsert({
     where: { id: data.id },
-    update: { ...row },
-    create: { ...createData },
+    update: { ...updateData },
+    create: { ...row },
   });
   console.log("Postgres: Upserted timesheet");
 }
