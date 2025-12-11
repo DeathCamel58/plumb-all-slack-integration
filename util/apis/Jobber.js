@@ -1201,3 +1201,110 @@ query OpenJobQuery {
 
   return jobs;
 }
+
+/**
+ * Queries the Jobber API to get a list of jobs
+ * @param user The salesperson to filter by
+ * @return {Promise<ProfileNode[]|*[]>}
+ */
+export async function findUserJobs(user = null) {
+  let invoices = {};
+
+  const date = new Date();
+  date.setDate(date.getDate() - 30);
+
+  let query = `
+query jobQuery {
+    jobs (sort: {key: UPDATED_AT, direction: DESCENDING}, filter: {createdAt: {after: "${date.toISOString()}"}}) {
+        nodes {
+            id
+            jobNumber
+            title
+            total
+            client {
+                name
+            }
+            salesperson {
+              name {
+                full
+              }
+            }
+            jobStatus
+        }
+    }
+}
+  `;
+
+  let jobResponse = await makeRequest(query);
+
+  if (user) {
+    // There's a salesperson we're filtering for
+    let jobs = [];
+
+    for (let job of jobResponse.jobs.nodes) {
+      if (job.salesperson !== null && job.salesperson.name.full === user) {
+        jobs.push(job);
+      }
+    }
+
+    return jobs;
+  } else {
+    return jobResponse.jobs.nodes;
+  }
+}
+
+/**
+ * Queries the Jobber API to get a list of invoices
+ * @param user The salesperson to filter by
+ * @return {Promise<ProfileNode[]|*[]>}
+ */
+export async function findUserInvoices(user = null) {
+  let invoices = {};
+
+  const date = new Date();
+  date.setDate(date.getDate() - 30);
+
+  let query = `
+query invoiceQuery {
+    invoices (sort: {key: CREATED_AT, direction: DESCENDING}, filter: {createdAt: {after: "${date.toISOString()}"}}) {
+        nodes {
+            id
+            invoiceNumber
+            subject
+            amounts {
+              total
+            }
+            client {
+                name
+            }
+            salesperson {
+              name {
+                full
+              }
+            }
+            jobberWebUri
+        }
+    }
+}
+  `;
+
+  let invoiceResponse = await makeRequest(query);
+
+  if (user) {
+    // There's a salesperson we're filtering for
+    let invoices = [];
+
+    for (let invoice of invoiceResponse.invoices.nodes) {
+      if (
+        invoice.salesperson !== null &&
+        invoice.salesperson.name.full === user
+      ) {
+        invoices.push(invoice);
+      }
+    }
+
+    return invoices;
+  } else {
+    return invoiceResponse.invoices.nodes;
+  }
+}

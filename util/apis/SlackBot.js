@@ -4,6 +4,7 @@ import * as Jobber from "./Jobber.js";
 import { interleave } from "../DataUtilities.js";
 import events from "../events.js";
 import * as Sentry from "@sentry/node";
+import { findUserInvoices, findUserJobs } from "./Jobber.js";
 
 const slackCallChannelName = process.env.SLACK_CHANNEL || "calls";
 
@@ -330,6 +331,138 @@ export function verifyWebhook(req, doYouLikeItRaw = false) {
   return false;
 }
 
+async function jobsModal(trigger_id, user) {
+  let jobs = await findUserJobs(user);
+
+  let jobBlocks = [];
+  if (jobs.length > 0) {
+    for (let job of jobs) {
+      if (jobBlocks.length + 2 <= 99) {
+        jobBlocks.push({
+          type: "divider",
+        });
+        jobBlocks.push({
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `J#${job.jobNumber} ${job.jobStatus === "archived" ? ":white_check_mark:" : ":x:"}\nClient: ${job.client.name}\nTotal: $${job.total}`,
+          },
+          accessory: {
+            type: "button",
+            text: {
+              type: "plain_text",
+              text: "Open",
+              emoji: true,
+            },
+            value: "job_link",
+            url: job.jobberWebUri,
+            action_id: "button-action",
+          },
+        });
+      }
+    }
+  } else {
+    jobBlocks.push({
+      type: "divider",
+    });
+    jobBlocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "No jobs found. Check that your name in Slack matches your name in Jobber",
+      },
+    });
+  }
+
+  await app.client.views.open({
+    trigger_id: trigger_id,
+    view: {
+      type: "modal",
+      callback_id: "open_job_modal",
+      title: {
+        type: "plain_text",
+        text: "Open Jobs Message",
+      },
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `Here's jobs in the past 30 days found for \`${user}\`.\n:white_check_mark: means that the job is closed\n:x: means that the job isn't closed properly`,
+          },
+        },
+        ...jobBlocks,
+      ],
+    },
+  });
+}
+
+async function invoicesModal(trigger_id, user) {
+  let invoices = await findUserInvoices(user);
+
+  let invoiceBlocks = [];
+  if (invoices.length > 0) {
+    for (let invoice of invoices) {
+      if (invoiceBlocks.length + 2 <= 99) {
+        invoiceBlocks.push({
+          type: "divider",
+        });
+        invoiceBlocks.push({
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `I#${invoice.invoiceNumber}\nClient: ${invoice.client.name}\nTotal: $${invoice.amounts.total}`,
+          },
+          accessory: {
+            type: "button",
+            text: {
+              type: "plain_text",
+              text: "Open",
+              emoji: true,
+            },
+            value: "invoice_link",
+            url: invoice.jobberWebUri,
+            action_id: "button-action",
+          },
+        });
+      }
+    }
+  } else {
+    invoiceBlocks.push({
+      type: "divider",
+    });
+    invoiceBlocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "No invoices found. Check that your name in Slack matches your name in Jobber",
+      },
+    });
+  }
+
+  await app.client.views.open({
+    trigger_id: trigger_id,
+    view: {
+      type: "modal",
+      callback_id: "open_job_modal",
+      title: {
+        type: "plain_text",
+        text: "Open Jobs Message",
+      },
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `Here's invoices in the past 30 days found for \`${user}\``,
+          },
+        },
+        ...invoiceBlocks,
+      ],
+    },
+  });
+}
+
 /**
  * Takes in a Slack webhook for an event, and processes it
  * @param req
@@ -418,6 +551,26 @@ export async function event(req) {
               value: "get_open_jobs",
               action_id: "get-open-jobs-0",
             },
+            {
+              type: "button",
+              text: {
+                type: "plain_text",
+                text: "Get my jobs",
+                emoji: true,
+              },
+              value: "get_my_jobs",
+              action_id: "get-my-jobs-0",
+            },
+            {
+              type: "button",
+              text: {
+                type: "plain_text",
+                text: "Get my invoices",
+                emoji: true,
+              },
+              value: "get_my_invoices",
+              action_id: "get-my-invoices-0",
+            },
           ],
         },
       ];
@@ -455,6 +608,14 @@ async function interactivity(req) {
     // If the event is a reaction added
     case "block_actions":
       for (let action of event.actions) {
+        let userResponse = await app.client.users.profile.get({
+          user: event.user.id,
+        });
+        let user = null;
+        if (userResponse.ok) {
+          user = userResponse.profile.real_name;
+        }
+
         switch (action.action_id) {
           case "get-open-jobs-0":
             console.log("Slack: User requests the get open jobs message!");
@@ -496,6 +657,18 @@ async function interactivity(req) {
                 ],
               },
             });
+
+            break;
+          case "get-my-jobs-0":
+            console.log("Slack: User requests their jobs!");
+
+            await jobsModal(event.trigger_id, user);
+
+            break;
+          case "get-my-invoices-0":
+            console.log("Slack: User requests their invoices!");
+
+            await invoicesModal(event.trigger_id, user);
 
             break;
           default:
