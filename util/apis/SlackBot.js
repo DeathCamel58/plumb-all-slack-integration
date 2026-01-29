@@ -7,7 +7,7 @@ import * as Sentry from "@sentry/node";
 import { findUserInvoices, findUserJobs } from "./Jobber.js";
 import {
   callEmployeeThenCustomer,
-  getEmployeeNumber,
+  getOrAssignEmployeeNumber,
   textCustomer,
   updateTwilioContact,
   updateTwilioContactTs,
@@ -944,7 +944,7 @@ async function interactivity(req) {
             });
 
             const assignedTwilioNumber =
-              await getEmployeeNumber(employeePhoneNumber);
+              await getOrAssignEmployeeNumber(employeePhoneNumber);
 
             await updateTwilioContact(
               action.value,

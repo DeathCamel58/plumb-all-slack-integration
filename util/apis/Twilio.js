@@ -10,15 +10,76 @@ const client = twilio(
   process.env.TWILIO_AUTH_TOKEN,
 );
 
-export async function getEmployeeNumber(employeePhoneNumber) {
-  return prisma.twilioNumber.findFirst({
-    where: {
-      assignedEmployeeNumber: toE164(employeePhoneNumber),
+/**
+ * Automatically assigns a Twilio number to an employee the first time they try to call/text.
+ *
+ * Flow:
+ * 1) If employee already has a TwilioNumber (assignedEmployeeNumber = employee E.164), return it
+ * 2) Else find the first unassigned TwilioNumber
+ * 3) Assign it to the employee
+ * 4) Return it
+ *
+ * Concurrency note:
+ * - Uses a transaction + conditional update to avoid two employees grabbing the same number.
+ */
+export async function getOrAssignEmployeeNumber(employeePhoneNumber) {
+  const employeeE164 = toE164(employeePhoneNumber);
+
+  const result = await prisma.$transaction(
+    async (tx) => {
+      // Step 1: already assigned?
+      const existing = await tx.twilioNumber.findFirst({
+        where: { assignedEmployeeNumber: employeeE164 },
+        select: { phoneNumber: true },
+      });
+
+      if (existing?.phoneNumber) return existing;
+
+      // Step 2: get first unassigned
+      const candidate = await tx.twilioNumber.findFirst({
+        where: {
+          assignedEmployeeNumber: "",
+        },
+        orderBy: {
+          phoneNumber: "asc",
+        },
+        select: {
+          id: true,
+          phoneNumber: true,
+        },
+      });
+
+      if (!candidate) return null;
+
+      // Step 3: attempt to assign (conditional update prevents double-claim)
+      const updated = await tx.twilioNumber.updateMany({
+        where: {
+          id: candidate.id,
+          assignedEmployeeNumber: "",
+        },
+        data: {
+          assignedEmployeeNumber: employeeE164,
+        },
+      });
+
+      if (updated.count === 1) {
+        // Step 4: return the newly-assigned number
+        return { phoneNumber: candidate.phoneNumber };
+      }
     },
-    select: {
-      phoneNumber: true,
+    {
+      // Postgres: helps reduce weird edge cases under concurrency
+      isolationLevel: "Serializable",
     },
-  });
+  );
+
+  if (!result) {
+    throw new Error(
+      "No available Twilio numbers to assign. Please add more numbers to the TwilioNumber table.",
+    );
+  }
+
+  return result;
 }
 
 export async function updateTwilioContactTs(call, threadTs) {
@@ -221,7 +282,8 @@ export async function callEmployeeThenCustomer(
   const twimlUrl = new URL(`${process.env.WEB_URL}/twilio/bridge`);
   twimlUrl.searchParams.set("to", toE164(customerPhoneNumber));
 
-  const assignedTwilioNumber = await getEmployeeNumber(employeePhoneNumber);
+  const assignedTwilioNumber =
+    await getOrAssignEmployeeNumber(employeePhoneNumber);
 
   // TODO: Ensure the employee picked up the phone
   //       If we don't check for this, the call can connect a voicemail
@@ -266,7 +328,8 @@ export async function textCustomer(
   smsMessage,
   slackTs = null,
 ) {
-  const assignedTwilioNumber = await getEmployeeNumber(employeePhoneNumber);
+  const assignedTwilioNumber =
+    await getOrAssignEmployeeNumber(employeePhoneNumber);
 
   await client.messages.create({
     to: toE164(customerPhoneNumber),
