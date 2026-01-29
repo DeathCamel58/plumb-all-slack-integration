@@ -40,3 +40,22 @@ export const interleave = (arr, value) => {
     return result;
   }, []);
 };
+
+/**
+ * Very small helper to coerce common US phone formats into E.164 for Twilio.
+ * If you need international support, we can expand this later.
+ */
+export function toE164(input) {
+  if (!input) return null;
+  const trimmed = String(input).trim();
+
+  // Already E.164-ish
+  if (/^\+\d{10,15}$/.test(trimmed)) return trimmed;
+
+  // Strip to digits and assume US if 10 digits, or 11 starting with 1
+  const digits = trimmed.replace(/\D/g, "");
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+
+  return null;
+}

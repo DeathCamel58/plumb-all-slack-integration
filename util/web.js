@@ -10,6 +10,14 @@ import * as Slack from "./apis/SlackBot.js";
 import * as Sentry from "@sentry/node";
 import cors from "cors";
 import { fileURLToPath } from "url";
+import twilio from "twilio";
+import {
+  handleBridge,
+  handleBridgeConfirm,
+  handleInboundCall,
+  handleInboundSms,
+  handleRecordingDone,
+} from "./apis/Twilio.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -319,6 +327,54 @@ app.post("/website/contactForm", cors(corsOptions), (req, res) => {
   res.sendStatus(200);
 
   events.emit("website-contact", data);
+});
+
+/**
+ * Twilio Inbound Voice Webhook
+ * - Twilio sends From/To as form-urlencoded fields
+ * - We respond with TwiML to bridge the caller to the assigned employee (or fallback)
+ * - We record the bridged conversation
+ */
+app.post("/twilio/voice", async (req, res) => {
+  const callResponse = await handleInboundCall(req, res);
+
+  res.type("text/xml").send(callResponse);
+});
+
+/**
+ * Twilio Inbound SMS Webhook
+ * - Twilio sends From/To as form-urlencoded fields
+ * - We send the message to Slack
+ */
+app.post("/twilio/sms", async (req, res) => {
+  const messageResponse = await handleInboundSms(req, res);
+
+  res.sendStatus(200);
+});
+
+/**
+ * Twilio Bridge
+ */
+app.post("/twilio/bridge", async (req, res) => {
+  const callResponse = await handleBridge(req, res);
+
+  res.type("text/xml").send(callResponse);
+});
+
+/**
+ * Twilio Bridge confirmation (Press 1)
+ */
+app.post("/twilio/bridge/confirm", async (req, res) => {
+  const callResponse = await handleBridgeConfirm(req, res);
+
+  res.type("text/xml").send(callResponse);
+});
+
+/**
+ * Twilio Recording Status Webhook
+ */
+app.post("/twilio/recording-status", (req, res) => {
+  return handleRecordingDone(req, res);
 });
 
 /**

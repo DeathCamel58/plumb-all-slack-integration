@@ -19,6 +19,7 @@ const modules = [
   "./util/apis/Postgres.js",
   "./util/apis/SasoWebHookHandler.js",
   "./util/apis/SlackBot.js",
+  "./util/apis/Twilio.js",
   "./util/apis/VerisaeIngles.js",
   "./util/apis/WebsiteContact.js",
 ];

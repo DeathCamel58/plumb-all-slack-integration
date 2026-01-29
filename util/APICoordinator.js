@@ -7,11 +7,7 @@ import events from "./events.js";
  * @returns {Promise<void>}
  */
 export async function contactMade(contact, originalMessage) {
-  events.emit(
-    "slackbot-send-message",
-    contact.messageToSend(),
-    `${contact.type} Contact`,
-  );
+  events.emit("slackbot-send-contact", contact, `${contact.type} Contact`);
   events.emit(
     "mattermost-send-message",
     contact.messageToSend(true),

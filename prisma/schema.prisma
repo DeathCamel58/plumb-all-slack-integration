@@ -244,3 +244,21 @@ model TimeSheetEntry {
   // visits        Visit?    @relation(fields: [visit], references: [id])
   visitDurationTotal Int?
 }
+
+model TwilioNumber {
+  id                     String          @id
+  phoneNumber            String
+  assignedEmployee       String?
+  assignedEmployeeNumber String?
+  twilioContacts         TwilioContact[]
+}
+
+model TwilioContact {
+  id             String        @id
+  twilioNumber   TwilioNumber? @relation(fields: [twilioNumberId], references: [id])
+  clientNumber   String
+  slackThreadId  String?
+  createdAt      DateTime
+  lastContactAt  DateTime
+  twilioNumberId String?
+}
