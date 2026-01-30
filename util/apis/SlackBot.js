@@ -51,6 +51,19 @@ async function resolveChannelId(channelOrName) {
   }
 }
 
+/**
+ * Check if the given user is an admin or owner of the Slack workspace
+ * @param userId The user to check
+ * @return {Promise<boolean>} Whether the user is an admin or owner
+ */
+async function isUserAdmin(userId) {
+  const userInfo = await app.client.users.info({
+    user: userId,
+  });
+
+  return userInfo?.user?.is_admin || userInfo?.user?.is_owner || false;
+}
+
 export async function resolveUserByPhoneNumber(phoneNumber) {
   console.log(`SlackBot: Resolving user for phone number ${phoneNumber}`);
 
@@ -122,10 +135,41 @@ async function publishHome(user_id) {
 
   const assignedNumbersRows = [];
 
+  const isAdmin = await isUserAdmin(user_id);
+
+  assignedNumbersRows.push(
+    {
+      type: "divider",
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "*Assigned Phone Numbers*",
+      },
+    },
+  );
+
   for (const number of assignedNumbers) {
     assignedNumbersRows.push({
       type: "divider",
     });
+
+    let assignedNumbersControls = [];
+    if (isAdmin) {
+      assignedNumbersControls = {
+        // TODO: Allow manual assignment of users
+        accessory: {
+          type: "button",
+          text: {
+            type: "plain_text",
+            text: "Unassign User",
+          },
+          value: number.id,
+          action_id: "unassign-number-0",
+        },
+      };
+    }
 
     let assignedEmployee = "Couldn't Find User";
     if (
@@ -143,16 +187,7 @@ async function publishHome(user_id) {
         type: "mrkdwn",
         text: `*${number.phoneNumber}*\n*Assigned to:* ${assignedEmployee}`,
       },
-      // TODO: Allow manual assignment of users
-      accessory: {
-        type: "button",
-        text: {
-          type: "plain_text",
-          text: "Unassign User",
-        },
-        value: number.id,
-        action_id: "unassign-number-0",
-      },
+      ...assignedNumbersControls,
     });
   }
 
@@ -198,16 +233,6 @@ async function publishHome(user_id) {
           action_id: "get-my-invoices-0",
         },
       ],
-    },
-    {
-      type: "divider",
-    },
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: "*Assigned Phone Numbers*",
-      },
     },
     ...assignedNumbersRows,
   ];
@@ -1083,13 +1108,7 @@ async function interactivity(req) {
           case "unassign-number-0":
             console.log(`Slack: User unassigning the number ${action.value}!`);
 
-            // Check if the user is an admin of the slack workspace
-            const userInfo = await app.client.users.info({
-              user: event.user.id,
-            });
-
-            const isAdmin =
-              userInfo?.user?.is_admin || userInfo?.user?.is_owner || false;
+            const isAdmin = await isUserAdmin(event.user.id);
 
             if (!isAdmin) {
               break;
