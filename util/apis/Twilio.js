@@ -238,7 +238,10 @@ export async function handleInboundCall(req, res) {
       twiml.dial({}, fallbackNumber);
 
       console.error(`Twilio: Missing the number they dialed`);
-      // Sentry.captureException(e);
+
+      Sentry.captureException(
+        new Error("Twilio: Missing the number they dialed"),
+      );
 
       return twiml.toString();
     }
@@ -278,7 +281,7 @@ export async function handleInboundCall(req, res) {
     return twiml.toString();
   } catch (e) {
     console.error("Twilio Voice: error handling inbound call", e);
-    // Sentry.captureException(e);
+    Sentry.captureException(e);
 
     twiml.dial({}, process.env.TWILIO_FALLBACK_NUMBER);
     return twiml.toString();
@@ -482,7 +485,7 @@ export async function handleInboundSms(req, res) {
     await updateTwilioContact(from, to, null);
   } catch (e) {
     console.error("Twilio SMS: error handling inbound sms", e);
-    // Sentry.captureException(e);
+    Sentry.captureException(e);
   }
 }
 
