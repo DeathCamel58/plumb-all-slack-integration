@@ -398,6 +398,7 @@ async function sendContactMessage(
               type: "plain_text",
               text: "Call",
             },
+            style: "primary",
             value: contact.phone,
             action_id: "outbound-call-0",
           },
