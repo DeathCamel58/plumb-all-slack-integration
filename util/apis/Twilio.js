@@ -3,12 +3,72 @@ import { PrismaClient } from "../../generated/prisma/index.js";
 import { normalizePhoneNumber, toE164 } from "../DataUtilities.js";
 import fetch from "node-fetch";
 import events from "../events.js";
+import { resolveUserByPhoneNumber } from "./SlackBot.js";
+import * as Sentry from "@sentry/node";
 
 const prisma = new PrismaClient();
 const client = twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN,
 );
+
+export async function unassignNumber(phoneNumber) {
+  console.log("Twilio: Unassigning number " + phoneNumber);
+
+  const unassignNumber = await prisma.twilioNumber.update({
+    where: {
+      id: phoneNumber,
+    },
+    data: {
+      assignedEmployee: "",
+      assignedEmployeeNumber: "",
+    },
+  });
+}
+
+export async function returnAssignedPhoneNumbers() {
+  // Check in DB for any unassigned numbers
+  const unassignedNumbers = await prisma.twilioNumber.findMany({
+    where: {
+      assignedEmployee: "",
+    },
+  });
+
+  // If any unassigned numbers, look up the user they're for
+  for (const unassignedNumber of unassignedNumbers) {
+    // Look up which employee
+    console.log(
+      `Twilio: Updating the employee for number ${unassignedNumber.phoneNumber}`,
+    );
+    const slackUser = await resolveUserByPhoneNumber(
+      unassignedNumber.assignedEmployeeNumber,
+    );
+
+    if (slackUser) {
+      console.log(
+        `Twilio: Found Slack user ${slackUser.id} for phone number ${unassignedNumber.phoneNumber}`,
+      );
+
+      await prisma.twilioNumber.update({
+        where: {
+          id: unassignedNumber.id,
+        },
+        data: {
+          assignedEmployee: slackUser.id,
+        },
+      });
+    } else {
+      console.log(
+        `Twilio: Couldn't find a Slack user for ${unassignedNumber.phoneNumber}`,
+      );
+    }
+  }
+
+  // Fetch all numbers in DB
+  const allNumbers = await prisma.twilioNumber.findMany();
+
+  return allNumbers;
+}
 
 /**
  * Automatically assigns a Twilio number to an employee the first time they try to call/text.
@@ -74,6 +134,17 @@ export async function getOrAssignEmployeeNumber(employeePhoneNumber) {
   );
 
   if (!result) {
+    Sentry.captureException(
+      new Error("Failed to assign Twilio number, no numbers available."),
+    );
+
+    let message = `Error from the call bot. *Super technical error code*: :robot_face::frowning::thumbsdown:\nI can't assign a phone number to a user. Check my page for current phone number assignments, and maybe add phone numbers in Twilio?`;
+    events.emit(
+      "slackbot-send-message",
+      message,
+      "Call Bot Twilio Number Error",
+    );
+
     throw new Error(
       "No available Twilio numbers to assign. Please add more numbers to the TwilioNumber table.",
     );

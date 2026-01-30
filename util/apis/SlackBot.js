@@ -8,7 +8,9 @@ import { findUserInvoices, findUserJobs } from "./Jobber.js";
 import {
   callEmployeeThenCustomer,
   getOrAssignEmployeeNumber,
+  returnAssignedPhoneNumbers,
   textCustomer,
+  unassignNumber,
   updateTwilioContact,
   updateTwilioContactTs,
 } from "./Twilio.js";
@@ -47,6 +49,180 @@ async function resolveChannelId(channelOrName) {
   } else {
     return null;
   }
+}
+
+export async function resolveUserByPhoneNumber(phoneNumber) {
+  console.log(`SlackBot: Resolving user for phone number ${phoneNumber}`);
+
+  const normalize = (value) => {
+    if (!value) return null;
+    try {
+      return toE164(value);
+    } catch {
+      return String(value).replace(/[^\d+]/g, "");
+    }
+  };
+
+  const target = normalize(phoneNumber);
+  if (!target) return null;
+
+  try {
+    let cursor;
+    do {
+      const resp = await app.client.users.list({
+        limit: 200,
+        cursor: cursor,
+      });
+
+      if (!resp?.ok) {
+        console.warn(
+          `SlackBot: users.list failed: ${resp?.error || "unknown_error"}`,
+        );
+        return null;
+      }
+
+      const members = resp.members || [];
+      for (const member of members) {
+        // Skip deleted users and bots/app users
+        if (!member || member.deleted || member.is_bot || member.is_app_user) {
+          continue;
+        }
+
+        let userResponse = await app.client.users.profile.get({
+          user: member.id,
+        });
+
+        const profile = userResponse?.profile || {};
+
+        // Standard Slack profile phone field (if populated)
+        const profilePhone = normalize(profile?.fields?.Xf03M22Q81Q8?.value);
+
+        if (profilePhone === target) {
+          console.log(
+            `SlackBot: Found matching Slack user ${member.id} for phone ${target}`,
+          );
+          return member;
+        }
+      }
+
+      cursor = resp?.response_metadata?.next_cursor || null;
+    } while (cursor);
+
+    console.log(`SlackBot: No Slack user matched phone number ${target}`);
+    return null;
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error("SlackBot: resolveUserByPhoneNumber failed", error);
+    return null;
+  }
+}
+
+async function publishHome(user_id) {
+  const assignedNumbers = await returnAssignedPhoneNumbers();
+
+  const assignedNumbersRows = [];
+
+  for (const number of assignedNumbers) {
+    assignedNumbersRows.push({
+      type: "divider",
+    });
+
+    let assignedEmployee = "Couldn't Find User";
+    if (
+      number.assignedEmployee === "" &&
+      number.assignedEmployeeNumber === ""
+    ) {
+      assignedEmployee = "Unassigned";
+    } else {
+      assignedEmployee = `<@${number.assignedEmployee}>`;
+    }
+
+    assignedNumbersRows.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*${number.phoneNumber}*\n*Assigned to:* ${assignedEmployee}`,
+      },
+      // TODO: Allow manual assignment of users
+      accessory: {
+        type: "button",
+        text: {
+          type: "plain_text",
+          text: "Unassign User",
+        },
+        value: number.id,
+        action_id: "unassign-number-0",
+      },
+    });
+  }
+
+  const homeBlocks = [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "*Welcome!*\nThis is the home for Plumb-All's Slack Integration.",
+      },
+    },
+    {
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: {
+            type: "plain_text",
+            text: "Get open jobs as message",
+            emoji: true,
+          },
+          value: "get_open_jobs",
+          action_id: "get-open-jobs-0",
+        },
+        {
+          type: "button",
+          text: {
+            type: "plain_text",
+            text: "Get my jobs",
+            emoji: true,
+          },
+          value: "get_my_jobs",
+          action_id: "get-my-jobs-0",
+        },
+        {
+          type: "button",
+          text: {
+            type: "plain_text",
+            text: "Get my invoices",
+            emoji: true,
+          },
+          value: "get_my_invoices",
+          action_id: "get-my-invoices-0",
+        },
+      ],
+    },
+    {
+      type: "divider",
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "*Assigned Phone Numbers*",
+      },
+    },
+    ...assignedNumbersRows,
+  ];
+
+  await app.client.views.publish({
+    user_id: user_id,
+    view: {
+      type: "home",
+      title: {
+        type: "plain_text",
+        text: "Home",
+      },
+      blocks: homeBlocks,
+    },
+  });
 }
 
 /**
@@ -708,62 +884,7 @@ export async function event(req) {
       );
       break;
     case "app_home_opened":
-      const homeBlocks = [
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: "*Welcome!*\nThis is the home for Plumb-All's Slack Integration.2",
-          },
-        },
-        {
-          type: "actions",
-          elements: [
-            {
-              type: "button",
-              text: {
-                type: "plain_text",
-                text: "Get open jobs as message",
-                emoji: true,
-              },
-              value: "get_open_jobs",
-              action_id: "get-open-jobs-0",
-            },
-            {
-              type: "button",
-              text: {
-                type: "plain_text",
-                text: "Get my jobs",
-                emoji: true,
-              },
-              value: "get_my_jobs",
-              action_id: "get-my-jobs-0",
-            },
-            {
-              type: "button",
-              text: {
-                type: "plain_text",
-                text: "Get my invoices",
-                emoji: true,
-              },
-              value: "get_my_invoices",
-              action_id: "get-my-invoices-0",
-            },
-          ],
-        },
-      ];
-
-      await app.client.views.publish({
-        user_id: event.user,
-        view: {
-          type: "home",
-          title: {
-            type: "plain_text",
-            text: "Home",
-          },
-          blocks: homeBlocks,
-        },
-      });
+      await publishHome(event.user);
 
       break;
     default:
@@ -955,6 +1076,28 @@ async function interactivity(req) {
             break;
           case "outbound-text-1":
             console.log("Slack: User sent an outbound text!");
+
+            // TODO: Send outbound text messages once A2P campaign is approved
+
+            break;
+          case "unassign-number-0":
+            console.log(`Slack: User unassigning the number ${action.value}!`);
+
+            // Check if the user is an admin of the slack workspace
+            const userInfo = await app.client.users.info({
+              user: event.user.id,
+            });
+
+            const isAdmin =
+              userInfo?.user?.is_admin || userInfo?.user?.is_owner || false;
+
+            if (!isAdmin) {
+              break;
+            }
+
+            await unassignNumber(action.value);
+
+            await publishHome(event.user.id);
 
             break;
           default:
