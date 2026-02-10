@@ -3,8 +3,13 @@ import { PrismaClient } from "../../generated/prisma/index.js";
 import { normalizePhoneNumber, toE164 } from "../DataUtilities.js";
 import fetch from "node-fetch";
 import events from "../events.js";
-import { resolveUserByPhoneNumber } from "./SlackBot.js";
+import {
+  resolveUserByPhoneNumber,
+  sendMessageBlocks,
+  uploadFile,
+} from "./SlackBot.js";
 import * as Sentry from "@sentry/node";
+import { extension } from "mime-types";
 
 const prisma = new PrismaClient();
 const client = twilio(
@@ -421,6 +426,80 @@ export async function textCustomer(
   );
 }
 
+function getMediaUrls(body) {
+  const numMedia = body.NumMedia;
+  if (numMedia === 0) {
+    return [];
+  }
+
+  const mediaUrls = [];
+  for (let i = 0; i < numMedia; i++) {
+    if (body[`MediaUrl${i}`]) {
+      mediaUrls.push(body[`MediaUrl${i}`]);
+    } else {
+      console.warn(
+        `Twilio SMS: Expecting ${numMedia} media attachments; couldn't access MediaUrl${i}. Body was:\n${JSON.stringify(body)}`,
+      );
+    }
+  }
+
+  // There can only be up to 10 media URLs
+
+  return mediaUrls;
+}
+
+async function downloadTwilioMediaUrls(mediaUrls) {
+  if (!mediaUrls.length) {
+    return [];
+  }
+
+  const auth = Buffer.from(
+    `${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`,
+  ).toString("base64");
+
+  const downloads = mediaUrls.map(async (mediaUrl) => {
+    const resp = await fetch(mediaUrl, {
+      headers: {
+        Authorization: `Basic ${auth}`,
+      },
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      throw new Error(`Twilio media download failed (${resp.status}): ${text}`);
+    }
+
+    const arrayBuffer = await resp.arrayBuffer();
+    return {
+      url: mediaUrl,
+      contentType:
+        resp.headers.get("content-type") || "application/octet-stream",
+      data: Buffer.from(arrayBuffer),
+    };
+  });
+
+  return Promise.all(downloads);
+}
+
+async function getMedia(body) {
+  const mediaUrls = getMediaUrls(body);
+  if (mediaUrls.length) {
+    return await downloadTwilioMediaUrls(mediaUrls);
+  }
+}
+
+function buildMediaFilename(media) {
+  const prefix = `attachment-${Date.now()}`;
+
+  const ext = extension(media.contentType) || "bin";
+
+  if (ext === "bin") {
+    console.warn("Twilio SMS: Couldn't determine file extension!");
+  }
+
+  return `${prefix}.${ext}`;
+}
+
 export async function handleInboundSms(req, res) {
   // const VoiceResponse = twilio.twiml.VoiceResponse;
   // const twiml = new VoiceResponse();
@@ -429,14 +508,22 @@ export async function handleInboundSms(req, res) {
     const from = req.body?.From; // customer/caller
     const to = req.body?.To; // the Twilio number they dialed
 
-    const twilioContact = await prisma.twilioContact.findUnique({
+    let twilioContact = await prisma.twilioContact.findUnique({
       where: { id: from },
     });
+
+    // Check if there were any MMS media attachments
+    const media = await getMedia(req.body);
 
     // Optional: tiny bit of logging context (avoid logging sensitive data in production)
     console.info(
       `Twilio SMS: inbound SMS to=${to} from=${from || "<unknown>"} message=${req.body?.Body}`,
     );
+
+    let text = req.body?.Body;
+    if (req.body?.Body === "" && media && media.length > 0) {
+      text = "No message provided (attachments only)";
+    }
 
     // TODO: Send the message to Slack
     const blocks = [
@@ -444,7 +531,7 @@ export async function handleInboundSms(req, res) {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `SMS From ${from}\n${req.body?.Body}`,
+          text: `SMS From ${from}\n${text}`,
         },
       },
       {
@@ -474,15 +561,40 @@ export async function handleInboundSms(req, res) {
         ],
       },
     ];
-    events.emit(
-      "slackbot-send-message-blocks",
+    const threadId =
+      twilioContact && twilioContact.slackThreadId
+        ? twilioContact.slackThreadId
+        : null;
+
+    const slackMessage = await sendMessageBlocks(
       blocks,
       "New Call Bot",
-      twilioContact.slackThreadId,
+      threadId,
       process.env.SLACK_CHANNEL,
     );
 
-    await updateTwilioContact(from, to, null);
+    // TODO: Set the TwilioContact's slackThreadId (this will allow new inbound conversations to be in-thread)
+    await updateTwilioContact(from, to, slackMessage.ts);
+
+    twilioContact = await prisma.twilioContact.findUnique({
+      where: { id: from },
+    });
+
+    // If there are media attachments, upload them to the thread
+    if (media) {
+      for (let i = 0; i < media.length; i++) {
+        const fileName = buildMediaFilename(media[i]);
+
+        await uploadFile(
+          media[i].data,
+          fileName,
+          "SMS Attachment",
+          "SMS Attachment",
+          process.env.SLACK_CHANNEL,
+          twilioContact.slackThreadId,
+        );
+      }
+    }
   } catch (e) {
     console.error("Twilio SMS: error handling inbound sms", e);
     Sentry.captureException(e);
@@ -526,6 +638,9 @@ export async function handleRecordingDone(req, res) {
       events.emit(
         "slackbot-upload-file",
         callRecording,
+        `call-recording-${Date.now()}.mp3`,
+        "Call recording",
+        "Call Recorded",
         process.env.SLACK_CHANNEL,
         twilioContact.slackThreadId,
       );
@@ -569,6 +684,9 @@ export async function handleRecordingDone(req, res) {
       events.emit(
         "slackbot-upload-file",
         callRecording,
+        `call-recording-${Date.now()}.mp3`,
+        "Call recording",
+        "Call Recorded",
         process.env.SLACK_CHANNEL,
         twilioContact.slackThreadId,
         blocks,

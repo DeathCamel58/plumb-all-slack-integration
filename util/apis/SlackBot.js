@@ -292,7 +292,7 @@ events.on("slackbot-send-message", sendMessage);
  * @param channelName The channel to send the message to
  * @returns {Promise<WebAPICallResult & {channel?: string; deprecated_argument?: string; error?: string; errors?: string[]; message?: ChatPostMessageResponseMessage; needed?: string; ok?: boolean; provided?: string; response_metadata?: ResponseMetadata; ts?: string}>} Promise that resolves after message is sent
  */
-async function sendMessageBlocks(
+export async function sendMessageBlocks(
   blocks,
   username,
   threadTs = null,
@@ -319,8 +319,11 @@ async function sendMessageBlocks(
 }
 events.on("slackbot-send-message-blocks", sendMessageBlocks);
 
-async function uploadFile(
+export async function uploadFile(
   fileBuffer,
+  fileName,
+  title,
+  initialComment,
   channelName = slackCallChannelName,
   threadTs = null,
   blocks = null,
@@ -348,16 +351,20 @@ async function uploadFile(
     const result = await app.client.files.uploadV2({
       channel_id: channelId,
       thread_ts: threadTs,
-      filename: `call-recording-${Date.now()}.mp3`,
-      title: "Call recording",
+      filename: fileName,
+      title: title,
       file: fileBuffer,
-      initial_comment: "Call Recorded",
+      initial_comment: initialComment,
     });
 
     console.info("Slack: Uploaded file to Slack!");
+
+    return result;
   } catch (error) {
     Sentry.captureException(error);
     console.error(error);
+
+    return null;
   }
 }
 events.on("slackbot-upload-file", uploadFile);
