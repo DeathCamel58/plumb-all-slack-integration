@@ -107,8 +107,18 @@ export async function resolveUserByPhoneNumber(phoneNumber) {
 
         const profile = userResponse?.profile || {};
 
-        // Standard Slack profile phone field (if populated)
-        const profilePhone = normalize(profile?.fields?.Xf03M22Q81Q8?.value);
+        // Standard Slack profile phone field
+        let profilePhone = normalize(profile?.phone);
+
+        if (profilePhone === target) {
+          console.log(
+            `SlackBot: Found matching Slack user ${member.id} for phone ${target}`,
+          );
+          return member;
+        }
+
+        // Other Slack profile phone field
+        profilePhone = normalize(profile?.fields?.Xf03M22Q81Q8?.value);
 
         if (profilePhone === target) {
           console.log(
@@ -948,8 +958,11 @@ async function interactivity(req) {
           user = userResponse.profile.real_name;
         }
 
-        const employeePhoneNumber =
+        let employeePhoneNumber =
           userResponse?.profile?.fields?.Xf03M22Q81Q8?.value;
+        if (!employeePhoneNumber && userResponse?.profile?.phone) {
+          employeePhoneNumber = userResponse.profile.phone;
+        }
 
         switch (action.action_id) {
           case "get-open-jobs-0":
