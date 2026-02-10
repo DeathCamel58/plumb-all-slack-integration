@@ -20,7 +20,7 @@ const client = twilio(
 export async function unassignNumber(phoneNumber) {
   console.log("Twilio: Unassigning number " + phoneNumber);
 
-  const unassignNumber = await prisma.twilioNumber.update({
+  await prisma.twilioNumber.update({
     where: {
       id: phoneNumber,
     },
@@ -70,22 +70,20 @@ export async function returnAssignedPhoneNumbers() {
   }
 
   // Fetch all numbers in DB
-  const allNumbers = await prisma.twilioNumber.findMany();
-
-  return allNumbers;
+  return prisma.twilioNumber.findMany();
 }
 
 /**
  * Automatically assigns a Twilio number to an employee the first time they try to call/text.
  *
  * Flow:
- * 1) If employee already has a TwilioNumber (assignedEmployeeNumber = employee E.164), return it
+ * 1) If an employee already has a TwilioNumber (assignedEmployeeNumber = employee E.164), return it
  * 2) Else find the first unassigned TwilioNumber
  * 3) Assign it to the employee
  * 4) Return it
  *
  * Concurrency note:
- * - Uses a transaction + conditional update to avoid two employees grabbing the same number.
+ * - Uses a transaction and conditional update to avoid two employees grabbing the same number.
  */
 export async function getOrAssignEmployeeNumber(employeePhoneNumber) {
   const employeeE164 = toE164(employeePhoneNumber);
@@ -128,7 +126,7 @@ export async function getOrAssignEmployeeNumber(employeePhoneNumber) {
       });
 
       if (updated.count === 1) {
-        // Step 4: return the newly-assigned number
+        // Step 4: return the newly assigned number
         return { phoneNumber: candidate.phoneNumber };
       }
     },
@@ -229,8 +227,7 @@ async function downloadTwilioRecording(recordingUrlBase) {
 }
 
 export async function handleInboundCall(req, res) {
-  const VoiceResponse = twilio.twiml.VoiceResponse;
-  const twiml = new VoiceResponse();
+  const twiml = new twilio.twiml.VoiceResponse();
 
   try {
     const from = req.body?.From; // customer/caller
@@ -300,8 +297,7 @@ export async function handleInboundCall(req, res) {
 }
 
 export function handleInboundScreen(req, res) {
-  const VoiceResponse = twilio.twiml.VoiceResponse;
-  const twiml = new VoiceResponse();
+  const twiml = new twilio.twiml.VoiceResponse();
 
   const gather = twiml.gather({
     numDigits: 1,
@@ -319,8 +315,7 @@ export function handleInboundScreen(req, res) {
 }
 
 export function handleInboundScreenConfirm(req, res) {
-  const VoiceResponse = twilio.twiml.VoiceResponse;
-  const twiml = new VoiceResponse();
+  const twiml = new twilio.twiml.VoiceResponse();
 
   const digits = req.body?.Digits;
 
@@ -336,8 +331,7 @@ export function handleInboundScreenConfirm(req, res) {
 }
 
 export function handleInboundAfterDial(req, res) {
-  const VoiceResponse = twilio.twiml.VoiceResponse;
-  const twiml = new VoiceResponse();
+  const twiml = new twilio.twiml.VoiceResponse();
 
   const dialStatus = req.body?.DialCallStatus;
   const dialDuration = Number(req.body?.DialCallDuration || 0);
@@ -361,8 +355,7 @@ export function handleInboundAfterDial(req, res) {
 }
 
 export async function handleBridge(req, res) {
-  const VoiceResponse = twilio.twiml.VoiceResponse;
-  const twiml = new VoiceResponse();
+  const twiml = new twilio.twiml.VoiceResponse();
 
   const customer = req.query.to;
 
@@ -390,8 +383,7 @@ export async function handleBridge(req, res) {
 }
 
 export async function handleBridgeConfirm(req, res) {
-  const VoiceResponse = twilio.twiml.VoiceResponse;
-  const twiml = new VoiceResponse();
+  const twiml = new twilio.twiml.VoiceResponse();
 
   const customer = req.query.to;
   const digits = req.body?.Digits;
@@ -424,7 +416,7 @@ export async function callEmployeeThenCustomer(
   customerPhoneNumber,
   slackTs,
 ) {
-  // Put the customer number + slack message id in query params so your webhook can see them
+  // Put the customer number + Slack message id in query params so your webhook can see them
   const twimlUrl = new URL(`${process.env.WEB_URL}/twilio/bridge`);
   twimlUrl.searchParams.set("to", toE164(customerPhoneNumber));
 
@@ -455,8 +447,6 @@ export async function callEmployeeThenCustomer(
     recordingStatusCallbackMethod: "POST",
   });
 
-  const now = new Date();
-
   await updateTwilioContact(
     customerPhoneNumber,
     assignedTwilioNumber.phoneNumber,
@@ -480,8 +470,6 @@ export async function textCustomer(
     from: assignedTwilioNumber.phoneNumber,
     body: smsMessage,
   });
-
-  const now = new Date();
 
   // TODO: This doesn't update the slack thread ID
   await updateTwilioContact(
@@ -673,9 +661,9 @@ export async function handleRecordingDone(req, res) {
   const thisCall = await client.calls(req.body.CallSid).fetch();
   let call = thisCall;
 
-  let customerNumber = null;
+  let customerNumber;
 
-  // For an inbount call, we can use the `from` field to lookup the sid, otherwise we need to lookup the child call
+  // For an inbount call, we can use the `from` field to look up the sid, otherwise we need to look up the child call
   if (thisCall.direction === "inbound") {
     customerNumber = thisCall.from;
   } else {
@@ -767,7 +755,7 @@ export async function handleRecordingDone(req, res) {
 }
 
 /**
- * Pull all phone numbers the account owns, then upsert into TwilioNumber table.
+ * Pull all phone numbers the account owns, then upsert into the TwilioNumber table.
  */
 async function updateTwilioNumbers() {
   // Twilio's SDK paginates internally for `.list()` (it will fetch multiple pages up to `limit`).

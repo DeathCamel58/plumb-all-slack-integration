@@ -117,7 +117,7 @@ export async function resolveUserByPhoneNumber(phoneNumber) {
           return member;
         }
 
-        // Other Slack profile phone field
+        // Another Slack profile phone field
         profilePhone = normalize(profile?.fields?.Xf03M22Q81Q8?.value);
 
         if (profilePhone === target) {
@@ -265,7 +265,7 @@ async function publishHome(user_id) {
  * @param message The message to send
  * @param username Username to send the message as
  * @param channelName The channel to send the message to
- * @returns {Promise<WebAPICallResult & {channel?: string; deprecated_argument?: string; error?: string; errors?: string[]; message?: ChatPostMessageResponseMessage; needed?: string; ok?: boolean; provided?: string; response_metadata?: ResponseMetadata; ts?: string}>} Promise that resolves after message is sent
+ * @returns {Promise<WebAPICallResult & {channel?: string; deprecated_argument?: string; error?: string; errors?: string[]; message?: ChatPostMessageResponseMessage; needed?: string; ok?: boolean; provided?: string; response_metadata?: ResponseMetadata; ts?: string}>} Promise that resolves after a message is sent
  */
 async function sendMessage(
   message,
@@ -300,7 +300,7 @@ events.on("slackbot-send-message", sendMessage);
  * @param username Username to send the message as
  * @param threadTs The thread to send the message to
  * @param channelName The channel to send the message to
- * @returns {Promise<WebAPICallResult & {channel?: string; deprecated_argument?: string; error?: string; errors?: string[]; message?: ChatPostMessageResponseMessage; needed?: string; ok?: boolean; provided?: string; response_metadata?: ResponseMetadata; ts?: string}>} Promise that resolves after message is sent
+ * @returns {Promise<WebAPICallResult & {channel?: string; deprecated_argument?: string; error?: string; errors?: string[]; message?: ChatPostMessageResponseMessage; needed?: string; ok?: boolean; provided?: string; response_metadata?: ResponseMetadata; ts?: string}>}
  */
 export async function sendMessageBlocks(
   blocks,
@@ -384,7 +384,8 @@ events.on("slackbot-upload-file", uploadFile);
  * @param contact The contact to send
  * @param username Username to send the message as
  * @param channelName The channel to send the message to
- * @returns {Promise<void>} Promise that resolves after message is sent
+ * @param thread_ts The thread to send the message to
+ * @returns {Promise<void>} Promise that resolves after a message is sent
  */
 async function sendContactMessage(
   contact,
@@ -431,8 +432,7 @@ async function sendContactMessage(
         ],
       },
     ];
-
-    const result = await app.client.chat.postMessage({
+    await app.client.chat.postMessage({
       channel: channelName,
       thread_ts: thread_ts,
       blocks: blocks,
@@ -452,8 +452,8 @@ events.on("slackbot-send-contact", sendContactMessage);
 
 async function sendReplyRawMessageBlocks(event, rawMessage, blocks) {
   try {
-    const result = await app.client.chat.postMessage({
-      // Needed to reply in thread
+    await app.client.chat.postMessage({
+      // Needed to reply in a thread
       channel: event.channel,
       thread_ts: event.ts,
 
@@ -532,7 +532,7 @@ async function unfurlMessage(event) {
     },
   ];
 
-  // Check for references in multiple formats, and add them to `needToUnfurl`
+  // Check for references in multiple formats and add them to `needToUnfurl`
   // Remove all user references first, as user references can make the regex return a false positive
   let tmp = event.text.replace(/<@.{11}>/gi, "");
   // - Q[number], J[number], I[number]
@@ -861,14 +861,14 @@ async function invoicesModal(trigger_id, user) {
 }
 
 /**
- * Takes in a Slack webhook for an event, and processes it
+ * Takes in a Slack webhook for an event and processes it
  * @param req
  * @returns {Promise<void>}
  */
 export async function event(req) {
   let event = req.body.event;
 
-  // Do stuff based on type of event
+  // Do stuff based on the type of event
   switch (event.type) {
     // If the event is a reaction added
     case "reaction_added":
@@ -938,14 +938,14 @@ export async function event(req) {
 events.on("slack-EVENT", event);
 
 /**
- * Takes in a Slack webhook for an INTERACTIVITY event, and processes it
+ * Takes in a Slack webhook for an INTERACTIVITY event and processes it
  * @param req
  * @returns {Promise<void>}
  */
 async function interactivity(req) {
   let event = req.body.payload;
 
-  // Do stuff based on type of event
+  // Do stuff based on the type of event
   switch (event.type) {
     // If the event is a reaction added
     case "block_actions":
