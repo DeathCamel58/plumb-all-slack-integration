@@ -364,8 +364,6 @@ export async function callEmployeeThenCustomer(
   const assignedTwilioNumber =
     await getOrAssignEmployeeNumber(employeePhoneNumber);
 
-  // TODO: Ensure the employee picked up the phone
-  //       If we don't check for this, the call can connect a voicemail
   const call = await client.calls.create({
     to: toE164(employeePhoneNumber),
     from: assignedTwilioNumber.phoneNumber,
@@ -525,7 +523,6 @@ export async function handleInboundSms(req, res) {
       text = "No message provided (attachments only)";
     }
 
-    // TODO: Send the message to Slack
     const blocks = [
       {
         type: "section",
@@ -573,7 +570,7 @@ export async function handleInboundSms(req, res) {
       process.env.SLACK_CHANNEL,
     );
 
-    // TODO: Set the TwilioContact's slackThreadId (this will allow new inbound conversations to be in-thread)
+    // Set the TwilioContact's slackThreadId (this will allow new inbound conversations to be in-thread)
     await updateTwilioContact(from, to, slackMessage.ts);
 
     twilioContact = await prisma.twilioContact.findUnique({
