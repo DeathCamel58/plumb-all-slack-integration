@@ -15,6 +15,9 @@ import {
   handleBridge,
   handleBridgeConfirm,
   handleInboundCall,
+  handleInboundAfterDial,
+  handleInboundScreen,
+  handleInboundScreenConfirm,
   handleInboundSms,
   handleRecordingDone,
 } from "./apis/Twilio.js";
@@ -337,6 +340,33 @@ app.post("/website/contactForm", cors(corsOptions), (req, res) => {
  */
 app.post("/twilio/voice", async (req, res) => {
   const callResponse = await handleInboundCall(req, res);
+
+  res.type("text/xml").send(callResponse);
+});
+
+/**
+ * Twilio Inbound Voice - call screening (Press 1)
+ */
+app.post("/twilio/voice/screen", async (req, res) => {
+  const callResponse = await handleInboundScreen(req, res);
+
+  res.type("text/xml").send(callResponse);
+});
+
+/**
+ * Twilio Inbound Voice - call screening confirmation
+ */
+app.post("/twilio/voice/screen/confirm", async (req, res) => {
+  const callResponse = await handleInboundScreenConfirm(req, res);
+
+  res.type("text/xml").send(callResponse);
+});
+
+/**
+ * Twilio Inbound Voice - post-dial fallback (voicemail)
+ */
+app.post("/twilio/voice/after-dial", async (req, res) => {
+  const callResponse = await handleInboundAfterDial(req, res);
 
   res.type("text/xml").send(callResponse);
 });

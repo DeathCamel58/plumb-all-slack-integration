@@ -275,11 +275,17 @@ export async function handleInboundCall(req, res) {
       // Optional callbacks if you want to store recording URLs later:
       recordingStatusCallback: `${process.env.WEB_URL}/twilio/recording-status`,
       recordingStatusCallbackMethod: "POST",
+      action: `${process.env.WEB_URL}/twilio/voice/after-dial`,
+      method: "POST",
     });
 
-    dial.number(dialTarget);
-
-    // TODO: Implement a simple voicemail recording thing if the call is unanswered or busy
+    dial.number(
+      {
+        url: `${process.env.WEB_URL}/twilio/voice/screen`,
+        method: "POST",
+      },
+      dialTarget,
+    );
 
     await updateTwilioContact(from, to, null);
 
@@ -291,6 +297,67 @@ export async function handleInboundCall(req, res) {
     twiml.dial({}, process.env.TWILIO_FALLBACK_NUMBER);
     return twiml.toString();
   }
+}
+
+export function handleInboundScreen(req, res) {
+  const VoiceResponse = twilio.twiml.VoiceResponse;
+  const twiml = new VoiceResponse();
+
+  const gather = twiml.gather({
+    numDigits: 1,
+    timeout: 6,
+    action: `${process.env.WEB_URL}/twilio/voice/screen/confirm`,
+    method: "POST",
+  });
+
+  gather.say("Press 1 to accept the call.");
+
+  twiml.say("No input received. Goodbye.");
+  twiml.reject();
+
+  return twiml.toString();
+}
+
+export function handleInboundScreenConfirm(req, res) {
+  const VoiceResponse = twilio.twiml.VoiceResponse;
+  const twiml = new VoiceResponse();
+
+  const digits = req.body?.Digits;
+
+  if (digits !== "1") {
+    twiml.say("Call not connected. Goodbye.");
+    twiml.reject();
+    return twiml.toString();
+  }
+
+  twiml.say("Connecting.");
+
+  return twiml.toString();
+}
+
+export function handleInboundAfterDial(req, res) {
+  const VoiceResponse = twilio.twiml.VoiceResponse;
+  const twiml = new VoiceResponse();
+
+  const dialStatus = req.body?.DialCallStatus;
+  const dialDuration = Number(req.body?.DialCallDuration || 0);
+  const wasConnected = dialStatus === "completed" && dialDuration > 0;
+
+  if (wasConnected) {
+    twiml.hangup();
+    return twiml.toString();
+  }
+
+  twiml.say("Please leave a message after the tone.");
+  twiml.record({
+    maxLength: 300,
+    finishOnKey: "#",
+    playBeep: true,
+    recordingStatusCallback: `${process.env.WEB_URL}/twilio/recording-status`,
+    recordingStatusCallbackMethod: "POST",
+  });
+
+  return twiml.toString();
 }
 
 export async function handleBridge(req, res) {
