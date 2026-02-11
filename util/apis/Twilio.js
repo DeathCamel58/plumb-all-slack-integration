@@ -268,6 +268,86 @@ async function downloadTwilioRecording(recordingUrlBase) {
   return Buffer.from(arrayBuffer);
 }
 
+async function sendMissedCallBlocks(from, to, reason) {
+  const safeFrom = from || "<unknown>";
+  const displayFrom = normalizePhoneNumber(safeFrom) || safeFrom;
+  const actionValue = toE164(safeFrom) || safeFrom;
+
+  const twilioNumber = to
+    ? await prisma.twilioNumber.findUnique({ where: { id: to } })
+    : null;
+
+  // TODO: Check tagging the employee
+  let heading = "Missed call ";
+  if (twilioNumber.assignedEmployee) {
+    heading += `for <@${twilioNumber.assignedEmployee}> `;
+  }
+  heading += `from ${displayFrom}`;
+
+  const reasonText = reason ? `\n_${reason}_` : "";
+
+  const blocks = [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `${heading}${reasonText}`,
+      },
+    },
+  ];
+
+  const twilioContact = from
+    ? await prisma.twilioContact.findUnique({ where: { id: from } })
+    : null;
+
+  const threadId = twilioContact?.slackThreadId || null;
+
+  if (!threadId) {
+    blocks.push(
+      {
+        type: "divider",
+      },
+      {
+        type: "actions",
+        elements: [
+          {
+            type: "button",
+            text: {
+              type: "plain_text",
+              text: "Call",
+            },
+            style: "primary",
+            value: from,
+            action_id: "outbound-call-0",
+          },
+          {
+            type: "button",
+            text: {
+              type: "plain_text",
+              text: "Text",
+            },
+            value: from,
+            action_id: "outbound-text-0",
+          },
+        ],
+      },
+    );
+  }
+
+  const slackMessage = await sendMessageBlocks(
+    blocks,
+    "New Call Bot",
+    threadId,
+    process.env.SLACK_CHANNEL,
+  );
+
+  if (from && to) {
+    await updateTwilioContact(from, to, slackMessage?.ts || null);
+  }
+
+  return slackMessage;
+}
+
 export async function handleInboundCall(req, res) {
   const twiml = new twilio.twiml.VoiceResponse();
 
@@ -393,7 +473,19 @@ export async function handleInboundAfterDial(req, res) {
   const dialDuration = Number(req.body?.DialCallDuration || 0);
   const wasConnected = dialStatus === "completed" && dialDuration > 0;
 
+  // TODO: Inbound call, hung up during voicemail greeting
+  // - This doesn't fire on this situation
+
   if (wasConnected) {
+    twiml.hangup();
+    return twiml.toString();
+  }
+  if (dialStatus === "no-answer") {
+    await sendMissedCallBlocks(
+      req.body?.From,
+      req.body?.To,
+      "Hung up before picked up",
+    );
     twiml.hangup();
     return twiml.toString();
   }
@@ -416,11 +508,26 @@ export async function handleInboundAfterDial(req, res) {
     maxLength: 300,
     finishOnKey: "#",
     playBeep: true,
+    action: `${process.env.WEB_URL}/twilio/voice/voicemail-action`,
+    method: "POST",
     recordingStatusCallback: `${process.env.WEB_URL}/twilio/recording-status`,
     recordingStatusCallbackMethod: "POST",
   });
 
   return twiml.toString();
+}
+
+export async function handleVoicemailAction(req, res) {
+  const duration = Number(req.body?.RecordingDuration || 0);
+
+  if (duration > 0) {
+    res.sendStatus(200);
+    return;
+  }
+
+  await sendMissedCallBlocks(req.body?.From, req.body?.To, "No voicemail left");
+
+  res.sendStatus(200);
 }
 
 export async function handleBridge(req, res) {
@@ -635,6 +742,10 @@ export async function handleInboundSms(req, res) {
       where: { id: from },
     });
 
+    let twilioNumber = await prisma.twilioNumber.findUnique({
+      where: { id: to },
+    });
+
     // Check if there were any MMS media attachments
     const media = await getMedia(req.body);
 
@@ -648,45 +759,62 @@ export async function handleInboundSms(req, res) {
       text = "No message provided (attachments only)";
     }
 
-    const blocks = [
-      {
+    const threadId =
+      twilioContact && twilioContact.slackThreadId
+        ? twilioContact.slackThreadId
+        : null;
+
+    const blocks = [];
+    if (threadId) {
+      blocks.push({
         type: "section",
         text: {
           type: "mrkdwn",
           text: `SMS From ${from}\n${text}`,
         },
-      },
-      {
-        type: "divider",
-      },
-      {
-        type: "actions",
-        elements: [
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "Call",
-            },
-            value: from,
-            action_id: "outbound-call-0",
+      });
+    } else {
+      const toName = twilioNumber.assignedEmployee
+        ? `<@${twilioNumber.assignedEmployee}>`
+        : to;
+
+      blocks.push(
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `SMS To ${toName} From ${from}\n${text}`,
           },
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "Text",
+        },
+        {
+          type: "divider",
+        },
+        {
+          type: "actions",
+          elements: [
+            {
+              type: "button",
+              text: {
+                type: "plain_text",
+                text: "Call",
+              },
+              style: "primary",
+              value: from,
+              action_id: "outbound-call-0",
             },
-            value: from,
-            action_id: "outbound-text-0",
-          },
-        ],
-      },
-    ];
-    const threadId =
-      twilioContact && twilioContact.slackThreadId
-        ? twilioContact.slackThreadId
-        : null;
+            {
+              type: "button",
+              text: {
+                type: "plain_text",
+                text: "Text",
+              },
+              value: from,
+              action_id: "outbound-text-0",
+            },
+          ],
+        },
+      );
+    }
 
     const slackMessage = await sendMessageBlocks(
       blocks,
@@ -726,16 +854,26 @@ export async function handleInboundSms(req, res) {
 export async function handleRecordingDone(req, res) {
   console.log(`Twilio: Recording done for call ${req.body.CallSid}`);
 
+  // Don't post recordings with duration 0
+  if (req.body.RecordingDuration === 0) {
+    console.log(
+      `Twilio: Recording had duration 0; not posting recording. (Recording SID: ${req.body.RecordingSid})`,
+    );
+    return;
+  }
+
   const callRecording = await downloadTwilioRecording(req.body.RecordingUrl);
 
   const thisCall = await client.calls(req.body.CallSid).fetch();
   let call = thisCall;
 
   let customerNumber;
+  let ourNumber;
 
-  // For an inbount call, we can use the `from` field to look up the sid, otherwise we need to look up the child call
+  // For an inbound call, we can use the `from` field to look up the sid, otherwise we need to look up the child call
   if (thisCall.direction === "inbound") {
     customerNumber = thisCall.from;
+    ourNumber = thisCall.to;
   } else {
     const childCall = await client.calls.list({
       parent: req.body.CallSid,
@@ -744,6 +882,7 @@ export async function handleRecordingDone(req, res) {
 
     call = childCall[0];
     customerNumber = call.to;
+    ourNumber = thisCall.from;
   }
 
   if (customerNumber) {
@@ -767,12 +906,20 @@ export async function handleRecordingDone(req, res) {
         twilioContact.slackThreadId,
       );
     } else {
+      let twilioNumber = await prisma.twilioNumber.findUnique({
+        where: { id: ourNumber },
+      });
+
+      const toName = twilioNumber.assignedEmployee
+        ? `<@${twilioNumber.assignedEmployee}>`
+        : ourNumber;
+
       const blocks = [
         {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `Call from ${normalizePhoneNumber(customerNumber)}`,
+            text: `Call To ${toName} From ${normalizePhoneNumber(customerNumber)}`,
           },
         },
         {
@@ -787,6 +934,7 @@ export async function handleRecordingDone(req, res) {
                 type: "plain_text",
                 text: "Call",
               },
+              style: "primary",
               value: toE164(customerNumber),
               action_id: "outbound-call-0",
             },

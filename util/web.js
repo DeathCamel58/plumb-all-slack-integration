@@ -19,6 +19,7 @@ import {
   handleInboundScreen,
   handleInboundScreenConfirm,
   handleInboundSms,
+  handleVoicemailAction,
   handleRecordingDone,
 } from "./apis/Twilio.js";
 
@@ -369,6 +370,13 @@ app.post("/twilio/voice/after-dial", async (req, res) => {
   const callResponse = await handleInboundAfterDial(req, res);
 
   res.type("text/xml").send(callResponse);
+});
+
+/**
+ * Twilio Inbound Voice - voicemail action (detect no voicemail)
+ */
+app.post("/twilio/voice/voicemail-action", async (req, res) => {
+  await handleVoicemailAction(req, res);
 });
 
 /**
