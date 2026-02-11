@@ -182,10 +182,7 @@ async function publishHome(user_id) {
     }
 
     let assignedEmployee = "Couldn't Find User";
-    if (
-      number.assignedEmployee === "" &&
-      number.assignedEmployeeNumber === ""
-    ) {
+    if (!number.assignedEmployee && !number.assignedEmployeeNumber) {
       assignedEmployee = "Unassigned";
     } else {
       assignedEmployee = `<@${number.assignedEmployee}>`;
