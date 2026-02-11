@@ -195,6 +195,8 @@ app.post("/slack/INTERACTIVITY", (req, res) => {
     req.body.payload = JSON.parse(req.body.payload);
 
     events.emit("slack-INTERACTIVITY", req);
+
+    res.json({});
   } else {
     // Webhook signature invalid. Send 401.
     res.sendStatus(401);
