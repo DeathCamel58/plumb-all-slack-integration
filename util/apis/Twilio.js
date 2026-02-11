@@ -306,29 +306,42 @@ export async function handleInboundCall(req, res) {
       `Twilio Voice: inbound call to=${to} from=${from || "<unknown>"} routingTo=${dialTarget}`,
     );
 
-    const dial = twiml.dial({
-      callerId: to, // present the dialed Twilio number to the recipient
-      answerOnBridge: true,
-      record: "record-from-answer",
-      recordingChannels: "dual",
-      // Optional callbacks if you want to store recording URLs later:
-      recordingStatusCallback: `${process.env.WEB_URL}/twilio/recording-status`,
-      recordingStatusCallbackMethod: "POST",
-      action: `${process.env.WEB_URL}/twilio/voice/after-dial`,
-      method: "POST",
-    });
-
-    dial.number(
-      {
-        url: `${process.env.WEB_URL}/twilio/voice/screen`,
+    if (dialTarget === fallbackNumber) {
+      const dial = twiml.dial({
+        callerId: from,
+        answerOnBridge: true,
+        action: `${process.env.WEB_URL}/twilio/voice/after-dial`,
         method: "POST",
-      },
-      dialTarget,
-    );
+      });
 
-    await updateTwilioContact(from, to, null);
+      dial.number(dialTarget);
 
-    return twiml.toString();
+      return twiml.toString();
+    } else {
+      const dial = twiml.dial({
+        callerId: to, // present the dialed Twilio number to the recipient
+        answerOnBridge: true,
+        record: "record-from-answer",
+        recordingChannels: "dual",
+        // Optional callbacks if you want to store recording URLs later:
+        recordingStatusCallback: `${process.env.WEB_URL}/twilio/recording-status`,
+        recordingStatusCallbackMethod: "POST",
+        action: `${process.env.WEB_URL}/twilio/voice/after-dial`,
+        method: "POST",
+      });
+
+      dial.number(
+        {
+          url: `${process.env.WEB_URL}/twilio/voice/screen`,
+          method: "POST",
+        },
+        dialTarget,
+      );
+
+      await updateTwilioContact(from, to, null);
+
+      return twiml.toString();
+    }
   } catch (e) {
     console.error("Twilio Voice: error handling inbound call", e);
     Sentry.captureException(e);
