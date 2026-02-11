@@ -1,7 +1,7 @@
 import events from "../events.js";
 import * as Sentry from "@sentry/node";
 
-import { PrismaClient } from "../../generated/prisma/index.js";
+import prisma from "../prismaClient.js";
 import {
   getUserData,
   getPropertyData,
@@ -9,8 +9,6 @@ import {
   getInvoiceData,
   getClientData,
 } from "./Jobber.js";
-const prisma = new PrismaClient();
-
 async function userUpsert(data) {
   const row = {
     createdAt: new Date(data.createdAt),

@@ -1,5 +1,5 @@
 import twilio from "twilio";
-import { PrismaClient } from "../../generated/prisma/index.js";
+import prisma from "../prismaClient.js";
 import { normalizePhoneNumber, toE164 } from "../DataUtilities.js";
 import fetch from "node-fetch";
 import events from "../events.js";
@@ -11,7 +11,6 @@ import {
 import * as Sentry from "@sentry/node";
 import { extension } from "mime-types";
 
-const prisma = new PrismaClient();
 const client = twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN,
