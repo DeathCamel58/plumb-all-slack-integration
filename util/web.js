@@ -204,6 +204,22 @@ app.post("/slack/INTERACTIVITY", (req, res) => {
 });
 
 /**
+ * Handle Slack Command Webhooks
+ */
+app.post("/slack/COMMAND", (req, res) => {
+  console.info("Web: Got a COMMAND from Slack!");
+
+  // Verify that the webhook came from Slack
+  if (Slack.verifyWebhook(req, true)) {
+    // Webhook was valid.
+    events.emit("slack-COMMAND", req);
+  } else {
+    // Webhook signature invalid. Send 401.
+    res.sendStatus(401);
+  }
+});
+
+/**
  * Handle Mattermost request for open jobs
  */
 app.get("/mattermost/jobberOpenJobs", (req, res) => {

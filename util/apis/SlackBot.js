@@ -469,6 +469,125 @@ async function sendContactMessage(
 }
 events.on("slackbot-send-contact", sendContactMessage);
 
+async function startOutboundCallFlow({
+  userId,
+  employeePhoneNumber,
+  rawCustomerNumber,
+}) {
+  if (!rawCustomerNumber) {
+    return {
+      ok: false,
+      userMessage:
+        "I couldn't start the call because the phone number was missing.",
+    };
+  }
+
+  if (!employeePhoneNumber) {
+    return {
+      ok: false,
+      userMessage:
+        "I couldn't start the call because your Slack profile doesn't have a valid phone number. Add one in Slack profile settings and try again.",
+    };
+  }
+
+  let customerPhoneNumber = rawCustomerNumber;
+  try {
+    customerPhoneNumber = toE164(rawCustomerNumber);
+  } catch (error) {
+    return {
+      ok: false,
+      userMessage:
+        "I couldn't start the call because the phone number looked invalid. Try again with a valid phone number.",
+    };
+  }
+
+  try {
+    let slackThreadId = null;
+    const existingContact = await prisma.twilioContact.findUnique({
+      where: { id: customerPhoneNumber },
+    });
+
+    if (existingContact) {
+      slackThreadId = existingContact.slackThreadId || null;
+    } else {
+      const outboundBlocks = [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `Outbound call requested by <@${userId}> to ${customerPhoneNumber}`,
+          },
+        },
+        {
+          type: "divider",
+        },
+        {
+          type: "actions",
+          elements: [
+            {
+              type: "button",
+              text: {
+                type: "plain_text",
+                text: "Call",
+              },
+              style: "primary",
+              value: customerPhoneNumber,
+              action_id: "outbound-call-0",
+            },
+            {
+              type: "button",
+              text: {
+                type: "plain_text",
+                text: "Text",
+              },
+              value: customerPhoneNumber,
+              action_id: "outbound-text-0",
+            },
+          ],
+        },
+      ];
+
+      const slackMessage = await sendMessageBlocks(
+        outboundBlocks,
+        "New Call Bot",
+        null,
+        process.env.SLACK_CHANNEL || slackCallChannelName,
+      );
+
+      slackThreadId = slackMessage?.ts || null;
+
+      const assignedTwilioNumber =
+        await getOrAssignEmployeeNumber(employeePhoneNumber);
+
+      await updateTwilioContact(
+        customerPhoneNumber,
+        assignedTwilioNumber.phoneNumber,
+        slackThreadId,
+      );
+    }
+
+    const sid = await callEmployeeThenCustomer(
+      employeePhoneNumber,
+      customerPhoneNumber,
+      slackThreadId,
+    );
+
+    return {
+      ok: true,
+      userMessage: `Placing your call now to ${customerPhoneNumber}. (ref: ${sid})`,
+    };
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Slack: outbound call failed", e);
+
+    return {
+      ok: false,
+      userMessage:
+        "Sorry — the outbound call failed to start. Please try again, or contact an admin.",
+    };
+  }
+}
+
 async function sendReplyRawMessageBlocks(event, rawMessage, blocks) {
   try {
     await app.client.chat.postMessage({
@@ -1260,197 +1379,36 @@ async function interactivity(req) {
             event.view.state.values.new_outbound_call_number
               .new_outbound_call_number_action.value;
 
-          if (!newCallNumberRaw) {
-            await app.client.views.open({
-              trigger_id: event.trigger_id,
-              view: {
-                type: "modal",
-                callback_id: "new_outbound_call_failure_modal",
-                title: {
-                  type: "plain_text",
-                  text: "Outbound Call Failure",
-                },
-                blocks: [
-                  {
-                    type: "section",
-                    text: {
-                      type: "mrkdwn",
-                      text: "I couldn't start the call because the phone number was missing.",
-                    },
-                  },
-                ],
+          const result = await startOutboundCallFlow({
+            userId: event.user.id,
+            employeePhoneNumber,
+            rawCustomerNumber: newCallNumberRaw,
+          });
+
+          await app.client.views.open({
+            trigger_id: event.trigger_id,
+            view: {
+              type: "modal",
+              callback_id: result.ok
+                ? "new_outbound_call_success_modal"
+                : "new_outbound_call_failure_modal",
+              title: {
+                type: "plain_text",
+                text: result.ok
+                  ? "Outbound Call Success"
+                  : "Outbound Call Failure",
               },
-            });
-            break;
-          }
-
-          if (!employeePhoneNumber) {
-            await app.client.views.open({
-              trigger_id: event.trigger_id,
-              view: {
-                type: "modal",
-                callback_id: "new_outbound_call_failure_modal",
-                title: {
-                  type: "plain_text",
-                  text: "Outbound Call Failure",
-                },
-                blocks: [
-                  {
-                    type: "section",
-                    text: {
-                      type: "mrkdwn",
-                      text: "I couldn't start the call because your Slack profile doesn't have a valid phone number. Add one in Slack profile settings and try again.",
-                    },
-                  },
-                ],
-              },
-            });
-            break;
-          }
-
-          let customerPhoneNumber = newCallNumberRaw;
-          try {
-            customerPhoneNumber = toE164(newCallNumberRaw);
-          } catch (error) {
-            await app.client.views.open({
-              trigger_id: event.trigger_id,
-              view: {
-                type: "modal",
-                callback_id: "new_outbound_call_failure_modal",
-                title: {
-                  type: "plain_text",
-                  text: "Outbound Call Failure",
-                },
-                blocks: [
-                  {
-                    type: "section",
-                    text: {
-                      type: "mrkdwn",
-                      text: "I couldn't start the call because the phone number looked invalid. Try again with a valid phone number.",
-                    },
-                  },
-                ],
-              },
-            });
-            break;
-          }
-
-          try {
-            let slackThreadId = null;
-            const existingContact = await prisma.twilioContact.findUnique({
-              where: { id: customerPhoneNumber },
-            });
-
-            if (existingContact) {
-              slackThreadId = existingContact.slackThreadId || null;
-            } else {
-              const outboundBlocks = [
+              blocks: [
                 {
                   type: "section",
                   text: {
                     type: "mrkdwn",
-                    text: `Outbound call requested by <@${event.user.id}> to ${customerPhoneNumber}`,
+                    text: result.userMessage,
                   },
                 },
-                {
-                  type: "divider",
-                },
-                {
-                  type: "actions",
-                  elements: [
-                    {
-                      type: "button",
-                      text: {
-                        type: "plain_text",
-                        text: "Call",
-                      },
-                      style: "primary",
-                      value: customerPhoneNumber,
-                      action_id: "outbound-call-0",
-                    },
-                    {
-                      type: "button",
-                      text: {
-                        type: "plain_text",
-                        text: "Text",
-                      },
-                      value: customerPhoneNumber,
-                      action_id: "outbound-text-0",
-                    },
-                  ],
-                },
-              ];
-
-              const slackMessage = await sendMessageBlocks(
-                outboundBlocks,
-                "New Call Bot",
-                null,
-                process.env.SLACK_CHANNEL || slackCallChannelName,
-              );
-
-              slackThreadId = slackMessage?.ts || null;
-
-              const assignedTwilioNumber =
-                await getOrAssignEmployeeNumber(employeePhoneNumber);
-
-              await updateTwilioContact(
-                customerPhoneNumber,
-                assignedTwilioNumber.phoneNumber,
-                slackThreadId,
-              );
-            }
-
-            const sid = await callEmployeeThenCustomer(
-              employeePhoneNumber,
-              customerPhoneNumber,
-              slackThreadId,
-            );
-
-            await app.client.views.open({
-              trigger_id: event.trigger_id,
-              view: {
-                type: "modal",
-                callback_id: "new_outbound_call_success_modal",
-                title: {
-                  type: "plain_text",
-                  text: "Outbound Call Success",
-                },
-                blocks: [
-                  {
-                    type: "section",
-                    text: {
-                      type: "mrkdwn",
-                      text: `Placing your call now to ${customerPhoneNumber}. (ref: ${sid})`,
-                    },
-                  },
-                ],
-              },
-            });
-          } catch (e) {
-            Sentry.captureException(e);
-            console.error("Slack: outbound call failed", e);
-
-            await app.client.views.open({
-              trigger_id: event.trigger_id,
-              view: {
-                type: "modal",
-                callback_id: "new_outbound_call_failure_modal",
-                title: {
-                  type: "plain_text",
-                  text: "Outbound Call Failure",
-                },
-                blocks: [
-                  {
-                    type: "section",
-                    text: {
-                      type: "mrkdwn",
-                      text: "Sorry — the outbound call failed to start. Please try again, or contact an admin.",
-                    },
-                  },
-                ],
-              },
-            });
-          }
+              ],
+            },
+          });
 
           break;
         default:
@@ -1469,3 +1427,57 @@ async function interactivity(req) {
   }
 }
 events.on("slack-INTERACTIVITY", interactivity);
+
+/**
+ * Takes in a Slack webhook for an COMMAND event and processes it
+ * @param req
+ * @returns {Promise<void>}
+ */
+async function command(req) {
+  const commandName = req.body?.command;
+  const rawText = (req.body?.text || "").trim();
+  const userId = req.body?.user_id;
+
+  if (!userId) {
+    console.warn("Slack: COMMAND missing user_id");
+    return;
+  }
+
+  if (commandName && commandName !== "/dial") {
+    await app.client.chat.postEphemeral({
+      channel: req.body?.channel_id,
+      user: userId,
+      text: `Unsupported command ${commandName}. Try /dial <phone_number>.`,
+    });
+    return;
+  }
+
+  let userResponse;
+  try {
+    userResponse = await app.client.users.profile.get({
+      user: userId,
+    });
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error("Slack: Failed to fetch user profile for command", error);
+  }
+
+  const employeePhoneNumber =
+    userResponse?.profile?.fields?.Xf03M22Q81Q8?.value ||
+    userResponse?.profile?.phone;
+
+  const result = await startOutboundCallFlow({
+    userId,
+    employeePhoneNumber,
+    rawCustomerNumber: rawText,
+  });
+
+  if (!result.ok) {
+    await app.client.chat.postEphemeral({
+      channel: req.body?.channel_id,
+      user: userId,
+      text: `${result.userMessage}\nUsage: /dial <phone_number>`,
+    });
+  }
+}
+events.on("slack-COMMAND", command);
