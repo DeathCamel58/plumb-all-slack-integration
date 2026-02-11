@@ -24,8 +24,9 @@ export async function unassignNumber(phoneNumber) {
       id: phoneNumber,
     },
     data: {
-      assignedEmployee: "",
-      assignedEmployeeNumber: "",
+      assignedEmployee: null,
+      assignedEmployeeNumber: null,
+      assignedEmployeeName: null,
     },
   });
 }
@@ -34,7 +35,7 @@ export async function returnAssignedPhoneNumbers() {
   // Check in DB for any unassigned numbers
   const unassignedNumbers = await prisma.twilioNumber.findMany({
     where: {
-      assignedEmployee: "",
+      assignedEmployee: null,
     },
   });
 
@@ -73,6 +74,31 @@ export async function returnAssignedPhoneNumbers() {
 }
 
 /**
+ * Looks up the employee by phone number in Slack, then updates their information in the database
+ * @param employeePhoneNumber The phone number of the employee to update data for
+ * @return {Promise<boolean>} Was the TwilioNumber updated?
+ */
+async function updateTwilioNumberSlackDetails(employeePhoneNumber) {
+  const member = await resolveUserByPhoneNumber(employeePhoneNumber);
+
+  if (!member) {
+    return false;
+  }
+
+  const result = await prisma.twilioNumber.updateMany({
+    where: {
+      assignedEmployeeNumber: employeePhoneNumber,
+    },
+    data: {
+      assignedEmployee: member.id,
+      assignedEmployeeName: member.profile.first_name,
+    },
+  });
+
+  return result.count > 0;
+}
+
+/**
  * Automatically assigns a Twilio number to an employee the first time they try to call/text.
  *
  * Flow:
@@ -100,7 +126,7 @@ export async function getOrAssignEmployeeNumber(employeePhoneNumber) {
       // Step 2: get first unassigned
       const candidate = await tx.twilioNumber.findFirst({
         where: {
-          assignedEmployeeNumber: "",
+          assignedEmployeeNumber: null,
         },
         orderBy: {
           phoneNumber: "asc",
@@ -117,7 +143,7 @@ export async function getOrAssignEmployeeNumber(employeePhoneNumber) {
       const updated = await tx.twilioNumber.updateMany({
         where: {
           id: candidate.id,
-          assignedEmployeeNumber: "",
+          assignedEmployeeNumber: null,
         },
         data: {
           assignedEmployeeNumber: employeeE164,
@@ -125,6 +151,9 @@ export async function getOrAssignEmployeeNumber(employeePhoneNumber) {
       });
 
       if (updated.count === 1) {
+        // Look up the Slack profile of the employee and async update it in the DB
+        updateTwilioNumberSlackDetails(employeeE164);
+
         // Step 4: return the newly assigned number
         return { phoneNumber: candidate.phoneNumber };
       }
@@ -300,12 +329,13 @@ export function handleInboundScreen(req, res) {
 
   const gather = twiml.gather({
     numDigits: 1,
-    timeout: 6,
+    timeout: 8,
     action: `${process.env.WEB_URL}/twilio/voice/screen/confirm`,
     method: "POST",
   });
 
-  gather.say("Press 1 to accept the call.");
+  twiml.pause({ length: 2 });
+  gather.say("To accept the call, press 1");
 
   twiml.say("No input received. Goodbye.");
   twiml.reject();
@@ -329,7 +359,7 @@ export function handleInboundScreenConfirm(req, res) {
   return twiml.toString();
 }
 
-export function handleInboundAfterDial(req, res) {
+export async function handleInboundAfterDial(req, res) {
   const twiml = new twilio.twiml.VoiceResponse();
 
   const dialStatus = req.body?.DialCallStatus;
@@ -341,7 +371,22 @@ export function handleInboundAfterDial(req, res) {
     return twiml.toString();
   }
 
-  twiml.say("Please leave a message after the tone.");
+  // TODO: Update the message to include the employee's name
+  //       Thank you for calling Plumb-All. Please leave a message for ${assignedEmployeeName} after the tone.
+  const twilioNumber = await prisma.twilioNumber.findUnique({
+    where: { id: req.body.To },
+  });
+
+  if (twilioNumber && twilioNumber.assignedEmployeeName) {
+    twiml.say(
+      `Thank you for calling ${twilioNumber.assignedEmployeeName} with Plumb-All. Please leave your name, number, and a brief description of the issue after the tone, and we’ll return your call as soon as possible.`,
+    );
+  } else {
+    twiml.say(
+      `Thank you for calling Plumb-All. Please leave your name, number, and a brief description of the issue after the tone, and we’ll return your call as soon as possible.`,
+    );
+  }
+
   twiml.record({
     maxLength: 300,
     finishOnKey: "#",
@@ -367,12 +412,13 @@ export async function handleBridge(req, res) {
   // Ask the employee to confirm they’re a human before connecting to the customer.
   const gather = twiml.gather({
     numDigits: 1,
-    timeout: 6,
+    timeout: 8,
     action: `/twilio/bridge/confirm?to=${encodeURIComponent(customer)}`,
     method: "POST",
   });
 
-  gather.say("Press 1 to connect the call.");
+  twiml.pause({ length: 2 });
+  gather.say("To connect the call, press 1");
 
   // If they don't press anything, do NOT connect to the customer.
   twiml.say("No input received. Goodbye.");

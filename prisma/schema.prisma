@@ -250,6 +250,7 @@ model TwilioNumber {
   phoneNumber            String
   assignedEmployee       String?
   assignedEmployeeNumber String?
+  assignedEmployeeName   String?
   twilioContacts         TwilioContact[]
 }
 
