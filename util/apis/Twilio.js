@@ -85,13 +85,27 @@ async function updateTwilioNumberSlackDetails(employeePhoneNumber) {
     return false;
   }
 
+  let name = member.profile.first_name;
+  if (!name || name === "") {
+    name = member.profile.display_name;
+  }
+  if (!name || name === "") {
+    name = member.profile.real_name;
+  }
+
+  if (!name || name === "") {
+    console.error(
+      `Twilio: Slack user doesn't have a profile.first_name, profile.display_name, or profile.real_name field! Slack user JSON:\n${JSON.stringify(member)}`,
+    );
+  }
+
   const result = await prisma.twilioNumber.updateMany({
     where: {
       assignedEmployeeNumber: employeePhoneNumber,
     },
     data: {
       assignedEmployee: member.id,
-      assignedEmployeeName: member.profile.first_name,
+      assignedEmployeeName: name,
     },
   });
 
@@ -371,8 +385,6 @@ export async function handleInboundAfterDial(req, res) {
     return twiml.toString();
   }
 
-  // TODO: Update the message to include the employee's name
-  //       Thank you for calling Plumb-All. Please leave a message for ${assignedEmployeeName} after the tone.
   const twilioNumber = await prisma.twilioNumber.findUnique({
     where: { id: req.body.To },
   });
