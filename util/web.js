@@ -212,7 +212,7 @@ app.post("/slack/COMMAND", (req, res) => {
   // Verify that the webhook came from Slack
   if (Slack.verifyWebhook(req, true)) {
     // Webhook was valid.
-    events.emit("slack-COMMAND", req);
+    events.emit("slack-COMMAND", req, res);
   } else {
     // Webhook signature invalid. Send 401.
     res.sendStatus(401);

@@ -1430,25 +1430,16 @@ events.on("slack-INTERACTIVITY", interactivity);
 
 /**
  * Takes in a Slack webhook for an COMMAND event and processes it
- * @param req
+ * @param req The request
  * @returns {Promise<void>}
  */
-async function command(req) {
+async function command(req, res) {
   const commandName = req.body?.command;
   const rawText = (req.body?.text || "").trim();
   const userId = req.body?.user_id;
 
   if (!userId) {
     console.warn("Slack: COMMAND missing user_id");
-    return;
-  }
-
-  if (commandName && commandName !== "/dial") {
-    await app.client.chat.postEphemeral({
-      channel: req.body?.channel_id,
-      user: userId,
-      text: `Unsupported command ${commandName}. Try /dial <phone_number>.`,
-    });
     return;
   }
 
@@ -1462,22 +1453,33 @@ async function command(req) {
     console.error("Slack: Failed to fetch user profile for command", error);
   }
 
-  const employeePhoneNumber =
-    userResponse?.profile?.fields?.Xf03M22Q81Q8?.value ||
-    userResponse?.profile?.phone;
+  switch (commandName) {
+    case "/dial":
+      const employeePhoneNumber =
+        userResponse?.profile?.fields?.Xf03M22Q81Q8?.value ||
+        userResponse?.profile?.phone;
 
-  const result = await startOutboundCallFlow({
-    userId,
-    employeePhoneNumber,
-    rawCustomerNumber: rawText,
-  });
+      const result = await startOutboundCallFlow({
+        userId,
+        employeePhoneNumber,
+        rawCustomerNumber: rawText,
+      });
 
-  if (!result.ok) {
-    await app.client.chat.postEphemeral({
-      channel: req.body?.channel_id,
-      user: userId,
-      text: `${result.userMessage}\nUsage: /dial <phone_number>`,
-    });
+      if (!result.ok) {
+        console.warn(
+          `Slack: ${result.userMessage}\nUsage: /dial <phone_number>`,
+        );
+        res.send(`${result.userMessage}\nUsage: /dial <phone_number>`);
+        break;
+      }
+
+      res.send("Calling you and connecting to customer...");
+
+      break;
+    default:
+      console.warn(`Slack: Unsupported command: ${commandName}`);
+      res.send(`Unsupported command ${commandName}. Try /dial <phone_number>.`);
+      break;
   }
 }
 events.on("slack-COMMAND", command);
