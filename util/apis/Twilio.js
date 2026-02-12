@@ -977,6 +977,9 @@ export async function handleRecordingDone(req, res) {
         call,
       );
     }
+
+    console.log("Twilio: Deleting recording from twilio");
+    await client.recordings(req.body.RecordingSid).remove();
   } else {
     console.error(
       `Twilio: No customer number found for call ${req.body.CallSid}`,
