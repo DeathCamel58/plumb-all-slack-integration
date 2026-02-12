@@ -374,6 +374,18 @@ export async function handleInboundCall(req, res) {
       where: { id: to },
     });
 
+    // Reject calls from our employee to their own number
+    if (twilioNumber.assignedEmployeeNumber === from) {
+      console.log(
+        `Twilio: ${twilioNumber.assignedEmployeeName} called their own number "${twilioNumber.id}". Rejecting call.`,
+      );
+      // TODO: Maybe DM the employee saying that they can't call themselves
+
+      twiml.reject();
+
+      return twiml.toString();
+    }
+
     const employeeNumber =
       twilioNumber?.assignedEmployeeNumber ||
       twilioNumber?.assignedEmployee ||
