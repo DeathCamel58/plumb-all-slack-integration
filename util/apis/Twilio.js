@@ -11,11 +11,44 @@ import {
 import * as Sentry from "@sentry/node";
 import { extension } from "mime-types";
 
+/**
+ * Twilio sends webhook params as form-encoded key/value pairs.
+ * This typedef captures the subset referenced in this module.
+ * @typedef {Object} TwilioWebhookBody
+ * @property {string | undefined} From
+ * @property {string | undefined} To
+ * @property {string | undefined} Body
+ * @property {string | undefined} Digits
+ * @property {string | undefined} CallSid
+ * @property {string | undefined} ParentCallSid
+ * @property {string | undefined} DialCallStatus
+ * @property {string | undefined} DialCallDuration
+ * @property {string | undefined} RecordingUrl
+ * @property {string | undefined} RecordingSid
+ * @property {string | undefined} RecordingDuration
+ * @property {string | undefined} NumMedia
+ * @property {string | undefined} MediaUrl0
+ * @property {string | undefined} MediaUrl1
+ * @property {string | undefined} MediaUrl2
+ * @property {string | undefined} MediaUrl3
+ * @property {string | undefined} MediaUrl4
+ * @property {string | undefined} MediaUrl5
+ * @property {string | undefined} MediaUrl6
+ * @property {string | undefined} MediaUrl7
+ * @property {string | undefined} MediaUrl8
+ * @property {string | undefined} MediaUrl9
+ */
+
 const client = twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN,
 );
 
+/**
+ * Clears the assigned employee fields for a Twilio number record.
+ * @param {string} phoneNumber - TwilioNumber id to unassign (E.164).
+ * @returns {Promise<void>}
+ */
 export async function unassignNumber(phoneNumber) {
   console.log("Twilio: Unassigning number " + phoneNumber);
 
@@ -31,6 +64,10 @@ export async function unassignNumber(phoneNumber) {
   });
 }
 
+/**
+ * Backfills missing Slack user assignments for unassigned numbers, then returns all numbers.
+ * @returns {Promise<Array<import("@prisma/client").TwilioNumber>>}
+ */
 export async function returnAssignedPhoneNumbers() {
   // Check in DB for any unassigned numbers
   const unassignedNumbers = await prisma.twilioNumber.findMany({
@@ -74,9 +111,9 @@ export async function returnAssignedPhoneNumbers() {
 }
 
 /**
- * Looks up the employee by phone number in Slack, then updates their information in the database
- * @param employeePhoneNumber The phone number of the employee to update data for
- * @return {Promise<boolean>} Was the TwilioNumber updated?
+ * Looks up the employee by phone number in Slack, then updates TwilioNumber records.
+ * @param {string} employeePhoneNumber - The employee phone number (E.164) to resolve in Slack.
+ * @returns {Promise<boolean>} True if at least one TwilioNumber record was updated.
  */
 async function updateTwilioNumberSlackDetails(employeePhoneNumber) {
   const member = await resolveUserByPhoneNumber(employeePhoneNumber);
@@ -94,9 +131,9 @@ async function updateTwilioNumberSlackDetails(employeePhoneNumber) {
   }
 
   if (!name || name === "") {
-    console.error(
-      `Twilio: Slack user doesn't have a profile.first_name, profile.display_name, or profile.real_name field! Slack user JSON:\n${JSON.stringify(member)}`,
-    );
+    const errorMessage = `Twilio: Slack user doesn't have a profile.first_name, profile.display_name, or profile.real_name field! Slack user JSON:\n${JSON.stringify(member)}`;
+    console.error(errorMessage);
+    Sentry.captureException(errorMessage, member);
   }
 
   const result = await prisma.twilioNumber.updateMany({
@@ -113,16 +150,18 @@ async function updateTwilioNumberSlackDetails(employeePhoneNumber) {
 }
 
 /**
- * Automatically assigns a Twilio number to an employee the first time they try to call/text.
+ * Assigns a Twilio number to an employee on first use.
  *
  * Flow:
- * 1) If an employee already has a TwilioNumber (assignedEmployeeNumber = employee E.164), return it
- * 2) Else find the first unassigned TwilioNumber
- * 3) Assign it to the employee
- * 4) Return it
+ * 1) If an employee already has a TwilioNumber (assignedEmployeeNumber = E.164), return it.
+ * 2) Else find the first unassigned TwilioNumber.
+ * 3) Assign it to the employee.
+ * 4) Return it.
  *
- * Concurrency note:
- * - Uses a transaction and conditional update to avoid two employees grabbing the same number.
+ * Concurrency: uses a transaction and conditional update to avoid double-assignments.
+ * @param {string} employeePhoneNumber - The employee phone number (any format).
+ * @returns {Promise<{phoneNumber: string}>} Assigned Twilio number.
+ * @throws {Error} When no Twilio numbers are available to assign.
  */
 export async function getOrAssignEmployeeNumber(employeePhoneNumber) {
   const employeeE164 = toE164(employeePhoneNumber);
@@ -166,7 +205,11 @@ export async function getOrAssignEmployeeNumber(employeePhoneNumber) {
 
       if (updated.count === 1) {
         // Look up the Slack profile of the employee and async update it in the DB
-        updateTwilioNumberSlackDetails(employeeE164);
+        updateTwilioNumberSlackDetails(employeeE164).then(() => {
+          console.log(
+            `Twilio: Assigned ${employeeE164} to ${candidate.phoneNumber}`,
+          );
+        });
 
         // Step 4: return the newly assigned number
         return { phoneNumber: candidate.phoneNumber };
@@ -179,9 +222,10 @@ export async function getOrAssignEmployeeNumber(employeePhoneNumber) {
   );
 
   if (!result) {
-    Sentry.captureException(
-      new Error("Failed to assign Twilio number, no numbers available."),
-    );
+    const errorMessage =
+      "Twilio: Failed to assign Twilio number, no numbers available.";
+    console.error(errorMessage);
+    Sentry.captureException(new Error(errorMessage));
 
     let message = `Error from the call bot. *Super technical error code*: :robot_face::frowning::thumbsdown:\nI can't assign a phone number to a user. Check my page for current phone number assignments, and maybe add phone numbers in Twilio?`;
     events.emit(
@@ -198,6 +242,12 @@ export async function getOrAssignEmployeeNumber(employeePhoneNumber) {
   return result;
 }
 
+/**
+ * Updates last contact time and thread id for a TwilioContact using call data.
+ * @param {{from: string}} call - Call-like object containing a `from` number.
+ * @param {string | null} threadTs - Slack thread timestamp.
+ * @returns {Promise<void>}
+ */
 export async function updateTwilioContactTs(call, threadTs) {
   const now = new Date();
 
@@ -216,6 +266,13 @@ export async function updateTwilioContactTs(call, threadTs) {
   await prisma.$transaction(ops);
 }
 
+/**
+ * Upserts a TwilioContact for the customer and updates last-contact metadata.
+ * @param {string} customerNumber - Customer phone number (any format).
+ * @param {string} twilioNumber - Twilio number used for the interaction (any format).
+ * @param {string | null} [slackThreadId=null] - Slack thread id to associate.
+ * @returns {Promise<void>}
+ */
 export async function updateTwilioContact(
   customerNumber,
   twilioNumber,
@@ -247,6 +304,11 @@ export async function updateTwilioContact(
   await prisma.$transaction(ops);
 }
 
+/**
+ * Downloads a Twilio recording as a Buffer.
+ * @param {string} recordingUrlBase - Recording URL without file extension.
+ * @returns {Promise<Buffer>}
+ */
 async function downloadTwilioRecording(recordingUrlBase) {
   const url = `${recordingUrlBase}.mp3`; // or ".wav"
   const auth = Buffer.from(
@@ -268,16 +330,21 @@ async function downloadTwilioRecording(recordingUrlBase) {
   return Buffer.from(arrayBuffer);
 }
 
+/**
+ * Sends a Slack message for a missed call and returns the Slack message.
+ * @param {string | undefined} from - Caller number.
+ * @param {string | undefined} to - Twilio number that was called.
+ * @param {string | undefined} reason - Optional reason to display.
+ * @returns {Promise<{ts?: string} | null>}
+ */
 async function sendMissedCallBlocks(from, to, reason) {
   const safeFrom = from || "<unknown>";
   const displayFrom = normalizePhoneNumber(safeFrom) || safeFrom;
-  const actionValue = toE164(safeFrom) || safeFrom;
 
   const twilioNumber = to
     ? await prisma.twilioNumber.findUnique({ where: { id: to } })
     : null;
 
-  // TODO: Check tagging the employee
   let heading = "Missed call ";
   if (twilioNumber.assignedEmployee) {
     heading += `for <@${twilioNumber.assignedEmployee}> `;
@@ -348,7 +415,13 @@ async function sendMissedCallBlocks(from, to, reason) {
   return slackMessage;
 }
 
-export async function handleInboundCall(req, res) {
+/**
+ * Handles Twilio inbound voice webhooks and returns TwiML response.
+ * @param {import("express").Request & {body?: TwilioWebhookBody}} req
+ * @param {import("express").Response} _res
+ * @returns {Promise<string>}
+ */
+export async function handleInboundCall(req, _res) {
   const twiml = new twilio.twiml.VoiceResponse();
 
   try {
@@ -361,11 +434,9 @@ export async function handleInboundCall(req, res) {
       twiml.say("We are unable to route your call at this time.");
       twiml.dial({}, fallbackNumber);
 
-      console.error(`Twilio: Missing the number they dialed`);
-
-      Sentry.captureException(
-        new Error("Twilio: Missing the number they dialed"),
-      );
+      const errorMessage = "Twilio: Missing the number they dialed";
+      console.error(errorMessage);
+      Sentry.captureException(new Error(errorMessage));
 
       return twiml.toString();
     }
@@ -444,7 +515,13 @@ export async function handleInboundCall(req, res) {
   }
 }
 
-export function handleInboundScreen(req, res) {
+/**
+ * Prompts the callee to confirm they are human before connecting.
+ * @param {import("express").Request} _req
+ * @param {import("express").Response} _res
+ * @returns {string}
+ */
+export function handleInboundScreen(_req, _res) {
   const twiml = new twilio.twiml.VoiceResponse();
 
   const gather = twiml.gather({
@@ -463,7 +540,13 @@ export function handleInboundScreen(req, res) {
   return twiml.toString();
 }
 
-export async function handleInboundScreenConfirm(req, res) {
+/**
+ * Confirms the inbound screen step and optionally starts call recording.
+ * @param {import("express").Request & {body?: TwilioWebhookBody}} req
+ * @param {import("express").Response} _res
+ * @returns {Promise<string>}
+ */
+export async function handleInboundScreenConfirm(req, _res) {
   const twiml = new twilio.twiml.VoiceResponse();
 
   const digits = req.body?.Digits;
@@ -500,7 +583,13 @@ export async function handleInboundScreenConfirm(req, res) {
   return twiml.toString();
 }
 
-export async function handleInboundAfterDial(req, res) {
+/**
+ * Handles the Twilio post-dial webhook; records voicemail or posts missed-call info.
+ * @param {import("express").Request & {body?: TwilioWebhookBody}} req
+ * @param {import("express").Response} _res
+ * @returns {Promise<string>}
+ */
+export async function handleInboundAfterDial(req, _res) {
   const twiml = new twilio.twiml.VoiceResponse();
 
   const dialStatus = req.body?.DialCallStatus;
@@ -551,6 +640,12 @@ export async function handleInboundAfterDial(req, res) {
   return twiml.toString();
 }
 
+/**
+ * Handles the voicemail action callback and posts a missed-call message if empty.
+ * @param {import("express").Request & {body?: TwilioWebhookBody}} req
+ * @param {import("express").Response} res
+ * @returns {Promise<void>}
+ */
 export async function handleVoicemailAction(req, res) {
   const duration = Number(req.body?.RecordingDuration || 0);
 
@@ -564,7 +659,13 @@ export async function handleVoicemailAction(req, res) {
   res.sendStatus(200);
 }
 
-export async function handleBridge(req, res) {
+/**
+ * Prompts an employee to confirm before bridging a call to a customer.
+ * @param {import("express").Request} req
+ * @param {import("express").Response} _res
+ * @returns {Promise<string>}
+ */
+export async function handleBridge(req, _res) {
   const twiml = new twilio.twiml.VoiceResponse();
 
   const customer = req.query.to;
@@ -593,7 +694,13 @@ export async function handleBridge(req, res) {
   return twiml.toString();
 }
 
-export async function handleBridgeConfirm(req, res) {
+/**
+ * Confirms the bridge prompt and dials the customer.
+ * @param {import("express").Request & {body?: TwilioWebhookBody}} req
+ * @param {import("express").Response} _res
+ * @returns {Promise<string>}
+ */
+export async function handleBridgeConfirm(req, _res) {
   const twiml = new twilio.twiml.VoiceResponse();
 
   const customer = req.query.to;
@@ -623,6 +730,13 @@ export async function handleBridgeConfirm(req, res) {
   return twiml.toString();
 }
 
+/**
+ * Calls the employee first, then bridges to the customer on acceptance.
+ * @param {string} employeePhoneNumber - Employee phone number (any format).
+ * @param {string} customerPhoneNumber - Customer phone number (any format).
+ * @param {string} slackTs - Slack message timestamp for the thread.
+ * @returns {Promise<string>} Twilio call SID.
+ */
 export async function callEmployeeThenCustomer(
   employeePhoneNumber,
   customerPhoneNumber,
@@ -641,15 +755,8 @@ export async function callEmployeeThenCustomer(
     url: twimlUrl.toString(),
     method: "POST",
 
-    // machineDetection: "Enable",
-
     // TODO: Setup the caller ID. Something about this needs to be verified
     // callerId: "Plumb-All",
-
-    // Optional: status callbacks so you can log outcomes
-    // statusCallback: `${process.env.WEB_URL}/twilio/status`,
-    // statusCallbackMethod: "POST",
-    // statusCallbackEvent: ["initiated", "ringing", "answered", "completed"],
   });
 
   await updateTwilioContact(
@@ -661,6 +768,14 @@ export async function callEmployeeThenCustomer(
   return call.sid;
 }
 
+/**
+ * Sends an SMS to a customer from the employee's assigned Twilio number.
+ * @param {string} customerPhoneNumber - Customer phone number (any format).
+ * @param {string} employeePhoneNumber - Employee phone number (any format).
+ * @param {string} smsMessage - Text body.
+ * @param {string | null} [slackTs=null] - Slack thread timestamp.
+ * @returns {Promise<void>}
+ */
 export async function textCustomer(
   customerPhoneNumber,
   employeePhoneNumber,
@@ -684,6 +799,11 @@ export async function textCustomer(
   );
 }
 
+/**
+ * Extracts MMS media URLs from a Twilio webhook payload.
+ * @param {TwilioWebhookBody} body
+ * @returns {string[]}
+ */
 function getMediaUrls(body) {
   const numMedia = body.NumMedia;
   if (numMedia === 0) {
@@ -701,11 +821,14 @@ function getMediaUrls(body) {
     }
   }
 
-  // There can only be up to 10 media URLs
-
   return mediaUrls;
 }
 
+/**
+ * Downloads media URLs and returns buffers and metadata.
+ * @param {string[]} mediaUrls
+ * @returns {Promise<Array<{url: string, contentType: string, data: Buffer}>>}
+ */
 async function downloadTwilioMediaUrls(mediaUrls) {
   if (!mediaUrls.length) {
     return [];
@@ -739,6 +862,11 @@ async function downloadTwilioMediaUrls(mediaUrls) {
   return Promise.all(downloads);
 }
 
+/**
+ * Resolves MMS media attachments (if any).
+ * @param {TwilioWebhookBody} body
+ * @returns {Promise<Array<{url: string, contentType: string, data: Buffer}> | undefined>}
+ */
 async function getMedia(body) {
   const mediaUrls = getMediaUrls(body);
   if (mediaUrls.length) {
@@ -746,6 +874,11 @@ async function getMedia(body) {
   }
 }
 
+/**
+ * Builds a filename for a media attachment based on its content type.
+ * @param {{contentType: string}} media
+ * @returns {string}
+ */
 function buildMediaFilename(media) {
   const prefix = `attachment-${Date.now()}`;
 
@@ -758,10 +891,13 @@ function buildMediaFilename(media) {
   return `${prefix}.${ext}`;
 }
 
-export async function handleInboundSms(req, res) {
-  // const VoiceResponse = twilio.twiml.VoiceResponse;
-  // const twiml = new VoiceResponse();
-
+/**
+ * Handles inbound SMS/MMS from Twilio and posts to Slack.
+ * @param {import("express").Request & {body?: TwilioWebhookBody}} req
+ * @param {import("express").Response} _res
+ * @returns {Promise<void>}
+ */
+export async function handleInboundSms(req, _res) {
   try {
     const from = req.body?.From; // customer/caller
     const to = req.body?.To; // the Twilio number they dialed
@@ -879,6 +1015,12 @@ export async function handleInboundSms(req, res) {
   }
 }
 
+/**
+ * Handles Twilio recording status callbacks and posts recordings to Slack.
+ * @param {import("express").Request & {body?: TwilioWebhookBody}} req
+ * @param {import("express").Response} res
+ * @returns {Promise<void>}
+ */
 export async function handleRecordingDone(req, res) {
   console.log(`Twilio: Recording done for call ${req.body.CallSid}`);
 
@@ -999,16 +1141,17 @@ export async function handleRecordingDone(req, res) {
     console.log("Twilio: Deleting recording from twilio");
     await client.recordings(req.body.RecordingSid).remove();
   } else {
-    console.error(
-      `Twilio: No customer number found for call ${req.body.CallSid}`,
-    );
+    const errorMessage = `Twilio: No customer number found for call ${req.body.CallSid}`;
+    console.error(errorMessage);
+    Sentry.captureException(new Error(errorMessage));
   }
 
   res.status(200).send();
 }
 
 /**
- * Pull all phone numbers the account owns, then upsert into the TwilioNumber table.
+ * Fetches all Twilio incoming phone numbers and upserts them into TwilioNumber.
+ * @returns {Promise<void>}
  */
 async function updateTwilioNumbers() {
   // Twilio's SDK paginates internally for `.list()` (it will fetch multiple pages up to `limit`).
@@ -1038,6 +1181,4 @@ async function updateTwilioNumbers() {
 }
 
 console.info("Twilio: Updating Phone Numbers");
-updateTwilioNumbers().then((r) =>
-  console.info("Twilio: Updated Phone Numbers"),
-);
+updateTwilioNumbers().then(() => console.info("Twilio: Updated Phone Numbers"));
