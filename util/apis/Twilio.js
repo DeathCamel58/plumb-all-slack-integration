@@ -379,7 +379,13 @@ export async function handleInboundCall(req, res) {
       console.log(
         `Twilio: ${twilioNumber.assignedEmployeeName} called their own number "${twilioNumber.id}". Rejecting call.`,
       );
-      // TODO: Maybe DM the employee saying that they can't call themselves
+
+      // DM the user on Slack that they can't call themselves
+      events.emit(
+        "slack-direct-message",
+        twilioNumber.assignedEmployee,
+        "I see that you tried calling your own number. That won't work.\nHere's what you can do instead:\n- Click or tap on a call button in #calls\n- Send a message in a DM or channel `/dial [phone number]` (I'll then call you)\nIf you missed a call, you should see a notification in threads",
+      );
 
       twiml.reject();
 

@@ -314,6 +314,45 @@ async function sendMessage(
 events.on("slackbot-send-message", sendMessage);
 
 /**
+ * Sends a direct message to a Slack user by user ID.
+ * @param userId The Slack user ID to DM
+ * @param message The message to send
+ * @returns {Promise<WebAPICallResult|null>}
+ */
+export async function sendDirectMessage(userId, message) {
+  if (!userId || !message) {
+    console.warn("Slack: sendDirectMessage missing userId or message");
+    return null;
+  }
+
+  try {
+    const dm = await app.client.conversations.open({
+      users: userId,
+    });
+
+    const channelId = dm?.channel?.id;
+    if (!channelId) {
+      console.warn("Slack: Failed to open DM channel", dm);
+      return null;
+    }
+
+    const result = await app.client.chat.postMessage({
+      channel: channelId,
+      text: message,
+      unfurl_links: false,
+    });
+
+    console.info(`Slack: Sent DM to ${userId}`);
+    return result;
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error("Slack: sendDirectMessage failed", error);
+    return null;
+  }
+}
+events.on("slack-direct-message", sendDirectMessage);
+
+/**
  * Takes message, and sends it to slack with given username
  * @param blocks The message to send
  * @param username Username to send the message as
