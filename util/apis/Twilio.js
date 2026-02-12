@@ -401,11 +401,6 @@ export async function handleInboundCall(req, res) {
       const dial = twiml.dial({
         callerId: to, // present the dialed Twilio number to the recipient
         answerOnBridge: true,
-        record: "record-from-answer",
-        recordingChannels: "dual",
-        // Optional callbacks if you want to store recording URLs later:
-        recordingStatusCallback: `${process.env.WEB_URL}/twilio/recording-status`,
-        recordingStatusCallbackMethod: "POST",
         action: `${process.env.WEB_URL}/twilio/voice/after-dial`,
         method: "POST",
       });
@@ -450,7 +445,7 @@ export function handleInboundScreen(req, res) {
   return twiml.toString();
 }
 
-export function handleInboundScreenConfirm(req, res) {
+export async function handleInboundScreenConfirm(req, res) {
   const twiml = new twilio.twiml.VoiceResponse();
 
   const digits = req.body?.Digits;
@@ -462,6 +457,27 @@ export function handleInboundScreenConfirm(req, res) {
   }
 
   twiml.say("Connecting.");
+
+  const recordingCallSid = req.body?.CallSid || req.body?.ParentCallSid;
+  if (recordingCallSid) {
+    try {
+      await client.calls(recordingCallSid).recordings.create({
+        recordingChannels: "dual",
+        recordingStatusCallback: `${process.env.WEB_URL}/twilio/recording-status`,
+        recordingStatusCallbackMethod: "POST",
+      });
+    } catch (e) {
+      console.error(
+        `Twilio: Failed to start recording for call ${recordingCallSid}`,
+        e,
+      );
+      Sentry.captureException(e);
+    }
+  } else {
+    console.warn(
+      "Twilio: Missing CallSid/ParentCallSid; could not start recording after screen confirm.",
+    );
+  }
 
   return twiml.toString();
 }
@@ -579,6 +595,7 @@ export async function handleBridgeConfirm(req, res) {
 
   const dial = twiml.dial({
     callerId: process.env.TWILIO_CALLER_ID,
+    record: "record-from-answer-dual",
     recordingStatusCallback: `${process.env.WEB_URL}/twilio/recording-status`,
     recordingStatusCallbackMethod: "POST",
   });
@@ -615,13 +632,6 @@ export async function callEmployeeThenCustomer(
     // statusCallback: `${process.env.WEB_URL}/twilio/status`,
     // statusCallbackMethod: "POST",
     // statusCallbackEvent: ["initiated", "ringing", "answered", "completed"],
-
-    // Optional: record the bridged call
-    record: true,
-    // recordingChannels: "dual", // depending on account defaults; dual is commonly available
-
-    recordingStatusCallback: `${process.env.WEB_URL}/twilio/recording-status`,
-    recordingStatusCallbackMethod: "POST",
   });
 
   await updateTwilioContact(
@@ -867,13 +877,17 @@ export async function handleRecordingDone(req, res) {
   const thisCall = await client.calls(req.body.CallSid).fetch();
   let call = thisCall;
 
+  if (thisCall.parentCallSid && thisCall.parentCallSid !== "") {
+    call = await client.calls(thisCall.parentCallSid).fetch();
+  }
+
   let customerNumber;
   let ourNumber;
 
   // For an inbound call, we can use the `from` field to look up the sid, otherwise we need to look up the child call
-  if (thisCall.direction === "inbound") {
-    customerNumber = thisCall.from;
-    ourNumber = thisCall.to;
+  if (call.direction === "inbound") {
+    customerNumber = call.from;
+    ourNumber = call.to;
   } else {
     const childCall = await client.calls.list({
       parent: req.body.CallSid,
