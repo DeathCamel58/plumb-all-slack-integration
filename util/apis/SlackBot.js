@@ -32,7 +32,9 @@ const app = new Slack.App({
 })();
 
 /**
- * Accepts a channel ID (C..., G...) or a channel name ("calls" or "#calls") and returns an ID.
+ * Resolves a channel ID (C..., G...) or channel name ("calls" or "#calls") to an ID.
+ * @param {string} channelOrName
+ * @returns {Promise<string | null>}
  */
 async function resolveChannelId(channelOrName) {
   if (!channelOrName) throw new Error("Missing Slack channel");
@@ -53,9 +55,9 @@ async function resolveChannelId(channelOrName) {
 }
 
 /**
- * Check if the given user is an admin or owner of the Slack workspace
- * @param userId The user to check
- * @return {Promise<boolean>} Whether the user is an admin or owner
+ * Checks whether the user is an admin or owner in the workspace.
+ * @param {string} userId
+ * @returns {Promise<boolean>}
  */
 async function isUserAdmin(userId) {
   const userInfo = await app.client.users.info({
@@ -65,6 +67,11 @@ async function isUserAdmin(userId) {
   return userInfo?.user?.is_admin || userInfo?.user?.is_owner || false;
 }
 
+/**
+ * Finds a Slack user by phone number using profile fields.
+ * @param {string} phoneNumber
+ * @returns {Promise<any | null>} Slack user object or null if not found.
+ */
 export async function resolveUserByPhoneNumber(phoneNumber) {
   console.log(`SlackBot: Resolving user for phone number ${phoneNumber}`);
 
@@ -141,6 +148,11 @@ export async function resolveUserByPhoneNumber(phoneNumber) {
   }
 }
 
+/**
+ * Publishes the app home view for a user.
+ * @param {string} user_id
+ * @returns {Promise<void>}
+ */
 async function publishHome(user_id) {
   const assignedNumbers = await returnAssignedPhoneNumbers();
 
@@ -280,11 +292,11 @@ async function publishHome(user_id) {
 }
 
 /**
- * Takes message, and sends it to slack with given username
- * @param message The message to send
- * @param username Username to send the message as
- * @param channelName The channel to send the message to
- * @returns {Promise<WebAPICallResult & {channel?: string; deprecated_argument?: string; error?: string; errors?: string[]; message?: ChatPostMessageResponseMessage; needed?: string; ok?: boolean; provided?: string; response_metadata?: ResponseMetadata; ts?: string}>} Promise that resolves after a message is sent
+ * Sends a plain-text message to Slack.
+ * @param {string} message
+ * @param {string} username
+ * @param {string} [channelName=slackCallChannelName]
+ * @returns {Promise<any | null>} Slack API result or null on failure.
  */
 async function sendMessage(
   message,
@@ -315,9 +327,9 @@ events.on("slackbot-send-message", sendMessage);
 
 /**
  * Sends a direct message to a Slack user by user ID.
- * @param userId The Slack user ID to DM
- * @param message The message to send
- * @returns {Promise<WebAPICallResult|null>}
+ * @param {string} userId
+ * @param {string} message
+ * @returns {Promise<any | null>}
  */
 export async function sendDirectMessage(userId, message) {
   if (!userId || !message) {
@@ -353,12 +365,12 @@ export async function sendDirectMessage(userId, message) {
 events.on("slack-direct-message", sendDirectMessage);
 
 /**
- * Takes message, and sends it to slack with given username
- * @param blocks The message to send
- * @param username Username to send the message as
- * @param threadTs The thread to send the message to
- * @param channelName The channel to send the message to
- * @returns {Promise<WebAPICallResult & {channel?: string; deprecated_argument?: string; error?: string; errors?: string[]; message?: ChatPostMessageResponseMessage; needed?: string; ok?: boolean; provided?: string; response_metadata?: ResponseMetadata; ts?: string}>}
+ * Sends a block-based message to Slack.
+ * @param {Array<object>} blocks
+ * @param {string} username
+ * @param {string | null} [threadTs=null]
+ * @param {string} [channelName=slackCallChannelName]
+ * @returns {Promise<any | null>} Slack API result or null on failure.
  */
 export async function sendMessageBlocks(
   blocks,
@@ -387,6 +399,18 @@ export async function sendMessageBlocks(
 }
 events.on("slackbot-send-message-blocks", sendMessageBlocks);
 
+/**
+ * Uploads a file to Slack and optionally creates a thread to attach it to.
+ * @param {Buffer} fileBuffer
+ * @param {string} fileName
+ * @param {string} title
+ * @param {string} initialComment
+ * @param {string} [channelName=slackCallChannelName]
+ * @param {string | null} [threadTs=null]
+ * @param {Array<object> | null} [blocks=null] - Optional blocks to create a thread.
+ * @param {any | null} [call=null] - Call metadata used to update thread id.
+ * @returns {Promise<any | null>}
+ */
 export async function uploadFile(
   fileBuffer,
   fileName,
@@ -438,12 +462,12 @@ export async function uploadFile(
 events.on("slackbot-upload-file", uploadFile);
 
 /**
- * Takes message, and sends it to slack with given username
- * @param contact The contact to send
- * @param username Username to send the message as
- * @param channelName The channel to send the message to
- * @param thread_ts The thread to send the message to
- * @returns {Promise<void>} Promise that resolves after a message is sent
+ * Sends a contact message with call/text actions to Slack.
+ * @param {{messageToSend: () => string, phone: string}} contact
+ * @param {string} username
+ * @param {string} [channelName=slackCallChannelName]
+ * @param {string | null} [thread_ts=null]
+ * @returns {Promise<void>}
  */
 async function sendContactMessage(
   contact,
@@ -508,6 +532,11 @@ async function sendContactMessage(
 }
 events.on("slackbot-send-contact", sendContactMessage);
 
+/**
+ * Validates inputs and starts the outbound call flow, returning a user message.
+ * @param {{userId: string, employeePhoneNumber: string, rawCustomerNumber: string}} params
+ * @returns {Promise<{ok: boolean, userMessage: string}>}
+ */
 async function startOutboundCallFlow({
   userId,
   employeePhoneNumber,
@@ -541,7 +570,7 @@ async function startOutboundCallFlow({
   }
 
   try {
-    let slackThreadId = null;
+    let slackThreadId;
     const existingContact = await prisma.twilioContact.findUnique({
       where: { id: customerPhoneNumber },
     });
@@ -627,6 +656,13 @@ async function startOutboundCallFlow({
   }
 }
 
+/**
+ * Posts a threaded reply with blocks using the original event data.
+ * @param {{channel: string, ts: string}} event
+ * @param {string} rawMessage
+ * @param {Array<object>} blocks
+ * @returns {Promise<void>}
+ */
 async function sendReplyRawMessageBlocks(event, rawMessage, blocks) {
   try {
     await app.client.chat.postMessage({
@@ -655,10 +691,10 @@ async function sendReplyRawMessageBlocks(event, rawMessage, blocks) {
 }
 
 /**
- * Gets a message from Slack
- * @param id The ID of the channel to search
- * @param ts The message ID
- * @returns {Promise<Message>}
+ * Fetches a single message by channel id and timestamp.
+ * @param {string} id
+ * @param {string} ts
+ * @returns {Promise<any>}
  */
 async function fetchMessage(id, ts) {
   try {
@@ -684,8 +720,8 @@ async function fetchMessage(id, ts) {
 }
 
 /**
- * Unfurl's a URL (kind of), and replies in thread to quote, job, or invoice references.
- * @param event the webhook event to check for references
+ * Detects Jobber references in a message and replies in-thread with details.
+ * @param {{user: string, text: string, channel: string, ts: string}} event
  * @returns {Promise<void>}
  */
 async function unfurlMessage(event) {
@@ -857,10 +893,10 @@ async function unfurlMessage(event) {
 }
 
 /**
- * Takes in a Slack webhook request, and checks if it's authentic
- * @param req The request
- * @param doYouLikeItRaw Should we validate signature using the raw body?
- * @returns {boolean} Is the webhook authentic?
+ * Verifies Slack webhook signatures.
+ * @param {import("express").Request & {rawBody?: string}} req
+ * @param {boolean} [doYouLikeItRaw=false]
+ * @returns {boolean}
  */
 export function verifyWebhook(req, doYouLikeItRaw = false) {
   if (process.env.DEBUG === "TRUE") {
@@ -905,6 +941,12 @@ export function verifyWebhook(req, doYouLikeItRaw = false) {
   return false;
 }
 
+/**
+ * Opens a modal showing recent jobs for the user.
+ * @param {string} trigger_id
+ * @param {string} user
+ * @returns {Promise<void>}
+ */
 async function jobsModal(trigger_id, user) {
   let jobs = await findUserJobs(user);
 
@@ -971,6 +1013,12 @@ async function jobsModal(trigger_id, user) {
   });
 }
 
+/**
+ * Opens a modal showing recent invoices for the user.
+ * @param {string} trigger_id
+ * @param {string} user
+ * @returns {Promise<void>}
+ */
 async function invoicesModal(trigger_id, user) {
   let invoices = await findUserInvoices(user);
 
@@ -1038,8 +1086,8 @@ async function invoicesModal(trigger_id, user) {
 }
 
 /**
- * Takes in a Slack webhook for an event and processes it
- * @param req
+ * Handles Slack event webhooks.
+ * @param {import("express").Request} req
  * @returns {Promise<void>}
  */
 export async function event(req) {
@@ -1115,8 +1163,8 @@ export async function event(req) {
 events.on("slack-EVENT", event);
 
 /**
- * Takes in a Slack webhook for an INTERACTIVITY event and processes it
- * @param req
+ * Handles Slack interactivity payloads.
+ * @param {import("express").Request} req
  * @returns {Promise<void>}
  */
 async function interactivity(req) {
@@ -1468,8 +1516,9 @@ async function interactivity(req) {
 events.on("slack-INTERACTIVITY", interactivity);
 
 /**
- * Takes in a Slack webhook for an COMMAND event and processes it
- * @param req The request
+ * Handles Slack slash command payloads.
+ * @param {import("express").Request} req
+ * @param {import("express").Response} res
  * @returns {Promise<void>}
  */
 async function command(req, res) {
