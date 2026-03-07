@@ -895,7 +895,7 @@ function buildMediaFilename(media) {
  * Handles inbound SMS/MMS from Twilio and posts to Slack.
  * @param {import("express").Request & {body?: TwilioWebhookBody}} req
  * @param {import("express").Response} _res
- * @returns {Promise<void>}
+ * @returns {Promise<string>}
  */
 export async function handleInboundSms(req, _res) {
   try {
@@ -1009,9 +1009,15 @@ export async function handleInboundSms(req, _res) {
         );
       }
     }
+
+    // No SMS response
+    return new twilio.twiml.MessagingResponse().toString();
   } catch (e) {
     console.error("Twilio SMS: error handling inbound sms", e);
     Sentry.captureException(e);
+
+    // No SMS response
+    return new twilio.twiml.MessagingResponse().toString();
   }
 }
 

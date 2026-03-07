@@ -405,7 +405,7 @@ app.post("/twilio/voice/voicemail-action", async (req, res) => {
 app.post("/twilio/sms", async (req, res) => {
   const messageResponse = await handleInboundSms(req, res);
 
-  res.sendStatus(200);
+  res.type("text/xml").send(messageResponse);
 });
 
 /**
