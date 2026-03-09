@@ -1,55 +1,92 @@
-import { expect, test, describe, jest } from "@jest/globals";
-import * as Trello from "../../util/apis/Trello.js";
-import * as APICoordinator from "../../util/APICoordinator.js";
-import dotenv from "dotenv";
-dotenv.config({
-  path: process.env.ENV_LOCATION || "/root/plumb-all-slack-integration/.env",
+import { beforeEach, describe, expect, jest, test } from "@jest/globals";
+
+const fetchMock = jest.fn();
+
+jest.unstable_mockModule("node-fetch", () => ({
+  default: fetchMock,
+}));
+
+const Trello = await import("../../util/apis/Trello.js");
+
+function buildResponse(status, body) {
+  return {
+    status,
+    text: async () => (typeof body === "string" ? body : JSON.stringify(body)),
+  };
+}
+
+beforeEach(() => {
+  process.env.TRELLO_API_KEY = "test-key";
+  process.env.TRELLO_TOKEN = "test-token";
+
+  fetchMock.mockReset();
+  fetchMock.mockImplementation(async (url) => {
+    const requestUrl = String(url);
+
+    if (requestUrl.includes("/1/members/me/boards")) {
+      return buildResponse(200, [
+        { id: "63adde25c5407a01b701b210", name: "Calls" },
+        { id: "another-board", name: "Other" },
+      ]);
+    }
+
+    if (requestUrl.includes("/1/boards/63adde25c5407a01b701b210/lists")) {
+      return buildResponse(200, [
+        { id: "63adde25c5407a01b701b217", name: "To Do" },
+        { id: "63adde25c5407a01b701b218", name: "WIP" },
+      ]);
+    }
+
+    if (requestUrl.includes("/1/boards/1234567890/lists")) {
+      return buildResponse(400, { error: "invalid board id" });
+    }
+
+    if (requestUrl.includes("/1/bad/endpoint")) {
+      return buildResponse(400, { error: "no such endpoint" });
+    }
+
+    return buildResponse(400, { error: "unhandled route" });
+  });
 });
 
-// We can group similar tests inside a `describe` block
 describe("Trello", () => {
-  // Test Low Level API
-  // Although this function shouldn't be used directly, it is good to test it
   describe("Low Level API", () => {
     test("List Boards (good request)", async () => {
-      let url = `1/members/me/boards?key=${process.env.TRELLO_API_KEY}&token=${process.env.TRELLO_TOKEN}`;
+      const url = `1/members/me/boards?key=${process.env.TRELLO_API_KEY}&token=${process.env.TRELLO_TOKEN}`;
       let response = await Trello.useAPI(url, "get", null);
       response = JSON.parse(response);
       expect(response.length).toBeGreaterThan(0);
     });
 
     test("No such endpoint (bad request)", async () => {
-      // We expect a `console.error()`, so implement it to hide it.
       jest.spyOn(console, "error").mockImplementation(() => {});
 
-      let url = `1/bad/endpoint?key=${process.env.TRELLO_API_KEY}&token=${process.env.TRELLO_TOKEN}`;
-      let response = await Trello.useAPI(url, "get", null);
+      const url = `1/bad/endpoint?key=${process.env.TRELLO_API_KEY}&token=${process.env.TRELLO_TOKEN}`;
+      const response = await Trello.useAPI(url, "get", null);
       expect(response).toBeUndefined();
 
-      // Reset the `console.error()` implementation
       console.error.mockRestore();
     });
   });
 
-  // Test Function Calls
   describe("Functions", () => {
     test("Get Board (Good Name)", async () => {
-      let boards = await Trello.getBoard("Calls");
+      const boards = await Trello.getBoard("Calls");
       expect(boards).toBe("63adde25c5407a01b701b210");
     });
 
     test("Get Board (Bad Name)", async () => {
-      let boards = await Trello.getBoard("NoSuchBoard");
+      const boards = await Trello.getBoard("NoSuchBoard");
       expect(boards).toBeNull();
     });
 
     test("Get List (Good Name)", async () => {
-      let boards = await Trello.getList("63adde25c5407a01b701b210", "To Do");
+      const boards = await Trello.getList("63adde25c5407a01b701b210", "To Do");
       expect(boards).toBe("63adde25c5407a01b701b217");
     });
 
     test("Get List (Bad List Name)", async () => {
-      let boards = await Trello.getList(
+      const boards = await Trello.getList(
         "63adde25c5407a01b701b210",
         "NoSuchList",
       );
@@ -57,17 +94,12 @@ describe("Trello", () => {
     });
 
     test("Get List (Bad Board Id)", async () => {
-      // We expect a `console.error()`, so implement it to hide it.
       jest.spyOn(console, "error").mockImplementation(() => {});
 
-      let boards = await Trello.getList("1234567890", "NoSuchList");
+      const boards = await Trello.getList("1234567890", "NoSuchList");
       expect(boards).toBeNull();
 
-      // Reset the `console.error()` implementation
       console.error.mockRestore();
     });
-
-    // TODO: Test Trello runSearch(), addCard(), moveCard(), addContact(), and moveContactCard()
-    // This isn't done now, as cards will move and be archived in the environment
   });
 });
