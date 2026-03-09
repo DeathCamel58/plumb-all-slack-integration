@@ -1301,6 +1301,13 @@ async function interactivity(req) {
           case "outbound-text-0":
             console.log("Slack: User wants an outbound text!");
 
+            const outboundTextThreadTs =
+              event?.container?.thread_ts ||
+              event?.container?.message_ts ||
+              event?.message?.thread_ts ||
+              event?.message?.ts ||
+              null;
+
             await app.client.views.open({
               trigger_id: event.trigger_id,
               view: {
@@ -1314,7 +1321,10 @@ async function interactivity(req) {
                   type: "plain_text",
                   text: "Send Text",
                 },
-                private_metadata: action.value,
+                private_metadata: JSON.stringify({
+                  customerPhoneNumber: action.value,
+                  threadTs: outboundTextThreadTs,
+                }),
                 blocks: [
                   {
                     type: "input",
@@ -1341,7 +1351,7 @@ async function interactivity(req) {
             await updateTwilioContact(
               action.value,
               assignedTwilioNumber.phoneNumber,
-              event.message.ts,
+              outboundTextThreadTs,
             );
 
             break;
@@ -1436,16 +1446,40 @@ async function interactivity(req) {
         case "send_text_modal":
           console.log("Slack: User submitted a send text modal!");
 
-          const customerPhoneNumberText = event.view.private_metadata;
+          let privateMetadata = {};
+          try {
+            privateMetadata = JSON.parse(event.view.private_metadata || "{}");
+          } catch (_error) {
+            privateMetadata = {};
+          }
+          const customerPhoneNumberText =
+            privateMetadata.customerPhoneNumber || event.view.private_metadata;
+          const threadTs = privateMetadata.threadTs || null;
           const smsMessage =
             event.view.state.values.sms_text_message_input
               .send_text_modal_action.value;
 
           try {
-            const sid = await textCustomer(
+            await textCustomer(
               customerPhoneNumberText,
               employeePhoneNumber,
               smsMessage,
+              threadTs,
+            );
+
+            await sendMessageBlocks(
+              [
+                {
+                  type: "section",
+                  text: {
+                    type: "mrkdwn",
+                    text: `SMS To ${customerPhoneNumberText}\n${smsMessage}`,
+                  },
+                },
+              ],
+              "New Call Bot",
+              threadTs,
+              process.env.SLACK_CHANNEL,
             );
           } catch (e) {
             Sentry.captureException(e);
