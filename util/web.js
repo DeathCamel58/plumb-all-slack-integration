@@ -10,6 +10,18 @@ import * as Slack from "./apis/SlackBot.js";
 import * as Sentry from "@sentry/node";
 import cors from "cors";
 import { fileURLToPath } from "url";
+import twilio from "twilio";
+import {
+  handleBridge,
+  handleBridgeConfirm,
+  handleInboundCall,
+  handleInboundAfterDial,
+  handleInboundScreen,
+  handleInboundScreenConfirm,
+  handleInboundSms,
+  handleVoicemailAction,
+  handleRecordingDone,
+} from "./apis/Twilio.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -183,6 +195,24 @@ app.post("/slack/INTERACTIVITY", (req, res) => {
     req.body.payload = JSON.parse(req.body.payload);
 
     events.emit("slack-INTERACTIVITY", req);
+
+    res.json({});
+  } else {
+    // Webhook signature invalid. Send 401.
+    res.sendStatus(401);
+  }
+});
+
+/**
+ * Handle Slack Command Webhooks
+ */
+app.post("/slack/COMMAND", (req, res) => {
+  console.info("Web: Got a COMMAND from Slack!");
+
+  // Verify that the webhook came from Slack
+  if (Slack.verifyWebhook(req, true)) {
+    // Webhook was valid.
+    events.emit("slack-COMMAND", req, res);
   } else {
     // Webhook signature invalid. Send 401.
     res.sendStatus(401);
@@ -319,6 +349,88 @@ app.post("/website/contactForm", cors(corsOptions), (req, res) => {
   res.sendStatus(200);
 
   events.emit("website-contact", data);
+});
+
+/**
+ * Twilio Inbound Voice Webhook
+ * - Twilio sends From/To as form-urlencoded fields
+ * - We respond with TwiML to bridge the caller to the assigned employee (or fallback)
+ * - We record the bridged conversation
+ */
+app.post("/twilio/voice", async (req, res) => {
+  const callResponse = await handleInboundCall(req, res);
+
+  res.type("text/xml").send(callResponse);
+});
+
+/**
+ * Twilio Inbound Voice - call screening (Press 1)
+ */
+app.post("/twilio/voice/screen", async (req, res) => {
+  const callResponse = await handleInboundScreen(req, res);
+
+  res.type("text/xml").send(callResponse);
+});
+
+/**
+ * Twilio Inbound Voice - call screening confirmation
+ */
+app.post("/twilio/voice/screen/confirm", async (req, res) => {
+  const callResponse = await handleInboundScreenConfirm(req, res);
+
+  res.type("text/xml").send(callResponse);
+});
+
+/**
+ * Twilio Inbound Voice - post-dial fallback (voicemail)
+ */
+app.post("/twilio/voice/after-dial", async (req, res) => {
+  const callResponse = await handleInboundAfterDial(req, res);
+
+  res.type("text/xml").send(callResponse);
+});
+
+/**
+ * Twilio Inbound Voice - voicemail action (detect no voicemail)
+ */
+app.post("/twilio/voice/voicemail-action", async (req, res) => {
+  await handleVoicemailAction(req, res);
+});
+
+/**
+ * Twilio Inbound SMS Webhook
+ * - Twilio sends From/To as form-urlencoded fields
+ * - We send the message to Slack
+ */
+app.post("/twilio/sms", async (req, res) => {
+  const messageResponse = await handleInboundSms(req, res);
+
+  res.type("text/xml").send(messageResponse);
+});
+
+/**
+ * Twilio Bridge
+ */
+app.post("/twilio/bridge", async (req, res) => {
+  const callResponse = await handleBridge(req, res);
+
+  res.type("text/xml").send(callResponse);
+});
+
+/**
+ * Twilio Bridge confirmation (Press 1)
+ */
+app.post("/twilio/bridge/confirm", async (req, res) => {
+  const callResponse = await handleBridgeConfirm(req, res);
+
+  res.type("text/xml").send(callResponse);
+});
+
+/**
+ * Twilio Recording Status Webhook
+ */
+app.post("/twilio/recording-status", (req, res) => {
+  return handleRecordingDone(req, res);
 });
 
 /**

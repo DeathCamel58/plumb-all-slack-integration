@@ -1,11 +1,11 @@
 generator client {
-  provider = "prisma-client-js"
-  output   = "../generated/prisma"
+  provider   = "prisma-client-js"
+  output     = "../generated/prisma"
+  engineType = "binary"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DB_URL")
 }
 
 // datasource db {
@@ -243,4 +243,23 @@ model TimeSheetEntry {
   visit              String?
   // visits        Visit?    @relation(fields: [visit], references: [id])
   visitDurationTotal Int?
+}
+
+model TwilioNumber {
+  id                     String          @id
+  phoneNumber            String
+  assignedEmployee       String?
+  assignedEmployeeNumber String?
+  assignedEmployeeName   String?
+  twilioContacts         TwilioContact[]
+}
+
+model TwilioContact {
+  id             String        @id
+  twilioNumber   TwilioNumber? @relation(fields: [twilioNumberId], references: [id])
+  clientNumber   String
+  slackThreadId  String?
+  createdAt      DateTime
+  lastContactAt  DateTime
+  twilioNumberId String?
 }

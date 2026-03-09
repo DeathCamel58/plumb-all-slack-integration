@@ -18,7 +18,8 @@
     "@mailchimp/mailchimp_marketing": "^3.0.80",
     "@mattermost/client": "^10.6.0-0",
     "@mattermost/types": "^10.8.0",
-    "@prisma/client": "^6.12.0",
+    "@prisma/adapter-pg": "^7.3.0",
+    "@prisma/client": "^7.3.0",
     "@sentry/node": "^9.40.0",
     "@slack/bolt": "^4.4.0",
     "body-parser": "^2.2.0",
@@ -27,8 +28,11 @@
     "express": "^5.1.0",
     "isomorphic-fetch": "^3.0.0",
     "lodash": "^4.17.21",
+    "mime-types": "^3.0.2",
     "node-fetch": "^3.3.2",
     "node-html-parser": "^7.0.1",
+    "pg": "^8.18.0",
+    "twilio": "^5.12.0",
     "ws": "^8.18.3"
   },
   "devDependencies": {
@@ -37,7 +41,7 @@
     "jest": "^30.0.4",
     "lint-staged": "^16.1.2",
     "prettier": "^3.6.2",
-    "prisma": "^6.12.0"
+    "prisma": "^7.3.0"
   },
   "lint-staged": {
     "*.{js,css,md}": "prettier --write"

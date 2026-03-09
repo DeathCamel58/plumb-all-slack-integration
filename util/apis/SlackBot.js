@@ -1,10 +1,20 @@
 import Slack from "@slack/bolt";
 import * as crypto from "crypto";
 import * as Jobber from "./Jobber.js";
-import { interleave } from "../DataUtilities.js";
+import { interleave, toE164 } from "../DataUtilities.js";
 import events from "../events.js";
 import * as Sentry from "@sentry/node";
 import { findUserInvoices, findUserJobs } from "./Jobber.js";
+import prisma from "../prismaClient.js";
+import {
+  callEmployeeThenCustomer,
+  getOrAssignEmployeeNumber,
+  returnAssignedPhoneNumbers,
+  textCustomer,
+  unassignNumber,
+  updateTwilioContact,
+  updateTwilioContactTs,
+} from "./Twilio.js";
 
 const slackCallChannelName = process.env.SLACK_CHANNEL || "calls";
 
@@ -22,11 +32,271 @@ const app = new Slack.App({
 })();
 
 /**
- * Takes message, and sends it to slack with given username
- * @param message The message to send
- * @param username Username to send the message as
- * @param channelName The channel to send the message to
- * @returns {Promise<void>} Promise that resolves after message is sent
+ * Resolves a channel ID (C..., G...) or channel name ("calls" or "#calls") to an ID.
+ * @param {string} channelOrName
+ * @returns {Promise<string | null>}
+ */
+async function resolveChannelId(channelOrName) {
+  if (!channelOrName) throw new Error("Missing Slack channel");
+
+  // If it already looks like an ID, keep it.
+  if (/^[CGD][A-Z0-9]{8,}$/.test(channelOrName)) return channelOrName;
+
+  const result = await app.client.conversations.list();
+  const channels = result.channels;
+
+  const channel = channels.find((ch) => ch.name === channelOrName);
+
+  if (channel) {
+    return channel.id;
+  } else {
+    return null;
+  }
+}
+
+/**
+ * Checks whether the user is an admin or owner in the workspace.
+ * @param {string} userId
+ * @returns {Promise<boolean>}
+ */
+async function isUserAdmin(userId) {
+  const userInfo = await app.client.users.info({
+    user: userId,
+  });
+
+  return userInfo?.user?.is_admin || userInfo?.user?.is_owner || false;
+}
+
+/**
+ * Finds a Slack user by phone number using profile fields.
+ * @param {string} phoneNumber
+ * @returns {Promise<any | null>} Slack user object or null if not found.
+ */
+export async function resolveUserByPhoneNumber(phoneNumber) {
+  console.log(`SlackBot: Resolving user for phone number ${phoneNumber}`);
+
+  const normalize = (value) => {
+    if (!value) return null;
+    try {
+      return toE164(value);
+    } catch {
+      return String(value).replace(/[^\d+]/g, "");
+    }
+  };
+
+  const target = normalize(phoneNumber);
+  if (!target) return null;
+
+  try {
+    let cursor;
+    do {
+      const resp = await app.client.users.list({
+        limit: 200,
+        cursor: cursor,
+      });
+
+      if (!resp?.ok) {
+        console.warn(
+          `SlackBot: users.list failed: ${resp?.error || "unknown_error"}`,
+        );
+        return null;
+      }
+
+      const members = resp.members || [];
+      for (const member of members) {
+        // Skip deleted users and bots/app users
+        if (!member || member.deleted || member.is_bot || member.is_app_user) {
+          continue;
+        }
+
+        let userResponse = await app.client.users.profile.get({
+          user: member.id,
+        });
+
+        const profile = userResponse?.profile || {};
+
+        // Standard Slack profile phone field
+        let profilePhone = normalize(profile?.phone);
+
+        if (profilePhone === target) {
+          console.log(
+            `SlackBot: Found matching Slack user ${member.id} for phone ${target}`,
+          );
+          return member;
+        }
+
+        // Another Slack profile phone field
+        profilePhone = normalize(profile?.fields?.Xf03M22Q81Q8?.value);
+
+        if (profilePhone === target) {
+          console.log(
+            `SlackBot: Found matching Slack user ${member.id} for phone ${target}`,
+          );
+          return member;
+        }
+      }
+
+      cursor = resp?.response_metadata?.next_cursor || null;
+    } while (cursor);
+
+    console.log(`SlackBot: No Slack user matched phone number ${target}`);
+    return null;
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error("SlackBot: resolveUserByPhoneNumber failed", error);
+    return null;
+  }
+}
+
+/**
+ * Publishes the app home view for a user.
+ * @param {string} user_id
+ * @returns {Promise<void>}
+ */
+async function publishHome(user_id) {
+  const assignedNumbers = await returnAssignedPhoneNumbers();
+
+  const assignedNumbersRows = [];
+
+  const isAdmin = await isUserAdmin(user_id);
+
+  assignedNumbersRows.push(
+    {
+      type: "divider",
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "*Assigned Phone Numbers*",
+      },
+    },
+  );
+
+  for (const number of assignedNumbers) {
+    assignedNumbersRows.push({
+      type: "divider",
+    });
+
+    let assignedNumbersControls = [];
+    if (isAdmin) {
+      assignedNumbersControls = {
+        // TODO: Allow manual assignment of users
+        accessory: {
+          type: "button",
+          text: {
+            type: "plain_text",
+            text: "Unassign User",
+          },
+          value: number.id,
+          action_id: "unassign-number-0",
+        },
+      };
+    }
+
+    let assignedEmployee = "Couldn't Find User";
+    if (!number.assignedEmployee && !number.assignedEmployeeNumber) {
+      assignedEmployee = "Unassigned";
+    } else {
+      assignedEmployee = `<@${number.assignedEmployee}>`;
+    }
+
+    assignedNumbersRows.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*${number.phoneNumber}*\n*Assigned to:* ${assignedEmployee}`,
+      },
+      ...assignedNumbersControls,
+    });
+  }
+
+  const homeBlocks = [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "*Welcome!*\nThis is the home for Plumb-All's Slack Integration.",
+      },
+    },
+    {
+      type: "divider",
+    },
+    {
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: {
+            type: "plain_text",
+            text: "Get open jobs as message",
+            emoji: true,
+          },
+          value: "get_open_jobs",
+          action_id: "get-open-jobs-0",
+        },
+        {
+          type: "button",
+          text: {
+            type: "plain_text",
+            text: "Get my jobs",
+            emoji: true,
+          },
+          value: "get_my_jobs",
+          action_id: "get-my-jobs-0",
+        },
+        {
+          type: "button",
+          text: {
+            type: "plain_text",
+            text: "Get my invoices",
+            emoji: true,
+          },
+          value: "get_my_invoices",
+          action_id: "get-my-invoices-0",
+        },
+      ],
+    },
+    {
+      type: "divider",
+    },
+    {
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: {
+            type: "plain_text",
+            text: "Make a call",
+            emoji: true,
+          },
+          value: "new_outbound_call",
+          action_id: "new-outbound-call-0",
+        },
+      ],
+    },
+    ...assignedNumbersRows,
+  ];
+
+  await app.client.views.publish({
+    user_id: user_id,
+    view: {
+      type: "home",
+      title: {
+        type: "plain_text",
+        text: "Home",
+      },
+      blocks: homeBlocks,
+    },
+  });
+}
+
+/**
+ * Sends a plain-text message to Slack.
+ * @param {string} message
+ * @param {string} username
+ * @param {string} [channelName=slackCallChannelName]
+ * @returns {Promise<any | null>} Slack API result or null on failure.
  */
 async function sendMessage(
   message,
@@ -46,17 +316,357 @@ async function sendMessage(
     });
 
     console.info("Slack: Sent Message to Slack!");
+    return result;
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error(error);
+    return null;
+  }
+}
+events.on("slackbot-send-message", sendMessage);
+
+/**
+ * Sends a direct message to a Slack user by user ID.
+ * @param {string} userId
+ * @param {string} message
+ * @returns {Promise<any | null>}
+ */
+export async function sendDirectMessage(userId, message) {
+  if (!userId || !message) {
+    console.warn("Slack: sendDirectMessage missing userId or message");
+    return null;
+  }
+
+  try {
+    const dm = await app.client.conversations.open({
+      users: userId,
+    });
+
+    const channelId = dm?.channel?.id;
+    if (!channelId) {
+      console.warn("Slack: Failed to open DM channel", dm);
+      return null;
+    }
+
+    const result = await app.client.chat.postMessage({
+      channel: channelId,
+      text: message,
+      unfurl_links: false,
+    });
+
+    console.info(`Slack: Sent DM to ${userId}`);
+    return result;
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error("Slack: sendDirectMessage failed", error);
+    return null;
+  }
+}
+events.on("slack-direct-message", sendDirectMessage);
+
+/**
+ * Sends a block-based message to Slack.
+ * @param {Array<object>} blocks
+ * @param {string} username
+ * @param {string | null} [threadTs=null]
+ * @param {string} [channelName=slackCallChannelName]
+ * @returns {Promise<any | null>} Slack API result or null on failure.
+ */
+export async function sendMessageBlocks(
+  blocks,
+  username,
+  threadTs = null,
+  channelName = slackCallChannelName,
+) {
+  try {
+    const result = await app.client.chat.postMessage({
+      channel: channelName,
+      blocks: blocks,
+      unfurl_links: false,
+      username: username,
+      thread_ts: threadTs,
+      icon_url:
+        "https://plumb-all.com/wp-content/uploads/2018/08/cropped-icon.png",
+    });
+
+    console.info("Slack: Sent Message to Slack!");
+    return result;
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error(error);
+    return null;
+  }
+}
+events.on("slackbot-send-message-blocks", sendMessageBlocks);
+
+/**
+ * Uploads a file to Slack and optionally creates a thread to attach it to.
+ * @param {Buffer} fileBuffer
+ * @param {string} fileName
+ * @param {string} title
+ * @param {string} initialComment
+ * @param {string} [channelName=slackCallChannelName]
+ * @param {string | null} [threadTs=null]
+ * @param {Array<object> | null} [blocks=null] - Optional blocks to create a thread.
+ * @param {any | null} [call=null] - Call metadata used to update thread id.
+ * @returns {Promise<any | null>}
+ */
+export async function uploadFile(
+  fileBuffer,
+  fileName,
+  title,
+  initialComment,
+  channelName = slackCallChannelName,
+  threadTs = null,
+  blocks = null,
+  call = null,
+) {
+  try {
+    const channelId = await resolveChannelId(channelName);
+
+    // If there isn't a thread for this, create the thread
+    let message;
+    if (blocks) {
+      message = await app.client.chat.postMessage({
+        channel: channelName,
+        blocks: blocks,
+        unfurl_links: false,
+        username: "Call Contact",
+        icon_url:
+          "https://plumb-all.com/wp-content/uploads/2018/08/cropped-icon.png",
+      });
+      threadTs = message.ts;
+
+      await updateTwilioContactTs(call, threadTs);
+    }
+
+    const result = await app.client.files.uploadV2({
+      channel_id: channelId,
+      thread_ts: threadTs,
+      filename: fileName,
+      title: title,
+      file: fileBuffer,
+      initial_comment: initialComment,
+    });
+
+    console.info("Slack: Uploaded file to Slack!");
+
+    return result;
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error(error);
+
+    return null;
+  }
+}
+events.on("slackbot-upload-file", uploadFile);
+
+/**
+ * Sends a contact message with call/text actions to Slack.
+ * @param {{messageToSend: () => string, phone: string}} contact
+ * @param {string} username
+ * @param {string} [channelName=slackCallChannelName]
+ * @param {string | null} [thread_ts=null]
+ * @returns {Promise<void>}
+ */
+async function sendContactMessage(
+  contact,
+  username,
+  channelName = slackCallChannelName,
+  thread_ts = null,
+) {
+  console.info(contact.messageToSend());
+
+  try {
+    const blocks = [
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: contact.messageToSend(),
+        },
+      },
+      {
+        type: "divider",
+      },
+      {
+        type: "actions",
+        elements: [
+          {
+            type: "button",
+            text: {
+              type: "plain_text",
+              text: "Call",
+            },
+            style: "primary",
+            value: contact.phone,
+            action_id: "outbound-call-0",
+          },
+          {
+            type: "button",
+            text: {
+              type: "plain_text",
+              text: "Text",
+            },
+            value: contact.phone,
+            action_id: "outbound-text-0",
+          },
+        ],
+      },
+    ];
+    await app.client.chat.postMessage({
+      channel: channelName,
+      thread_ts: thread_ts,
+      blocks: blocks,
+      unfurl_links: false,
+      username: username,
+      icon_url:
+        "https://plumb-all.com/wp-content/uploads/2018/08/cropped-icon.png",
+    });
+
+    console.info("Slack: Sent Message to Slack!");
   } catch (error) {
     Sentry.captureException(error);
     console.error(error);
   }
 }
-events.on("slackbot-send-message", sendMessage);
+events.on("slackbot-send-contact", sendContactMessage);
 
+/**
+ * Validates inputs and starts the outbound call flow, returning a user message.
+ * @param {{userId: string, employeePhoneNumber: string, rawCustomerNumber: string}} params
+ * @returns {Promise<{ok: boolean, userMessage: string}>}
+ */
+async function startOutboundCallFlow({
+  userId,
+  employeePhoneNumber,
+  rawCustomerNumber,
+}) {
+  if (!rawCustomerNumber) {
+    return {
+      ok: false,
+      userMessage:
+        "I couldn't start the call because the phone number was missing.",
+    };
+  }
+
+  if (!employeePhoneNumber) {
+    return {
+      ok: false,
+      userMessage:
+        "I couldn't start the call because your Slack profile doesn't have a valid phone number. Add one in Slack profile settings and try again.",
+    };
+  }
+
+  let customerPhoneNumber = rawCustomerNumber;
+  try {
+    customerPhoneNumber = toE164(rawCustomerNumber);
+  } catch (error) {
+    return {
+      ok: false,
+      userMessage:
+        "I couldn't start the call because the phone number looked invalid. Try again with a valid phone number.",
+    };
+  }
+
+  try {
+    let slackThreadId;
+    const existingContact = await prisma.twilioContact.findUnique({
+      where: { id: customerPhoneNumber },
+    });
+
+    if (existingContact) {
+      slackThreadId = existingContact.slackThreadId || null;
+    } else {
+      const outboundBlocks = [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `Outbound call requested by <@${userId}> to ${customerPhoneNumber}`,
+          },
+        },
+        {
+          type: "divider",
+        },
+        {
+          type: "actions",
+          elements: [
+            {
+              type: "button",
+              text: {
+                type: "plain_text",
+                text: "Call",
+              },
+              style: "primary",
+              value: customerPhoneNumber,
+              action_id: "outbound-call-0",
+            },
+            {
+              type: "button",
+              text: {
+                type: "plain_text",
+                text: "Text",
+              },
+              value: customerPhoneNumber,
+              action_id: "outbound-text-0",
+            },
+          ],
+        },
+      ];
+
+      const slackMessage = await sendMessageBlocks(
+        outboundBlocks,
+        "New Call Bot",
+        null,
+        process.env.SLACK_CHANNEL || slackCallChannelName,
+      );
+
+      slackThreadId = slackMessage?.ts || null;
+
+      const assignedTwilioNumber =
+        await getOrAssignEmployeeNumber(employeePhoneNumber);
+
+      await updateTwilioContact(
+        customerPhoneNumber,
+        assignedTwilioNumber.phoneNumber,
+        slackThreadId,
+      );
+    }
+
+    const sid = await callEmployeeThenCustomer(
+      employeePhoneNumber,
+      customerPhoneNumber,
+      slackThreadId,
+    );
+
+    return {
+      ok: true,
+      userMessage: `Placing your call now to ${customerPhoneNumber}. (ref: ${sid})`,
+    };
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Slack: outbound call failed", e);
+
+    return {
+      ok: false,
+      userMessage:
+        "Sorry — the outbound call failed to start. Please try again, or contact an admin.",
+    };
+  }
+}
+
+/**
+ * Posts a threaded reply with blocks using the original event data.
+ * @param {{channel: string, ts: string}} event
+ * @param {string} rawMessage
+ * @param {Array<object>} blocks
+ * @returns {Promise<void>}
+ */
 async function sendReplyRawMessageBlocks(event, rawMessage, blocks) {
   try {
-    const result = await app.client.chat.postMessage({
-      // Needed to reply in thread
+    await app.client.chat.postMessage({
+      // Needed to reply in a thread
       channel: event.channel,
       thread_ts: event.ts,
 
@@ -81,10 +691,10 @@ async function sendReplyRawMessageBlocks(event, rawMessage, blocks) {
 }
 
 /**
- * Gets a message from Slack
- * @param id The ID of the channel to search
- * @param ts The message ID
- * @returns {Promise<Message>}
+ * Fetches a single message by channel id and timestamp.
+ * @param {string} id
+ * @param {string} ts
+ * @returns {Promise<any>}
  */
 async function fetchMessage(id, ts) {
   try {
@@ -110,8 +720,8 @@ async function fetchMessage(id, ts) {
 }
 
 /**
- * Unfurl's a URL (kind of), and replies in thread to quote, job, or invoice references.
- * @param event the webhook event to check for references
+ * Detects Jobber references in a message and replies in-thread with details.
+ * @param {{user: string, text: string, channel: string, ts: string}} event
  * @returns {Promise<void>}
  */
 async function unfurlMessage(event) {
@@ -135,7 +745,7 @@ async function unfurlMessage(event) {
     },
   ];
 
-  // Check for references in multiple formats, and add them to `needToUnfurl`
+  // Check for references in multiple formats and add them to `needToUnfurl`
   // Remove all user references first, as user references can make the regex return a false positive
   let tmp = event.text.replace(/<@.{11}>/gi, "");
   // - Q[number], J[number], I[number]
@@ -283,10 +893,10 @@ async function unfurlMessage(event) {
 }
 
 /**
- * Takes in a Slack webhook request, and checks if it's authentic
- * @param req The request
- * @param doYouLikeItRaw Should we validate signature using the raw body?
- * @returns {boolean} Is the webhook authentic?
+ * Verifies Slack webhook signatures.
+ * @param {import("express").Request & {rawBody?: string}} req
+ * @param {boolean} [doYouLikeItRaw=false]
+ * @returns {boolean}
  */
 export function verifyWebhook(req, doYouLikeItRaw = false) {
   if (process.env.DEBUG === "TRUE") {
@@ -331,6 +941,12 @@ export function verifyWebhook(req, doYouLikeItRaw = false) {
   return false;
 }
 
+/**
+ * Opens a modal showing recent jobs for the user.
+ * @param {string} trigger_id
+ * @param {string} user
+ * @returns {Promise<void>}
+ */
 async function jobsModal(trigger_id, user) {
   let jobs = await findUserJobs(user);
 
@@ -397,6 +1013,12 @@ async function jobsModal(trigger_id, user) {
   });
 }
 
+/**
+ * Opens a modal showing recent invoices for the user.
+ * @param {string} trigger_id
+ * @param {string} user
+ * @returns {Promise<void>}
+ */
 async function invoicesModal(trigger_id, user) {
   let invoices = await findUserInvoices(user);
 
@@ -464,14 +1086,14 @@ async function invoicesModal(trigger_id, user) {
 }
 
 /**
- * Takes in a Slack webhook for an event, and processes it
- * @param req
+ * Handles Slack event webhooks.
+ * @param {import("express").Request} req
  * @returns {Promise<void>}
  */
 export async function event(req) {
   let event = req.body.event;
 
-  // Do stuff based on type of event
+  // Do stuff based on the type of event
   switch (event.type) {
     // If the event is a reaction added
     case "reaction_added":
@@ -530,62 +1152,7 @@ export async function event(req) {
       );
       break;
     case "app_home_opened":
-      const homeBlocks = [
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: "*Welcome!*\nThis is the home for Plumb-All's Slack Integration.",
-          },
-        },
-        {
-          type: "actions",
-          elements: [
-            {
-              type: "button",
-              text: {
-                type: "plain_text",
-                text: "Get open jobs as message",
-                emoji: true,
-              },
-              value: "get_open_jobs",
-              action_id: "get-open-jobs-0",
-            },
-            {
-              type: "button",
-              text: {
-                type: "plain_text",
-                text: "Get my jobs",
-                emoji: true,
-              },
-              value: "get_my_jobs",
-              action_id: "get-my-jobs-0",
-            },
-            {
-              type: "button",
-              text: {
-                type: "plain_text",
-                text: "Get my invoices",
-                emoji: true,
-              },
-              value: "get_my_invoices",
-              action_id: "get-my-invoices-0",
-            },
-          ],
-        },
-      ];
-
-      await app.client.views.publish({
-        user_id: event.user,
-        view: {
-          type: "home",
-          title: {
-            type: "plain_text",
-            text: "Home",
-          },
-          blocks: homeBlocks,
-        },
-      });
+      await publishHome(event.user);
 
       break;
     default:
@@ -596,14 +1163,14 @@ export async function event(req) {
 events.on("slack-EVENT", event);
 
 /**
- * Takes in a Slack webhook for an INTERACTIVITY event, and processes it
- * @param req
+ * Handles Slack interactivity payloads.
+ * @param {import("express").Request} req
  * @returns {Promise<void>}
  */
 async function interactivity(req) {
   let event = req.body.payload;
 
-  // Do stuff based on type of event
+  // Do stuff based on the type of event
   switch (event.type) {
     // If the event is a reaction added
     case "block_actions":
@@ -614,6 +1181,12 @@ async function interactivity(req) {
         let user = null;
         if (userResponse.ok) {
           user = userResponse.profile.real_name;
+        }
+
+        let employeePhoneNumber =
+          userResponse?.profile?.fields?.Xf03M22Q81Q8?.value;
+        if (!employeePhoneNumber && userResponse?.profile?.phone) {
+          employeePhoneNumber = userResponse.profile.phone;
         }
 
         switch (action.action_id) {
@@ -671,6 +1244,171 @@ async function interactivity(req) {
             await invoicesModal(event.trigger_id, user);
 
             break;
+          case "outbound-call-0":
+            console.log("Slack: User wants an outbound call!");
+
+            const customerPhoneRaw = action.value;
+            const customerPhoneNumber = customerPhoneRaw;
+
+            const slackTs =
+              event?.container?.message_ts ||
+              event?.message?.ts ||
+              event?.container?.thread_ts ||
+              null;
+
+            if (!customerPhoneNumber) {
+              await app.client.chat.postEphemeral({
+                channel: event.channel?.id,
+                user: event.user.id,
+                text: "I couldn't start the call because the customer's phone number looked invalid or missing.",
+              });
+              break;
+            }
+
+            if (!employeePhoneNumber) {
+              await app.client.chat.postEphemeral({
+                channel: event.channel?.id,
+                user: event.user.id,
+                text: "I couldn't start the call because your Slack profile doesn't have a valid phone number. Add one in Slack profile settings and try again.",
+              });
+              break;
+            }
+
+            try {
+              const sid = await callEmployeeThenCustomer(
+                employeePhoneNumber,
+                customerPhoneNumber,
+                slackTs,
+              );
+
+              // await app.client.chat.postEphemeral({
+              //   channel: event.channel?.id,
+              //   user: event.user.id,
+              //   text: `Placing the call now. (ref: ${sid})`,
+              // });
+            } catch (e) {
+              Sentry.captureException(e);
+              console.error("Slack: outbound call failed", e);
+
+              await app.client.chat.postEphemeral({
+                channel: event.channel?.id,
+                user: event.user.id,
+                text: "Sorry — the outbound call failed to start. Please try again, or contact an admin.",
+              });
+            }
+
+            break;
+          case "outbound-text-0":
+            console.log("Slack: User wants an outbound text!");
+
+            await app.client.views.open({
+              trigger_id: event.trigger_id,
+              view: {
+                type: "modal",
+                callback_id: "send_text_modal",
+                title: {
+                  type: "plain_text",
+                  text: "Send Text",
+                },
+                submit: {
+                  type: "plain_text",
+                  text: "Send Text",
+                },
+                private_metadata: action.value,
+                blocks: [
+                  {
+                    type: "input",
+                    block_id: "sms_text_message_input",
+                    element: {
+                      type: "plain_text_input",
+                      multiline: true,
+                      action_id: "send_text_modal_action",
+                    },
+                    label: {
+                      type: "plain_text",
+                      text: "Message to send",
+                      emoji: true,
+                    },
+                    optional: false,
+                  },
+                ],
+              },
+            });
+
+            const assignedTwilioNumber =
+              await getOrAssignEmployeeNumber(employeePhoneNumber);
+
+            await updateTwilioContact(
+              action.value,
+              assignedTwilioNumber.phoneNumber,
+              event.message.ts,
+            );
+
+            break;
+          case "outbound-text-1":
+            console.log("Slack: User sent an outbound text!");
+
+            // TODO: Send outbound text messages once A2P campaign is approved
+
+            break;
+          case "new-outbound-call-0":
+            console.log("Slack: User wants an outbound call!");
+
+            await app.client.views.open({
+              trigger_id: event.trigger_id,
+              view: {
+                type: "modal",
+                callback_id: "new_outbound_call_modal",
+                title: {
+                  type: "plain_text",
+                  text: "Place Call",
+                },
+                submit: {
+                  type: "plain_text",
+                  text: "Call",
+                },
+                close: {
+                  type: "plain_text",
+                  text: "Cancel",
+                },
+                blocks: [
+                  {
+                    type: "input",
+                    block_id: "new_outbound_call_number",
+                    element: {
+                      type: "plain_text_input",
+                      action_id: "new_outbound_call_number_action",
+                      placeholder: {
+                        type: "plain_text",
+                        text: "e.g., 555-123-4567 or +1 555 123 4567",
+                      },
+                    },
+                    label: {
+                      type: "plain_text",
+                      text: "Phone number to call",
+                      emoji: true,
+                    },
+                    optional: false,
+                  },
+                ],
+              },
+            });
+
+            break;
+          case "unassign-number-0":
+            console.log(`Slack: User unassigning the number ${action.value}!`);
+
+            const isAdmin = await isUserAdmin(event.user.id);
+
+            if (!isAdmin) {
+              break;
+            }
+
+            await unassignNumber(action.value);
+
+            await publishHome(event.user.id);
+
+            break;
           default:
             console.warn(
               `Slack: Slack INTERACTIVITY had unhandled action ID ${action.action_id}`,
@@ -678,6 +1416,95 @@ async function interactivity(req) {
             break;
         }
       }
+      break;
+    case "view_submission":
+      console.log("Slack: User submitted a view!");
+
+      let userResponse = await app.client.users.profile.get({
+        user: event.user.id,
+      });
+      let user = null;
+      if (userResponse.ok) {
+        user = userResponse.profile.real_name;
+      }
+
+      const employeePhoneNumber =
+        userResponse?.profile?.fields?.Xf03M22Q81Q8?.value ||
+        userResponse?.profile?.phone;
+
+      switch (event.view.callback_id) {
+        case "send_text_modal":
+          console.log("Slack: User submitted a send text modal!");
+
+          const customerPhoneNumberText = event.view.private_metadata;
+          const smsMessage =
+            event.view.state.values.sms_text_message_input
+              .send_text_modal_action.value;
+
+          try {
+            const sid = await textCustomer(
+              customerPhoneNumberText,
+              employeePhoneNumber,
+              smsMessage,
+            );
+          } catch (e) {
+            Sentry.captureException(e);
+            console.error("Slack: outbound call failed", e);
+
+            await app.client.chat.postEphemeral({
+              channel: event.channel?.id,
+              user: event.user.id,
+              text: "Sorry — the outbound call failed to start. Please try again, or contact an admin.",
+            });
+          }
+
+          break;
+        case "new_outbound_call_modal":
+          console.log("Slack: User submitted a new outbound call modal!");
+
+          const newCallNumberRaw =
+            event.view.state.values.new_outbound_call_number
+              .new_outbound_call_number_action.value;
+
+          const result = await startOutboundCallFlow({
+            userId: event.user.id,
+            employeePhoneNumber,
+            rawCustomerNumber: newCallNumberRaw,
+          });
+
+          await app.client.views.open({
+            trigger_id: event.trigger_id,
+            view: {
+              type: "modal",
+              callback_id: result.ok
+                ? "new_outbound_call_success_modal"
+                : "new_outbound_call_failure_modal",
+              title: {
+                type: "plain_text",
+                text: result.ok
+                  ? "Outbound Call Success"
+                  : "Outbound Call Failure",
+              },
+              blocks: [
+                {
+                  type: "section",
+                  text: {
+                    type: "mrkdwn",
+                    text: result.userMessage,
+                  },
+                },
+              ],
+            },
+          });
+
+          break;
+        default:
+          console.warn(
+            `Slack: Slack INTERACTIVITY had unhandled view callback ID ${event.view.callback_id}`,
+          );
+          break;
+      }
+
       break;
     default:
       console.info(
@@ -687,3 +1514,60 @@ async function interactivity(req) {
   }
 }
 events.on("slack-INTERACTIVITY", interactivity);
+
+/**
+ * Handles Slack slash command payloads.
+ * @param {import("express").Request} req
+ * @param {import("express").Response} res
+ * @returns {Promise<void>}
+ */
+async function command(req, res) {
+  const commandName = req.body?.command;
+  const rawText = (req.body?.text || "").trim();
+  const userId = req.body?.user_id;
+
+  if (!userId) {
+    console.warn("Slack: COMMAND missing user_id");
+    return;
+  }
+
+  let userResponse;
+  try {
+    userResponse = await app.client.users.profile.get({
+      user: userId,
+    });
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error("Slack: Failed to fetch user profile for command", error);
+  }
+
+  switch (commandName) {
+    case "/dial":
+      const employeePhoneNumber =
+        userResponse?.profile?.fields?.Xf03M22Q81Q8?.value ||
+        userResponse?.profile?.phone;
+
+      const result = await startOutboundCallFlow({
+        userId,
+        employeePhoneNumber,
+        rawCustomerNumber: rawText,
+      });
+
+      if (!result.ok) {
+        console.warn(
+          `Slack: ${result.userMessage}\nUsage: /dial <phone_number>`,
+        );
+        res.send(`${result.userMessage}\nUsage: /dial <phone_number>`);
+        break;
+      }
+
+      res.send("Calling you and connecting to customer...");
+
+      break;
+    default:
+      console.warn(`Slack: Unsupported command: ${commandName}`);
+      res.send(`Unsupported command ${commandName}. Try /dial <phone_number>.`);
+      break;
+  }
+}
+events.on("slack-COMMAND", command);
