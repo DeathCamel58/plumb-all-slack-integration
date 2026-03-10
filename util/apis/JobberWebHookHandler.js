@@ -4,6 +4,7 @@ import * as PostHog from "./PostHog.js";
 import Contact from "../contact.js";
 import * as APICoordinator from "../APICoordinator.js";
 import events from "../events.js";
+import * as Sentry from "@sentry/node";
 
 /**
  * Checks if the HMAC was valid to ensure the Webhook came from Jobber
@@ -589,7 +590,7 @@ async function requestCreateHandle(req) {
     let contact = new Contact(
       "Jobber Request",
       request.client.name,
-      request.client.phones[0] ? request.client.phones[0].number : null,
+      request.client.phones?.[0]?.number ?? null,
       null,
       request.client.emails[0] ? request.client.emails[0].address : null,
       address,
