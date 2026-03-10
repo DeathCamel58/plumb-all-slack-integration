@@ -273,6 +273,16 @@ async function publishHome(user_id) {
           value: "new_outbound_call",
           action_id: "new-outbound-call-0",
         },
+        {
+          type: "button",
+          text: {
+            type: "plain_text",
+            text: "Send a text",
+            emoji: true,
+          },
+          value: "new_outbound_sms",
+          action_id: "new-outbound-sms-0",
+        },
       ],
     },
     ...assignedNumbersRows,
@@ -1405,6 +1415,69 @@ async function interactivity(req) {
             });
 
             break;
+          case "new-outbound-sms-0":
+            console.log("Slack: User wants to send an outbound SMS!");
+
+            await app.client.views.open({
+              trigger_id: event.trigger_id,
+              view: {
+                type: "modal",
+                callback_id: "new_outbound_sms_modal",
+                title: {
+                  type: "plain_text",
+                  text: "Send a Text",
+                },
+                submit: {
+                  type: "plain_text",
+                  text: "Send",
+                },
+                close: {
+                  type: "plain_text",
+                  text: "Cancel",
+                },
+                blocks: [
+                  {
+                    type: "input",
+                    block_id: "new_outbound_sms_number",
+                    element: {
+                      type: "plain_text_input",
+                      action_id: "new_outbound_sms_number_action",
+                      placeholder: {
+                        type: "plain_text",
+                        text: "e.g., 555-123-4567 or +1 555 123 4567",
+                      },
+                    },
+                    label: {
+                      type: "plain_text",
+                      text: "Phone number to text",
+                      emoji: true,
+                    },
+                    optional: false,
+                  },
+                  {
+                    type: "input",
+                    block_id: "new_outbound_sms_message",
+                    element: {
+                      type: "plain_text_input",
+                      action_id: "new_outbound_sms_message_action",
+                      multiline: true,
+                      placeholder: {
+                        type: "plain_text",
+                        text: "Type your message here...",
+                      },
+                    },
+                    label: {
+                      type: "plain_text",
+                      text: "Message",
+                      emoji: true,
+                    },
+                    optional: false,
+                  },
+                ],
+              },
+            });
+
+            break;
           case "unassign-number-0":
             console.log(`Slack: User unassigning the number ${action.value}!`);
 
@@ -1493,6 +1566,88 @@ async function interactivity(req) {
           }
 
           break;
+        case "new_outbound_sms_modal": {
+          console.log("Slack: User submitted a new outbound SMS modal!");
+
+          const smsNumberRaw =
+            event.view.state.values.new_outbound_sms_number
+              .new_outbound_sms_number_action.value;
+          const smsMessageText =
+            event.view.state.values.new_outbound_sms_message
+              .new_outbound_sms_message_action.value;
+
+          const smsCustomerPhone = toE164(smsNumberRaw);
+
+          if (!smsCustomerPhone) {
+            await app.client.views.open({
+              trigger_id: event.trigger_id,
+              view: {
+                type: "modal",
+                callback_id: "new_outbound_sms_failure_modal",
+                title: { type: "plain_text", text: "Send Text Failed" },
+                blocks: [
+                  {
+                    type: "section",
+                    text: {
+                      type: "mrkdwn",
+                      text: `"${smsNumberRaw}" doesn't look like a valid phone number. Please try again.`,
+                    },
+                  },
+                ],
+              },
+            });
+            break;
+          }
+
+          try {
+            await textCustomer(
+              smsCustomerPhone,
+              employeePhoneNumber,
+              smsMessageText,
+            );
+
+            await app.client.views.open({
+              trigger_id: event.trigger_id,
+              view: {
+                type: "modal",
+                callback_id: "new_outbound_sms_success_modal",
+                title: { type: "plain_text", text: "Text Sent" },
+                blocks: [
+                  {
+                    type: "section",
+                    text: {
+                      type: "mrkdwn",
+                      text: `SMS sent to ${smsCustomerPhone}.`,
+                    },
+                  },
+                ],
+              },
+            });
+          } catch (e) {
+            Sentry.captureException(e);
+            console.error("Slack: outbound SMS from home modal failed", e);
+
+            await app.client.views.open({
+              trigger_id: event.trigger_id,
+              view: {
+                type: "modal",
+                callback_id: "new_outbound_sms_failure_modal",
+                title: { type: "plain_text", text: "Send Text Failed" },
+                blocks: [
+                  {
+                    type: "section",
+                    text: {
+                      type: "mrkdwn",
+                      text: "Sorry — the SMS failed to send. Please try again, or contact an admin.",
+                    },
+                  },
+                ],
+              },
+            });
+          }
+
+          break;
+        }
         case "new_outbound_call_modal":
           console.log("Slack: User submitted a new outbound call modal!");
 
@@ -1598,6 +1753,53 @@ async function command(req, res) {
       res.send("Calling you and connecting to customer...");
 
       break;
+    case "/sms": {
+      const spaceIndex = rawText.indexOf(" ");
+      if (spaceIndex === -1) {
+        res.send("Usage: /sms <phone_number> <message>");
+        break;
+      }
+
+      const smsTargetRaw = rawText.slice(0, spaceIndex).trim();
+      const smsBody = rawText.slice(spaceIndex + 1).trim();
+
+      if (!smsBody) {
+        res.send("Usage: /sms <phone_number> <message>");
+        break;
+      }
+
+      const smsEmployeePhone =
+        userResponse?.profile?.fields?.Xf03M22Q81Q8?.value ||
+        userResponse?.profile?.phone;
+
+      if (!smsEmployeePhone) {
+        res.send(
+          "I couldn't send the SMS because your Slack profile doesn't have a valid phone number. Add one in Slack profile settings and try again.",
+        );
+        break;
+      }
+
+      const smsCustomerPhone = toE164(smsTargetRaw);
+      if (!smsCustomerPhone) {
+        res.send(
+          `I couldn't send the SMS because "${smsTargetRaw}" doesn't look like a valid phone number.`,
+        );
+        break;
+      }
+
+      try {
+        await textCustomer(smsCustomerPhone, smsEmployeePhone, smsBody);
+        res.send(`SMS sent to ${smsCustomerPhone}.`);
+      } catch (e) {
+        Sentry.captureException(e);
+        console.error("Slack: /sms failed", e);
+        res.send(
+          "Sorry — the SMS failed to send. Please try again, or contact an admin.",
+        );
+      }
+
+      break;
+    }
     default:
       console.warn(`Slack: Unsupported command: ${commandName}`);
       res.send(`Unsupported command ${commandName}. Try /dial <phone_number>.`);
