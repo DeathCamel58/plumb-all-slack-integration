@@ -29,6 +29,8 @@ wsClient.addCloseListener((event) => {
   console.log(
     `Mattermost: WebSocket disconnected. Event:\n${JSON.stringify(event)}`,
   );
+  console.warn("Mattermost: WebSocket closed. Reconnecting in 5s...");
+  setTimeout(() => wsConnect(), 5000);
 });
 
 wsClient.addMissedMessageListener(() => {
@@ -54,6 +56,21 @@ wsConnect();
 
 const mattermostCallChannelName = process.env.MATTERMOST_CHANNEL || "calls";
 
+const channelCache = new Map();
+
+/**
+ * Resolves a channel name to its ID, with caching to avoid repeated API calls.
+ * @param channelName The channel name to look up
+ * @returns {Promise<string|null>} The channel ID, or null if not found
+ */
+async function getChannelId(channelName) {
+  if (channelCache.has(channelName)) return channelCache.get(channelName);
+  const teams = await client.getMyTeams();
+  const channels = await client.getChannels(teams[0].id);
+  for (const ch of channels) channelCache.set(ch.name, ch.id);
+  return channelCache.get(channelName) ?? null;
+}
+
 /**
  * Takes message, and sends it to Mattermost with given username
  * @param message The message to send
@@ -71,17 +88,10 @@ async function sendMessage(
   // TODO: Check if we can send in Mattermost with another username
 
   try {
-    const teams = await client.getMyTeams();
-    const channels = await client.getChannels(teams[0].id);
-    let channelId = null;
-    for (const channel of channels) {
-      if (channel.name === channelName) {
-        channelId = channel.id;
-      }
-    }
+    const channelId = await getChannelId(channelName);
     if (!channelId) {
       console.error(
-        `Mattermost: Couldn't determine channel ID for ${channelName}. Found channels are:\n${JSON.stringify(channels)}`,
+        `Mattermost: Couldn't determine channel ID for ${channelName}.`,
       );
     }
 
