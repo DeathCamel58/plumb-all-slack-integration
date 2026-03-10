@@ -667,6 +667,135 @@ async function startOutboundCallFlow({
 }
 
 /**
+ * Validates inputs and starts the outbound SMS flow, returning a user message.
+ * If no existing contact thread exists, posts an "Outbound SMS" card to the calls channel.
+ * @param {{userId: string, employeePhoneNumber: string, rawCustomerNumber: string, smsMessage: string, mediaUrl?: string|null}} params
+ * @returns {Promise<{ok: boolean, userMessage: string}>}
+ */
+async function startOutboundSmsFlow({
+  userId,
+  employeePhoneNumber,
+  rawCustomerNumber,
+  smsMessage,
+  mediaUrl = null,
+}) {
+  if (!rawCustomerNumber) {
+    return {
+      ok: false,
+      userMessage:
+        "I couldn't send the SMS because the phone number was missing.",
+    };
+  }
+
+  if (!employeePhoneNumber) {
+    return {
+      ok: false,
+      userMessage:
+        "I couldn't send the SMS because your Slack profile doesn't have a valid phone number. Add one in Slack profile settings and try again.",
+    };
+  }
+
+  let customerPhoneNumber = rawCustomerNumber;
+  try {
+    customerPhoneNumber = toE164(rawCustomerNumber);
+  } catch (error) {
+    return {
+      ok: false,
+      userMessage:
+        "I couldn't send the SMS because the phone number looked invalid. Try again with a valid phone number.",
+    };
+  }
+
+  try {
+    let slackThreadId;
+    const existingContact = await prisma.twilioContact.findUnique({
+      where: { id: customerPhoneNumber },
+    });
+
+    if (existingContact) {
+      slackThreadId = existingContact.slackThreadId || null;
+    } else {
+      const outboundBlocks = [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `Outbound SMS sent by <@${userId}> to ${customerPhoneNumber}`,
+          },
+        },
+        {
+          type: "divider",
+        },
+        {
+          type: "actions",
+          elements: [
+            {
+              type: "button",
+              text: {
+                type: "plain_text",
+                text: "Call",
+              },
+              style: "primary",
+              value: customerPhoneNumber,
+              action_id: "outbound-call-0",
+            },
+            {
+              type: "button",
+              text: {
+                type: "plain_text",
+                text: "Text",
+              },
+              value: customerPhoneNumber,
+              action_id: "outbound-text-0",
+            },
+          ],
+        },
+      ];
+
+      const slackMessage = await sendMessageBlocks(
+        outboundBlocks,
+        "New Call Bot",
+        null,
+        process.env.SLACK_CHANNEL || slackCallChannelName,
+      );
+
+      slackThreadId = slackMessage?.ts || null;
+
+      const assignedTwilioNumber =
+        await getOrAssignEmployeeNumber(employeePhoneNumber);
+
+      await updateTwilioContact(
+        customerPhoneNumber,
+        assignedTwilioNumber.phoneNumber,
+        slackThreadId,
+      );
+    }
+
+    await textCustomer(
+      customerPhoneNumber,
+      employeePhoneNumber,
+      smsMessage,
+      slackThreadId,
+      mediaUrl,
+    );
+
+    return {
+      ok: true,
+      userMessage: `SMS sent to ${customerPhoneNumber}.`,
+    };
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Slack: outbound SMS failed", e);
+
+    return {
+      ok: false,
+      userMessage:
+        "Sorry — the outbound SMS failed to send. Please try again, or contact an admin.",
+    };
+  }
+}
+
+/**
  * Posts a threaded reply with blocks using the original event data.
  * @param {{channel: string, ts: string}} event
  * @param {string} rawMessage
@@ -1576,75 +1705,35 @@ async function interactivity(req) {
             event.view.state.values.new_outbound_sms_message
               .new_outbound_sms_message_action.value;
 
-          const smsCustomerPhone = toE164(smsNumberRaw);
+          const smsResult = await startOutboundSmsFlow({
+            userId: event.user.id,
+            employeePhoneNumber,
+            rawCustomerNumber: smsNumberRaw,
+            smsMessage: smsMessageText,
+          });
 
-          if (!smsCustomerPhone) {
-            await app.client.views.open({
-              trigger_id: event.trigger_id,
-              view: {
-                type: "modal",
-                callback_id: "new_outbound_sms_failure_modal",
-                title: { type: "plain_text", text: "Send Text Failed" },
-                blocks: [
-                  {
-                    type: "section",
-                    text: {
-                      type: "mrkdwn",
-                      text: `"${smsNumberRaw}" doesn't look like a valid phone number. Please try again.`,
-                    },
-                  },
-                ],
+          await app.client.views.open({
+            trigger_id: event.trigger_id,
+            view: {
+              type: "modal",
+              callback_id: smsResult.ok
+                ? "new_outbound_sms_success_modal"
+                : "new_outbound_sms_failure_modal",
+              title: {
+                type: "plain_text",
+                text: smsResult.ok ? "Text Sent" : "Send Text Failed",
               },
-            });
-            break;
-          }
-
-          try {
-            await textCustomer(
-              smsCustomerPhone,
-              employeePhoneNumber,
-              smsMessageText,
-            );
-
-            await app.client.views.open({
-              trigger_id: event.trigger_id,
-              view: {
-                type: "modal",
-                callback_id: "new_outbound_sms_success_modal",
-                title: { type: "plain_text", text: "Text Sent" },
-                blocks: [
-                  {
-                    type: "section",
-                    text: {
-                      type: "mrkdwn",
-                      text: `SMS sent to ${smsCustomerPhone}.`,
-                    },
+              blocks: [
+                {
+                  type: "section",
+                  text: {
+                    type: "mrkdwn",
+                    text: smsResult.userMessage,
                   },
-                ],
-              },
-            });
-          } catch (e) {
-            Sentry.captureException(e);
-            console.error("Slack: outbound SMS from home modal failed", e);
-
-            await app.client.views.open({
-              trigger_id: event.trigger_id,
-              view: {
-                type: "modal",
-                callback_id: "new_outbound_sms_failure_modal",
-                title: { type: "plain_text", text: "Send Text Failed" },
-                blocks: [
-                  {
-                    type: "section",
-                    text: {
-                      type: "mrkdwn",
-                      text: "Sorry — the SMS failed to send. Please try again, or contact an admin.",
-                    },
-                  },
-                ],
-              },
-            });
-          }
+                },
+              ],
+            },
+          });
 
           break;
         }
@@ -1772,31 +1861,20 @@ async function command(req, res) {
         userResponse?.profile?.fields?.Xf03M22Q81Q8?.value ||
         userResponse?.profile?.phone;
 
-      if (!smsEmployeePhone) {
-        res.send(
-          "I couldn't send the SMS because your Slack profile doesn't have a valid phone number. Add one in Slack profile settings and try again.",
+      const smsResult = await startOutboundSmsFlow({
+        userId,
+        employeePhoneNumber: smsEmployeePhone,
+        rawCustomerNumber: smsTargetRaw,
+        smsMessage: smsBody,
+      });
+
+      if (!smsResult.ok) {
+        console.warn(
+          `Slack: ${smsResult.userMessage}\nUsage: /sms <phone_number> <message>`,
         );
-        break;
       }
 
-      const smsCustomerPhone = toE164(smsTargetRaw);
-      if (!smsCustomerPhone) {
-        res.send(
-          `I couldn't send the SMS because "${smsTargetRaw}" doesn't look like a valid phone number.`,
-        );
-        break;
-      }
-
-      try {
-        await textCustomer(smsCustomerPhone, smsEmployeePhone, smsBody);
-        res.send(`SMS sent to ${smsCustomerPhone}.`);
-      } catch (e) {
-        Sentry.captureException(e);
-        console.error("Slack: /sms failed", e);
-        res.send(
-          "Sorry — the SMS failed to send. Please try again, or contact an admin.",
-        );
-      }
+      res.send(smsResult.userMessage);
 
       break;
     }
