@@ -1100,18 +1100,7 @@ async function jobsModal(trigger_id, user) {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `J#${job.jobNumber} ${job.jobStatus === "archived" ? ":white_check_mark:" : ":x:"}\nClient: ${job.client.name}\nTotal: $${job.total}`,
-          },
-          accessory: {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "Open",
-              emoji: true,
-            },
-            value: "job_link",
-            url: job.jobberWebUri,
-            action_id: "button-action",
+            text: `J#${job.jobNumber} ${job.jobStatus === "archived" ? ":white_check_mark:" : ":x:"}\nClient: ${job.client.name}\nTotal: $${job.total}${job.jobberWebUri ? `\n<${job.jobberWebUri}|Open in Jobber>` : ""}`,
           },
         });
       }
@@ -1136,7 +1125,7 @@ async function jobsModal(trigger_id, user) {
       callback_id: "open_job_modal",
       title: {
         type: "plain_text",
-        text: "Open Jobs Message",
+        text: "Jobs",
       },
       blocks: [
         {
@@ -1172,18 +1161,7 @@ async function invoicesModal(trigger_id, user) {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `I#${invoice.invoiceNumber}\nClient: ${invoice.client.name}\nTotal: $${invoice.amounts.total}`,
-          },
-          accessory: {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "Open",
-              emoji: true,
-            },
-            value: "invoice_link",
-            url: invoice.jobberWebUri,
-            action_id: "button-action",
+            text: `I#${invoice.invoiceNumber}\nClient: ${invoice.client.name}\nTotal: $${invoice.amounts.total}${invoice.jobberWebUri ? `\n<${invoice.jobberWebUri}|Open in Jobber>` : ""}`,
           },
         });
       }
@@ -1205,10 +1183,10 @@ async function invoicesModal(trigger_id, user) {
     trigger_id: trigger_id,
     view: {
       type: "modal",
-      callback_id: "open_job_modal",
+      callback_id: "open_invoice_modal",
       title: {
         type: "plain_text",
-        text: "Open Jobs Message",
+        text: "Invoices",
       },
       blocks: [
         {
@@ -1356,7 +1334,7 @@ async function interactivity(req) {
                 callback_id: "open_job_modal",
                 title: {
                   type: "plain_text",
-                  text: "Open Jobs Message",
+                  text: "Open Jobs",
                 },
                 blocks: [
                   {
