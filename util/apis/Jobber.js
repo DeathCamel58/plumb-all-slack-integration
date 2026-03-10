@@ -98,7 +98,10 @@ export function verifyWebhook(req) {
 export async function setAuthorization(code) {
   process.env.JOBBER_AUTHORIZATION_CODE = code;
   let success = false;
-  while (!success) {
+  let retries = 0;
+  const MAX_RETRIES = 5;
+  while (!success && retries < MAX_RETRIES) {
+    retries++;
     try {
       let response = await fetch(
         `https://api.getjobber.com/api/oauth/token?client_id=${process.env.JOBBER_CLIENT_ID}&client_secret=${process.env.JOBBER_APP_SECRET}&grant_type=authorization_code&code=${process.env.JOBBER_AUTHORIZATION_CODE}`,
@@ -122,10 +125,19 @@ export async function setAuthorization(code) {
         await requestAuthorization();
       }
     } catch (e) {
-      console.error(`Jobber: Failure in setAuthorization`);
+      console.error(
+        `Jobber: Failure in setAuthorization (attempt ${retries}/${MAX_RETRIES})`,
+      );
       Sentry.captureException(e);
       console.error(e);
+      if (retries < MAX_RETRIES) {
+        await sleep(1000 * retries);
+      }
     }
+  }
+  if (!success) {
+    Sentry.captureMessage("Jobber: Max retries exceeded in setAuthorization");
+    console.error("Jobber: Max retries exceeded in setAuthorization");
   }
 }
 
@@ -178,7 +190,10 @@ export async function requestAuthorization() {
 export async function getRefreshToken() {
   let success = false;
   let data;
-  while (!success) {
+  let retries = 0;
+  const MAX_RETRIES = 5;
+  while (!success && retries < MAX_RETRIES) {
+    retries++;
     try {
       let response = await fetch(`https://api.getjobber.com/api/oauth/token`, {
         method: "post",
@@ -201,6 +216,7 @@ export async function getRefreshToken() {
           console.error(
             `Jobber: Got 429 while refreshing access token. This is likely because of some sort of limiting!`,
           );
+          if (retries < MAX_RETRIES) await sleep(1000 * retries);
           break;
         case 401:
         default:
@@ -211,10 +227,19 @@ export async function getRefreshToken() {
           break;
       }
     } catch (e) {
-      console.error(`Jobber: Failure in getRefreshToken`);
+      console.error(
+        `Jobber: Failure in getRefreshToken (attempt ${retries}/${MAX_RETRIES})`,
+      );
       Sentry.captureException(e);
       console.error(e);
+      if (retries < MAX_RETRIES) {
+        await sleep(1000 * retries);
+      }
     }
+  }
+  if (!success) {
+    Sentry.captureMessage("Jobber: Max retries exceeded in getRefreshToken");
+    console.error("Jobber: Max retries exceeded in getRefreshToken");
   }
 }
 
@@ -225,7 +250,10 @@ export async function getRefreshToken() {
 export async function refreshAccessToken() {
   let success = false;
   let data;
-  while (!success) {
+  let retries = 0;
+  const MAX_RETRIES = 5;
+  while (!success && retries < MAX_RETRIES) {
+    retries++;
     try {
       let response = await fetch(`https://api.getjobber.com/api/oauth/token`, {
         method: "post",
@@ -248,6 +276,7 @@ export async function refreshAccessToken() {
           console.error(
             `Jobber: Got 429 while refreshing access token. This is likely because of some sort of limiting!`,
           );
+          if (retries < MAX_RETRIES) await sleep(1000 * retries);
           break;
         case 401:
         default:
@@ -258,10 +287,19 @@ export async function refreshAccessToken() {
           break;
       }
     } catch (e) {
-      console.error(`Jobber: Failure in refreshAccessToken`);
+      console.error(
+        `Jobber: Failure in refreshAccessToken (attempt ${retries}/${MAX_RETRIES})`,
+      );
       Sentry.captureException(e);
       console.error(e);
+      if (retries < MAX_RETRIES) {
+        await sleep(1000 * retries);
+      }
     }
+  }
+  if (!success) {
+    Sentry.captureMessage("Jobber: Max retries exceeded in refreshAccessToken");
+    console.error("Jobber: Max retries exceeded in refreshAccessToken");
   }
 }
 
@@ -273,7 +311,10 @@ export async function refreshAccessToken() {
 export async function makeRequest(query) {
   let success = false;
   let response;
-  while (!success) {
+  let retries = 0;
+  const MAX_RETRIES = 5;
+  while (!success && retries < MAX_RETRIES) {
+    retries++;
     try {
       response = await fetch(JOBBER_BASE_URL, {
         method: "post",
@@ -304,13 +345,23 @@ export async function makeRequest(query) {
           );
           let text = await response.text();
           console.error(text);
+          if (retries < MAX_RETRIES) await sleep(1000 * retries);
           break;
       }
     } catch (e) {
-      console.error(`Jobber: Failure in makeRequest`);
+      console.error(
+        `Jobber: Failure in makeRequest (attempt ${retries}/${MAX_RETRIES})`,
+      );
       Sentry.captureException(e);
       console.error(e);
+      if (retries < MAX_RETRIES) {
+        await sleep(1000 * retries);
+      }
     }
+  }
+  if (!success) {
+    Sentry.captureMessage("Jobber: Max retries exceeded in makeRequest");
+    throw new Error("Jobber: Max retries exceeded in makeRequest");
   }
 
   let data = await response.text();
