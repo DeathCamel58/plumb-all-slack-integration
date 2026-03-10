@@ -1,5 +1,4 @@
 import * as DataUtilities from "./DataUtilities.js";
-import queryString from "querystring";
 
 /**
  * A contact from a client
@@ -61,7 +60,7 @@ export default class Contact {
      */
     this.contactMessage = message ? message.replace(/^\s+|\s+$/g, "") : message;
 
-    this.contactSource = source ? source : source;
+    this.contactSource = source ?? null;
   }
 
   get type() {
@@ -198,7 +197,7 @@ export default class Contact {
     }
 
     if (isAddress) {
-      let fullAddressForLink = queryString.escape(this.contactAddress);
+      let fullAddressForLink = encodeURIComponent(this.contactAddress);
       if (!markdown) {
         message += `Address: <https://www.google.com/maps/search/?api=1&query=${fullAddressForLink}|${this.contactAddress}>\n`;
       } else {

@@ -329,7 +329,7 @@ export async function sendClientToPostHog(contact) {
   // Identify the user to allow PostHog to display client details properly
   clientData.name = contact.name;
   clientData.phone = contact.phone;
-  clientData.alternatePhone = contact.phone;
+  clientData.alternatePhone = contact.alternatePhone;
   clientData.email = contact.email;
   clientData.address = contact.address;
   clientData.latestContactSource = contact.type;

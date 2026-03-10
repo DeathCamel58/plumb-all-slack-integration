@@ -4,6 +4,7 @@ import * as PostHog from "./PostHog.js";
 import Contact from "../contact.js";
 import * as APICoordinator from "../APICoordinator.js";
 import events from "../events.js";
+import * as Sentry from "@sentry/node";
 
 /**
  * Checks if the HMAC was valid to ensure the Webhook came from Jobber
@@ -40,20 +41,25 @@ function jobberVerify(webhookBody, jobberHmac) {
  * @returns {Promise<void>}
  */
 async function invoiceHandle(req) {
-  let body = req.body;
+  try {
+    let body = req.body;
 
-  // Verify authenticity of webhook, then process
-  if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
-    // Get Invoice data
-    let invoice = await Jobber.getInvoiceData(
-      body.data["webHookEvent"]["itemId"],
-    );
-    // Insert/Update client
-    let clientID = await PostHog.logClient(invoice.client);
-    // Insert/Update Invoice
-    events.emit("db-INVOICE_CREATE_UPDATE", invoice);
-    events.emit("mailchimp-INVOICE_CREATE_UPDATE", invoice);
-    await PostHog.logInvoice(invoice, clientID);
+    // Verify authenticity of webhook, then process
+    if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
+      // Get Invoice data
+      let invoice = await Jobber.getInvoiceData(
+        body.data["webHookEvent"]["itemId"],
+      );
+      // Insert/Update client
+      let clientID = await PostHog.logClient(invoice.client);
+      // Insert/Update Invoice
+      events.emit("db-INVOICE_CREATE_UPDATE", invoice);
+      events.emit("mailchimp-INVOICE_CREATE_UPDATE", invoice);
+      await PostHog.logInvoice(invoice, clientID);
+    }
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Jobber webhook handler error:", e);
   }
 }
 events.on("jobber-INVOICE_CREATE", invoiceHandle);
@@ -64,16 +70,21 @@ events.on("jobber-INVOICE_CREATE", invoiceHandle);
  * @returns {Promise<void>}
  */
 async function invoiceUpdateHandle(req) {
-  let body = req.body;
+  try {
+    let body = req.body;
 
-  // Verify authenticity of webhook, then process
-  if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
-    // Get Invoice data
-    let invoice = await Jobber.getInvoiceData(
-      body.data["webHookEvent"]["itemId"],
-    );
-    // Insert/Update Invoice
-    events.emit("db-INVOICE_CREATE_UPDATE", invoice);
+    // Verify authenticity of webhook, then process
+    if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
+      // Get Invoice data
+      let invoice = await Jobber.getInvoiceData(
+        body.data["webHookEvent"]["itemId"],
+      );
+      // Insert/Update Invoice
+      events.emit("db-INVOICE_CREATE_UPDATE", invoice);
+    }
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Jobber webhook handler error:", e);
   }
 }
 events.on("jobber-INVOICE_UPDATE", invoiceUpdateHandle);
@@ -84,12 +95,17 @@ events.on("jobber-INVOICE_UPDATE", invoiceUpdateHandle);
  * @returns {Promise<void>}
  */
 async function invoiceDestroyHandle(req) {
-  let body = req.body;
+  try {
+    let body = req.body;
 
-  // Verify authenticity of webhook, then process
-  if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
-    // Destroy Invoice
-    events.emit("db-INVOICE_DESTROY", body.data["webHookEvent"]["itemId"]);
+    // Verify authenticity of webhook, then process
+    if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
+      // Destroy Invoice
+      events.emit("db-INVOICE_DESTROY", body.data["webHookEvent"]["itemId"]);
+    }
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Jobber webhook handler error:", e);
   }
 }
 events.on("jobber-INVOICE_DESTROY", invoiceDestroyHandle);
@@ -100,17 +116,22 @@ events.on("jobber-INVOICE_DESTROY", invoiceDestroyHandle);
  * @returns {Promise<void>}
  */
 async function clientHandle(req) {
-  let body = req.body;
+  try {
+    let body = req.body;
 
-  // Verify the authenticity of webhook, then process
-  if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
-    // Get client data
-    let client = await Jobber.getClientData(
-      body.data["webHookEvent"]["itemId"],
-    );
-    // Insert/Update client
-    events.emit("db-CLIENT_CREATE_UPDATE", client);
-    await PostHog.logClient(client);
+    // Verify the authenticity of webhook, then process
+    if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
+      // Get client data
+      let client = await Jobber.getClientData(
+        body.data["webHookEvent"]["itemId"],
+      );
+      // Insert/Update client
+      events.emit("db-CLIENT_CREATE_UPDATE", client);
+      await PostHog.logClient(client);
+    }
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Jobber webhook handler error:", e);
   }
 }
 events.on("jobber-CLIENT_CREATE", clientHandle);
@@ -122,12 +143,17 @@ events.on("jobber-CLIENT_UPDATE", clientHandle);
  * @returns {Promise<void>}
  */
 async function clientDestroyHandle(req) {
-  let body = req.body;
+  try {
+    let body = req.body;
 
-  // Verify authenticity of webhook, then process
-  if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
-    // Destroy Invoice
-    events.emit("db-CLIENT_DESTROY", body.data["webHookEvent"]["itemId"]);
+    // Verify authenticity of webhook, then process
+    if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
+      // Destroy Invoice
+      events.emit("db-CLIENT_DESTROY", body.data["webHookEvent"]["itemId"]);
+    }
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Jobber webhook handler error:", e);
   }
 }
 events.on("jobber-CLIENT_DESTROY", clientDestroyHandle);
@@ -138,17 +164,24 @@ events.on("jobber-CLIENT_DESTROY", clientDestroyHandle);
  * @returns {Promise<void>}
  */
 async function quoteCreateHandle(req) {
-  let body = req.body;
+  try {
+    let body = req.body;
 
-  // Verify authenticity of webhook, then process
-  if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
-    // Get quote data
-    let quote = await Jobber.getQuoteData(body.data["webHookEvent"]["itemId"]);
-    // Insert/Update client
-    let clientID = await PostHog.logClient(quote.client);
-    // Insert quote
-    events.emit("db-QUOTE_CREATE_UPDATE", quote);
-    await PostHog.logQuote(quote, clientID);
+    // Verify authenticity of webhook, then process
+    if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
+      // Get quote data
+      let quote = await Jobber.getQuoteData(
+        body.data["webHookEvent"]["itemId"],
+      );
+      // Insert/Update client
+      let clientID = await PostHog.logClient(quote.client);
+      // Insert quote
+      events.emit("db-QUOTE_CREATE_UPDATE", quote);
+      await PostHog.logQuote(quote, clientID);
+    }
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Jobber webhook handler error:", e);
   }
 }
 events.on("jobber-QUOTE_CREATE", quoteCreateHandle);
@@ -159,17 +192,24 @@ events.on("jobber-QUOTE_CREATE", quoteCreateHandle);
  * @returns {Promise<void>}
  */
 async function quoteUpdateHandle(req) {
-  let body = req.body;
+  try {
+    let body = req.body;
 
-  // Verify authenticity of webhook, then process
-  if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
-    // Get quote data
-    let quote = await Jobber.getQuoteData(body.data["webHookEvent"]["itemId"]);
-    // Insert/Update client
-    let clientID = await PostHog.logClient(quote.client);
-    // Update quote
-    events.emit("db-QUOTE_CREATE_UPDATE", quote);
-    await PostHog.logQuoteUpdate(quote, clientID);
+    // Verify authenticity of webhook, then process
+    if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
+      // Get quote data
+      let quote = await Jobber.getQuoteData(
+        body.data["webHookEvent"]["itemId"],
+      );
+      // Insert/Update client
+      let clientID = await PostHog.logClient(quote.client);
+      // Update quote
+      events.emit("db-QUOTE_CREATE_UPDATE", quote);
+      await PostHog.logQuoteUpdate(quote, clientID);
+    }
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Jobber webhook handler error:", e);
   }
 }
 events.on("jobber-QUOTE_UPDATE", quoteUpdateHandle);
@@ -180,12 +220,17 @@ events.on("jobber-QUOTE_UPDATE", quoteUpdateHandle);
  * @returns {Promise<void>}
  */
 async function quoteDestroyHandle(req) {
-  let body = req.body;
+  try {
+    let body = req.body;
 
-  // Verify authenticity of webhook, then process
-  if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
-    // Destroy Invoice
-    events.emit("db-QUOTE_DESTROY", body.data["webHookEvent"]["itemId"]);
+    // Verify authenticity of webhook, then process
+    if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
+      // Destroy Invoice
+      events.emit("db-QUOTE_DESTROY", body.data["webHookEvent"]["itemId"]);
+    }
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Jobber webhook handler error:", e);
   }
 }
 events.on("jobber-QUOTE_DESTROY", quoteDestroyHandle);
@@ -196,17 +241,22 @@ events.on("jobber-QUOTE_DESTROY", quoteDestroyHandle);
  * @returns {Promise<void>}
  */
 async function jobCreateHandle(req) {
-  let body = req.body;
+  try {
+    let body = req.body;
 
-  // Verify authenticity of webhook, then process
-  if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
-    // Get job data
-    let job = await Jobber.getJobData(body.data["webHookEvent"]["itemId"]);
-    // Insert/Update client
-    let clientID = await PostHog.logClient(job.client);
-    // Insert job
-    events.emit("db-JOB_CREATE_UPDATE", job);
-    await PostHog.logJob(job, clientID);
+    // Verify authenticity of webhook, then process
+    if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
+      // Get job data
+      let job = await Jobber.getJobData(body.data["webHookEvent"]["itemId"]);
+      // Insert/Update client
+      let clientID = await PostHog.logClient(job.client);
+      // Insert job
+      events.emit("db-JOB_CREATE_UPDATE", job);
+      await PostHog.logJob(job, clientID);
+    }
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Jobber webhook handler error:", e);
   }
 }
 events.on("jobber-JOB_CREATE", jobCreateHandle);
@@ -217,21 +267,26 @@ events.on("jobber-JOB_CREATE", jobCreateHandle);
  * @returns {Promise<void>}
  */
 async function jobUpdateHandle(req) {
-  let body = req.body;
+  try {
+    let body = req.body;
 
-  // Verify authenticity of webhook, then process
-  if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
-    // Get job data
-    let job = await Jobber.getJobData(body.data["webHookEvent"]["itemId"]);
+    // Verify authenticity of webhook, then process
+    if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
+      // Get job data
+      let job = await Jobber.getJobData(body.data["webHookEvent"]["itemId"]);
 
-    // If job exists, that means this isn't related to a JOB_DESTROY
-    if (job) {
-      // Insert/Update client
-      let clientID = await PostHog.logClient(job.client);
-      // Insert job
-      events.emit("db-JOB_CREATE_UPDATE", job);
-      await PostHog.logJobUpdate(job, clientID);
+      // If job exists, that means this isn't related to a JOB_DESTROY
+      if (job) {
+        // Insert/Update client
+        let clientID = await PostHog.logClient(job.client);
+        // Insert job
+        events.emit("db-JOB_CREATE_UPDATE", job);
+        await PostHog.logJobUpdate(job, clientID);
+      }
     }
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Jobber webhook handler error:", e);
   }
 }
 events.on("jobber-JOB_UPDATE", jobUpdateHandle);
@@ -243,12 +298,17 @@ events.on("jobber-JOB_CLOSE", jobUpdateHandle);
  * @returns {Promise<void>}
  */
 async function jobDestroyHandle(req) {
-  let body = req.body;
+  try {
+    let body = req.body;
 
-  // Verify authenticity of webhook, then process
-  if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
-    // Destroy job
-    events.emit("db-JOB_DESTROY", body.data["webHookEvent"]["itemId"]);
+    // Verify authenticity of webhook, then process
+    if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
+      // Destroy job
+      events.emit("db-JOB_DESTROY", body.data["webHookEvent"]["itemId"]);
+    }
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Jobber webhook handler error:", e);
   }
 }
 events.on("jobber-JOB_DESTROY", jobDestroyHandle);
@@ -259,19 +319,24 @@ events.on("jobber-JOB_DESTROY", jobDestroyHandle);
  * @returns {Promise<void>}
  */
 async function paymentCreateHandle(req) {
-  let body = req.body;
+  try {
+    let body = req.body;
 
-  // Verify authenticity of webhook, then process
-  if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
-    // Get payment data
-    let payment = await Jobber.getPaymentData(
-      body.data["webHookEvent"]["itemId"],
-    );
-    // Insert/Update client
-    let clientID = await PostHog.logClient(payment.client);
-    // Insert payment
-    events.emit("db-PAYMENT_CREATE_UPDATE", payment);
-    await PostHog.logPayment(payment, clientID);
+    // Verify authenticity of webhook, then process
+    if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
+      // Get payment data
+      let payment = await Jobber.getPaymentData(
+        body.data["webHookEvent"]["itemId"],
+      );
+      // Insert/Update client
+      let clientID = await PostHog.logClient(payment.client);
+      // Insert payment
+      events.emit("db-PAYMENT_CREATE_UPDATE", payment);
+      await PostHog.logPayment(payment, clientID);
+    }
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Jobber webhook handler error:", e);
   }
 }
 events.on("jobber-PAYMENT_CREATE", paymentCreateHandle);
@@ -282,19 +347,24 @@ events.on("jobber-PAYMENT_CREATE", paymentCreateHandle);
  * @returns {Promise<void>}
  */
 async function paymentUpdateHandle(req) {
-  let body = req.body;
+  try {
+    let body = req.body;
 
-  // Verify authenticity of webhook, then process
-  if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
-    // Get payment data
-    let payment = await Jobber.getPaymentData(
-      body.data["webHookEvent"]["itemId"],
-    );
-    // Insert/Update client
-    let clientID = await PostHog.logClient(payment.client);
-    // Insert payment
-    events.emit("db-PAYMENT_CREATE_UPDATE", payment);
-    await PostHog.logPaymentUpdate(payment, clientID);
+    // Verify authenticity of webhook, then process
+    if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
+      // Get payment data
+      let payment = await Jobber.getPaymentData(
+        body.data["webHookEvent"]["itemId"],
+      );
+      // Insert/Update client
+      let clientID = await PostHog.logClient(payment.client);
+      // Insert payment
+      events.emit("db-PAYMENT_CREATE_UPDATE", payment);
+      await PostHog.logPaymentUpdate(payment, clientID);
+    }
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Jobber webhook handler error:", e);
   }
 }
 events.on("jobber-PAYMENT_UPDATE", paymentUpdateHandle);
@@ -305,12 +375,17 @@ events.on("jobber-PAYMENT_UPDATE", paymentUpdateHandle);
  * @returns {Promise<void>}
  */
 async function paymentDestroyHandle(req) {
-  let body = req.body;
+  try {
+    let body = req.body;
 
-  // Verify authenticity of webhook, then process
-  if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
-    // Destroy payment
-    events.emit("db-PAYMENT_DESTROY", body.data["webHookEvent"]["itemId"]);
+    // Verify authenticity of webhook, then process
+    if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
+      // Destroy payment
+      events.emit("db-PAYMENT_DESTROY", body.data["webHookEvent"]["itemId"]);
+    }
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Jobber webhook handler error:", e);
   }
 }
 events.on("jobber-PAYMENT_DESTROY", paymentDestroyHandle);
@@ -321,17 +396,22 @@ events.on("jobber-PAYMENT_DESTROY", paymentDestroyHandle);
  * @returns {Promise<void>}
  */
 async function payoutCreateHandle(req) {
-  let body = req.body;
+  try {
+    let body = req.body;
 
-  // Verify authenticity of webhook, then process
-  if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
-    // Get payout data
-    let payout = await Jobber.getPayoutData(
-      body.data["webHookEvent"]["itemId"],
-    );
-    // Insert payout
-    // TODO: Insert into DB
-    await PostHog.logPayout(payout);
+    // Verify authenticity of webhook, then process
+    if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
+      // Get payout data
+      let payout = await Jobber.getPayoutData(
+        body.data["webHookEvent"]["itemId"],
+      );
+      // Insert payout
+      // TODO: Insert into DB
+      await PostHog.logPayout(payout);
+    }
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Jobber webhook handler error:", e);
   }
 }
 events.on("jobber-PAYOUT_CREATE", payoutCreateHandle);
@@ -510,7 +590,7 @@ async function requestCreateHandle(req) {
     let contact = new Contact(
       "Jobber Request",
       request.client.name,
-      request.client.phones[0] ? request.client.phones[0].number : null,
+      request.client.phones?.[0]?.number ?? null,
       null,
       request.client.emails[0] ? request.client.emails[0].address : null,
       address,

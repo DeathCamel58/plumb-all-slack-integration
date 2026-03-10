@@ -33,6 +33,34 @@ describe("Data Utilities", () => {
       assert.equal(normalized, null);
     });
   });
+  // Test toE164
+  describe("toE164", () => {
+    it("10-digit number gets +1 prefix", () => {
+      assert.equal(DataUtilities.toE164("2345678901"), "+12345678901");
+    });
+    it("Formatted US number with dashes", () => {
+      assert.equal(DataUtilities.toE164("234-567-8901"), "+12345678901");
+    });
+    it("Formatted US number with parens", () => {
+      assert.equal(DataUtilities.toE164("(234) 567-8901"), "+12345678901");
+    });
+    it("11-digit number starting with 1", () => {
+      assert.equal(DataUtilities.toE164("12345678901"), "+12345678901");
+    });
+    it("Already E.164 formatted number passes through", () => {
+      assert.equal(DataUtilities.toE164("+12345678901"), "+12345678901");
+    });
+    it("Null input returns null", () => {
+      assert.equal(DataUtilities.toE164(null), null);
+    });
+    it("Empty string returns null", () => {
+      assert.equal(DataUtilities.toE164(""), null);
+    });
+    it("Invalid short number returns null", () => {
+      assert.equal(DataUtilities.toE164("12345"), null);
+    });
+  });
+
   // Test Interleave
   describe("Interleaving", () => {
     it("Add null between", () => {
