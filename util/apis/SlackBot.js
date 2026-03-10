@@ -1598,6 +1598,53 @@ async function command(req, res) {
       res.send("Calling you and connecting to customer...");
 
       break;
+    case "/sms": {
+      const spaceIndex = rawText.indexOf(" ");
+      if (spaceIndex === -1) {
+        res.send("Usage: /sms <phone_number> <message>");
+        break;
+      }
+
+      const smsTargetRaw = rawText.slice(0, spaceIndex).trim();
+      const smsBody = rawText.slice(spaceIndex + 1).trim();
+
+      if (!smsBody) {
+        res.send("Usage: /sms <phone_number> <message>");
+        break;
+      }
+
+      const smsEmployeePhone =
+        userResponse?.profile?.fields?.Xf03M22Q81Q8?.value ||
+        userResponse?.profile?.phone;
+
+      if (!smsEmployeePhone) {
+        res.send(
+          "I couldn't send the SMS because your Slack profile doesn't have a valid phone number. Add one in Slack profile settings and try again.",
+        );
+        break;
+      }
+
+      const smsCustomerPhone = toE164(smsTargetRaw);
+      if (!smsCustomerPhone) {
+        res.send(
+          `I couldn't send the SMS because "${smsTargetRaw}" doesn't look like a valid phone number.`,
+        );
+        break;
+      }
+
+      try {
+        await textCustomer(smsCustomerPhone, smsEmployeePhone, smsBody);
+        res.send(`SMS sent to ${smsCustomerPhone}.`);
+      } catch (e) {
+        Sentry.captureException(e);
+        console.error("Slack: /sms failed", e);
+        res.send(
+          "Sorry — the SMS failed to send. Please try again, or contact an admin.",
+        );
+      }
+
+      break;
+    }
     default:
       console.warn(`Slack: Unsupported command: ${commandName}`);
       res.send(`Unsupported command ${commandName}. Try /dial <phone_number>.`);
