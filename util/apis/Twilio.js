@@ -723,10 +723,34 @@ export async function handleBridgeConfirm(req, _res) {
     record: "record-from-answer-dual",
     recordingStatusCallback: `${process.env.WEB_URL}/twilio/recording-status`,
     recordingStatusCallbackMethod: "POST",
+    action: `${process.env.WEB_URL}/twilio/bridge/after-dial`,
+    method: "POST",
   });
 
   dial.number(customer);
 
+  return twiml.toString();
+}
+
+/**
+ * Handles the post-dial callback for outbound bridge calls and informs the employee of the outcome.
+ * @param {import("express").Request & {body?: TwilioWebhookBody}} req
+ * @param {import("express").Response} _res
+ * @returns {string}
+ */
+export function handleBridgeAfterDial(req, _res) {
+  const twiml = new twilio.twiml.VoiceResponse();
+  const dialStatus = req.body?.DialCallStatus;
+
+  if (dialStatus === "busy") {
+    twiml.say("The customer's line is busy. Please try again later.");
+  } else if (dialStatus === "no-answer") {
+    twiml.say("The customer did not answer. Please try again later.");
+  } else if (dialStatus === "failed") {
+    twiml.say("The call could not be connected. Please try again later.");
+  }
+
+  twiml.hangup();
   return twiml.toString();
 }
 

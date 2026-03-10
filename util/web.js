@@ -13,6 +13,7 @@ import { fileURLToPath } from "url";
 import twilio from "twilio";
 import {
   handleBridge,
+  handleBridgeAfterDial,
   handleBridgeConfirm,
   handleInboundCall,
   handleInboundAfterDial,
@@ -443,6 +444,15 @@ app.post("/twilio/bridge", async (req, res) => {
  */
 app.post("/twilio/bridge/confirm", async (req, res) => {
   const callResponse = await handleBridgeConfirm(req, res);
+
+  res.type("text/xml").send(callResponse);
+});
+
+/**
+ * Twilio Bridge post-dial callback (busy, no-answer, failed)
+ */
+app.post("/twilio/bridge/after-dial", (req, res) => {
+  const callResponse = handleBridgeAfterDial(req, res);
 
   res.type("text/xml").send(callResponse);
 });
