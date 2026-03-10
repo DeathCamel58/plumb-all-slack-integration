@@ -244,7 +244,12 @@ app.get("/mattermost/jobberOpenJobs", (req, res) => {
  * Google Ads Form Lead
  */
 app.post("/google-ads/form", (req, res) => {
-  let data = JSON.parse(req.body);
+  let data;
+  try {
+    data = JSON.parse(req.body);
+  } catch (e) {
+    return res.status(400).send("Invalid JSON");
+  }
 
   if (data["google_key"] === process.env.GOOGLE_ADS_KEY) {
     console.info("Web: Google Ads lead form received.");
@@ -263,7 +268,11 @@ app.post("/google-ads/form", (req, res) => {
  * CloudFlare Workers Contact Form
  */
 app.post("/cloudflare/contactForm", (req, res) => {
-  req.body = JSON.parse(req.body);
+  try {
+    req.body = JSON.parse(req.body);
+  } catch (e) {
+    return res.status(400).send("Invalid JSON");
+  }
   let data = req.body;
 
   if (data["cloudflare_key"] === process.env.CLOUDFLARE_CONTACT_FORM_KEY) {
@@ -294,7 +303,11 @@ app.post("/fleetsharp/alerts", (req, res) => {
  * Verisae Notification
  */
 app.post("/verisae/ingles", (req, res) => {
-  req.body = JSON.parse(req.body);
+  try {
+    req.body = JSON.parse(req.body);
+  } catch (e) {
+    return res.status(400).send("Invalid JSON");
+  }
   let data = req.body;
 
   if (data.payload.sender.includes("plumb-all.com")) {
@@ -314,7 +327,11 @@ app.post("/verisae/ingles", (req, res) => {
  * 86 Repairs Notification
  */
 app.post("/86repairs/call", (req, res) => {
-  req.body = JSON.parse(req.body);
+  try {
+    req.body = JSON.parse(req.body);
+  } catch (e) {
+    return res.status(400).send("Invalid JSON");
+  }
   let data = req.body;
 
   if (data.payload.sender.includes("plumb-all.com")) {
@@ -341,7 +358,11 @@ const corsOptions = {
  */
 app.options("/website/contactForm", cors(corsOptions));
 app.post("/website/contactForm", cors(corsOptions), (req, res) => {
-  req.body = JSON.parse(req.body);
+  try {
+    req.body = JSON.parse(req.body);
+  } catch (e) {
+    return res.status(400).send("Invalid JSON");
+  }
   let data = req.body;
 
   console.info("Web: Website contact form received.");
@@ -438,7 +459,11 @@ app.post("/twilio/recording-status", (req, res) => {
  */
 app.options("/website/negativeFeedback", cors(corsOptions));
 app.post("/website/negativeFeedback", cors(corsOptions), (req, res) => {
-  req.body = JSON.parse(req.body);
+  try {
+    req.body = JSON.parse(req.body);
+  } catch (e) {
+    return res.status(400).send("Invalid JSON");
+  }
   let data = req.body;
 
   console.info("Web: Website negative feedback form received.");
