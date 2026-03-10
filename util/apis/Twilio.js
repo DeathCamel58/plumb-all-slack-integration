@@ -488,7 +488,7 @@ export async function handleInboundCall(req, _res) {
       return twiml.toString();
     } else {
       const dial = twiml.dial({
-        callerId: to, // present the dialed Twilio number to the recipient
+        callerId: from,
         answerOnBridge: true,
         action: `${process.env.WEB_URL}/twilio/voice/after-dial`,
         method: "POST",
