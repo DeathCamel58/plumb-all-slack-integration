@@ -1673,6 +1673,7 @@ async function interactivity(req) {
             event.view.state.values.sms_text_message_input
               .send_text_modal_action.value;
           let smsMediaUrl = null;
+          let smsMediaFile = null;
           const uploadedFiles =
             event.view.state.values.sms_text_file_input
               ?.send_text_modal_file_action?.files;
@@ -1687,6 +1688,10 @@ async function interactivity(req) {
               const buffer = Buffer.from(await fileResp.arrayBuffer());
               const token = hostFile(buffer, slackFile.mimetype);
               smsMediaUrl = `${process.env.WEB_URL}/media/${token}`;
+              smsMediaFile = {
+                buffer,
+                fileName: slackFile.name || `attachment-${Date.now()}`,
+              };
             } catch (e) {
               Sentry.captureException(e);
               console.error(
@@ -1705,7 +1710,7 @@ async function interactivity(req) {
               smsMediaUrl,
             );
 
-            await sendMessageBlocks(
+            const outboundMessage = await sendMessageBlocks(
               [
                 {
                   type: "section",
@@ -1719,6 +1724,17 @@ async function interactivity(req) {
               threadTs,
               process.env.SLACK_CHANNEL,
             );
+
+            if (smsMediaFile) {
+              await uploadFile(
+                smsMediaFile.buffer,
+                smsMediaFile.fileName,
+                "SMS Attachment",
+                "SMS Attachment",
+                process.env.SLACK_CHANNEL,
+                threadTs || outboundMessage?.ts || null,
+              );
+            }
           } catch (e) {
             Sentry.captureException(e);
             console.error("Slack: outbound call failed", e);
