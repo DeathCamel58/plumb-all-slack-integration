@@ -1460,6 +1460,22 @@ async function interactivity(req) {
                     },
                     optional: false,
                   },
+                  {
+                    type: "input",
+                    block_id: "sms_text_file_input",
+                    element: {
+                      type: "file_input",
+                      action_id: "send_text_modal_file_action",
+                      filetypes: ["jpg", "jpeg", "png", "gif", "mp4", "pdf"],
+                      max_files: 1,
+                    },
+                    label: {
+                      type: "plain_text",
+                      text: "Attachment (optional)",
+                      emoji: true,
+                    },
+                    optional: true,
+                  },
                 ],
               },
             });
@@ -1656,6 +1672,29 @@ async function interactivity(req) {
           const smsMessage =
             event.view.state.values.sms_text_message_input
               .send_text_modal_action.value;
+          let smsMediaUrl = null;
+          const uploadedFiles =
+            event.view.state.values.sms_text_file_input
+              ?.send_text_modal_file_action?.files;
+          if (uploadedFiles?.length > 0) {
+            const slackFile = uploadedFiles[0];
+            try {
+              const fileResp = await fetch(slackFile.url_private_download, {
+                headers: {
+                  Authorization: `Bearer ${process.env.SLACK_TOKEN}`,
+                },
+              });
+              const buffer = Buffer.from(await fileResp.arrayBuffer());
+              const token = hostFile(buffer, slackFile.mimetype);
+              smsMediaUrl = `${process.env.WEB_URL}/media/${token}`;
+            } catch (e) {
+              Sentry.captureException(e);
+              console.error(
+                "Slack: Failed to download attached file for send_text_modal",
+                e,
+              );
+            }
+          }
 
           try {
             await textCustomer(
@@ -1663,6 +1702,7 @@ async function interactivity(req) {
               employeePhoneNumber,
               smsMessage,
               threadTs,
+              smsMediaUrl,
             );
 
             await sendMessageBlocks(
