@@ -15,6 +15,8 @@ import {
   updateTwilioContact,
   updateTwilioContactTs,
 } from "./Twilio.js";
+import fetch from "node-fetch";
+import { hostFile } from "../mediaStore.js";
 
 const slackCallChannelName = process.env.SLACK_CHANNEL || "calls";
 
@@ -1580,6 +1582,22 @@ async function interactivity(req) {
                     },
                     optional: false,
                   },
+                  {
+                    type: "input",
+                    block_id: "new_outbound_sms_file",
+                    element: {
+                      type: "file_input",
+                      action_id: "new_outbound_sms_file_action",
+                      filetypes: ["jpg", "jpeg", "png", "gif", "mp4", "pdf"],
+                      max_files: 1,
+                    },
+                    label: {
+                      type: "plain_text",
+                      text: "Attachment (optional)",
+                      emoji: true,
+                    },
+                    optional: true,
+                  },
                 ],
               },
             });
@@ -1683,11 +1701,37 @@ async function interactivity(req) {
             event.view.state.values.new_outbound_sms_message
               .new_outbound_sms_message_action.value;
 
+          // Download attached file from Slack (if any) and host it temporarily for Twilio
+          let smsMediaUrl = null;
+          const uploadedFiles =
+            event.view.state.values.new_outbound_sms_file
+              ?.new_outbound_sms_file_action?.files;
+          if (uploadedFiles?.length > 0) {
+            const slackFile = uploadedFiles[0];
+            try {
+              const fileResp = await fetch(slackFile.url_private_download, {
+                headers: {
+                  Authorization: `Bearer ${process.env.SLACK_TOKEN}`,
+                },
+              });
+              const buffer = Buffer.from(await fileResp.arrayBuffer());
+              const token = hostFile(buffer, slackFile.mimetype);
+              smsMediaUrl = `${process.env.WEB_URL}/media/${token}`;
+            } catch (e) {
+              Sentry.captureException(e);
+              console.error(
+                "Slack: Failed to download attached file for SMS",
+                e,
+              );
+            }
+          }
+
           const smsResult = await startOutboundSmsFlow({
             userId: event.user.id,
             employeePhoneNumber,
             rawCustomerNumber: smsNumberRaw,
             smsMessage: smsMessageText,
+            mediaUrl: smsMediaUrl,
           });
 
           await app.client.views.open({

@@ -798,6 +798,7 @@ export async function callEmployeeThenCustomer(
  * @param {string} employeePhoneNumber - Employee phone number (any format).
  * @param {string} smsMessage - Text body.
  * @param {string | null} [slackTs=null] - Slack thread timestamp.
+ * @param mediaUrl The URL of the media file to send
  * @returns {Promise<void>}
  */
 export async function textCustomer(
@@ -805,15 +806,21 @@ export async function textCustomer(
   employeePhoneNumber,
   smsMessage,
   slackTs = null,
+  mediaUrl = null,
 ) {
   const assignedTwilioNumber =
     await getOrAssignEmployeeNumber(employeePhoneNumber);
 
-  await client.messages.create({
+  const messageParams = {
     to: toE164(customerPhoneNumber),
     from: assignedTwilioNumber.phoneNumber,
     body: smsMessage,
-  });
+  };
+  if (mediaUrl) {
+    messageParams.mediaUrl = [mediaUrl];
+  }
+
+  await client.messages.create(messageParams);
 
   // TODO: This doesn't update the slack thread ID
   await updateTwilioContact(

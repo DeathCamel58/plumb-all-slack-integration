@@ -10,7 +10,7 @@ import * as Slack from "./apis/SlackBot.js";
 import * as Sentry from "@sentry/node";
 import cors from "cors";
 import { fileURLToPath } from "url";
-import twilio from "twilio";
+import { getFile } from "./mediaStore.js";
 import {
   handleBridge,
   handleBridgeAfterDial,
@@ -481,6 +481,15 @@ app.post("/website/negativeFeedback", cors(corsOptions), (req, res) => {
   res.sendStatus(200);
 
   events.emit("website-negative-feedback", data);
+});
+
+/**
+ * Temporary media file serving (for Twilio MMS attachments)
+ */
+app.get("/media/:token", (req, res) => {
+  const entry = getFile(req.params.token);
+  if (!entry) return res.status(404).send("Not found");
+  res.type(entry.contentType).send(entry.buffer);
 });
 
 app.get("/", (req, res) => {
