@@ -311,7 +311,7 @@ async function jobDestroy(id) {
 events.on("db-JOB_DESTROY", invoiceDestroy);
 
 async function ensureJobExists(id) {
-  const job = await prisma.user.findMany({ where: { id: { equals: id } } });
+  const job = await prisma.job.findMany({ where: { id: { equals: id } } });
 
   // Query the API for the job and insert it
   if (job.length === 0) {
