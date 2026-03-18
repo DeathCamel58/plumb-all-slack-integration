@@ -285,11 +285,25 @@ async function jobCreateUpdate(data) {
   // The update operation should not include the id field as it's already in the where clause
   const { id, ...updateData } = row;
 
-  await prisma.job.upsert({
-    where: { id: data.id },
-    update: { ...updateData },
-    create: { ...row },
-  });
+  try {
+    await prisma.job.upsert({
+      where: { id: data.id },
+      update: { ...updateData },
+      create: { ...row },
+    });
+  } catch (e) {
+    if (e.code === "P2002" && e.meta?.target?.includes("jobNumber")) {
+      console.log(
+        `Postgres: Job id ${data.id} conflicted on jobNumber ${data.jobNumber}, falling back to update by jobNumber`,
+      );
+      await prisma.job.update({
+        where: { jobNumber: data.jobNumber },
+        data: { ...updateData, id: data.id },
+      });
+    } else {
+      throw e;
+    }
+  }
   console.log("Postgres: Upserted job");
 }
 events.on("db-JOB_CREATE_UPDATE", jobCreateUpdate);
