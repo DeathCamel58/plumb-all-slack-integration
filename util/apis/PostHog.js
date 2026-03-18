@@ -59,44 +59,71 @@ export async function individualSearch(searchQuery, parameter) {
     ? searchQuery
     : encodeURIComponent(JSON.stringify(searchQuery));
   let url = `https://app.posthog.com/api/projects/${process.env.POSTHOG_PROJECT_ID}/persons/?${parameter ? parameter : "properties"}=${query}`;
-  let response = [];
-  try {
+
+  const maxRetries = 3;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    let response;
     try {
       response = await fetch(url, {
         method: "get",
         headers: { Authorization: `Bearer ${process.env.POSTHOG_API_TOKEN}` },
       });
     } catch (e) {
-      console.error(`PostHog: Error when making API call ${e}`);
-      Sentry.captureException(e);
-    }
-  } catch (e) {
-    console.error(`PostHog: Failed to run an API search.`);
-    Sentry.captureException(e);
-    console.error(e);
-  }
-
-  let data = [];
-  try {
-    data = await response
-      .text()
-      .catch((e) =>
-        console.error(`PostHog: Error when getting text from API call ${e}`),
+      console.error(
+        `PostHog: Error when making API call (attempt ${attempt}/${maxRetries}): ${e}`,
       );
-  } catch (e) {
-    console.error(`PostHog: Failure in individualSearch`);
-    Sentry.captureException(e);
-    console.error(e);
-  }
-  try {
-    data = JSON.parse(data);
-  } catch (e) {
-    console.error(`PostHog: Failed to parse the JSON data with\n${e}`);
-    console.error(`PostHog: JSON data was:\n${data}`);
-    Sentry.captureException(e);
+      if (attempt === maxRetries) {
+        Sentry.captureException(e);
+        return [];
+      }
+      continue;
+    }
+
+    if (!response.ok) {
+      console.error(
+        `PostHog: API returned status ${response.status} (attempt ${attempt}/${maxRetries})`,
+      );
+      if (attempt === maxRetries) {
+        Sentry.captureException(
+          new Error(
+            `PostHog: API returned status ${response.status} after ${maxRetries} attempts`,
+          ),
+        );
+        return [];
+      }
+      continue;
+    }
+
+    let data;
+    try {
+      data = await response.text();
+    } catch (e) {
+      console.error(
+        `PostHog: Error reading response body (attempt ${attempt}/${maxRetries}): ${e}`,
+      );
+      if (attempt === maxRetries) {
+        Sentry.captureException(e);
+        return [];
+      }
+      continue;
+    }
+
+    try {
+      return JSON.parse(data);
+    } catch (e) {
+      console.error(
+        `PostHog: Failed to parse JSON (attempt ${attempt}/${maxRetries}): ${e}`,
+      );
+      console.error(`PostHog: JSON data was:\n${data}`);
+      if (attempt === maxRetries) {
+        Sentry.captureException(e);
+        return [];
+      }
+    }
   }
 
-  return data;
+  return [];
 }
 
 /**
