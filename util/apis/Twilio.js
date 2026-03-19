@@ -402,6 +402,7 @@ async function sendMissedCallBlocks(from, to, reason) {
   }
 
   const slackMessage = await sendMessageBlocks(
+    `${heading}${reasonText}`,
     blocks,
     "New Call Bot",
     threadId,
@@ -960,12 +961,14 @@ export async function handleInboundSms(req, _res) {
         : null;
 
     const blocks = [];
+    let smsHeading;
     if (threadId) {
+      smsHeading = `SMS From ${from}\n${text}`;
       blocks.push({
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `SMS From ${from}\n${text}`,
+          text: smsHeading,
         },
       });
     } else {
@@ -973,12 +976,13 @@ export async function handleInboundSms(req, _res) {
         ? `<@${twilioNumber.assignedEmployee}>`
         : to;
 
+      smsHeading = `SMS To ${toName} From ${from}\n${text}`;
       blocks.push(
         {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `SMS To ${toName} From ${from}\n${text}`,
+            text: smsHeading,
           },
         },
         {
@@ -1012,6 +1016,7 @@ export async function handleInboundSms(req, _res) {
     }
 
     const slackMessage = await sendMessageBlocks(
+      smsHeading,
       blocks,
       "New Call Bot",
       threadId,

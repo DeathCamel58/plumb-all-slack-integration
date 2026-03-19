@@ -378,6 +378,7 @@ events.on("slack-direct-message", sendDirectMessage);
 
 /**
  * Sends a block-based message to Slack.
+ * @param {string} text - Plain-text fallback for notifications and screen readers.
  * @param {Array<object>} blocks
  * @param {string} username
  * @param {string | null} [threadTs=null]
@@ -385,6 +386,7 @@ events.on("slack-direct-message", sendDirectMessage);
  * @returns {Promise<any | null>} Slack API result or null on failure.
  */
 export async function sendMessageBlocks(
+  text,
   blocks,
   username,
   threadTs = null,
@@ -393,6 +395,7 @@ export async function sendMessageBlocks(
   try {
     const result = await app.client.chat.postMessage({
       channel: channelName,
+      text: text,
       blocks: blocks,
       unfurl_links: false,
       username: username,
@@ -420,6 +423,7 @@ events.on("slackbot-send-message-blocks", sendMessageBlocks);
  * @param {string} [channelName=slackCallChannelName]
  * @param {string | null} [threadTs=null]
  * @param {Array<object> | null} [blocks=null] - Optional blocks to create a thread.
+ * @param {string | null} [threadText=null] - Plain-text fallback when blocks create a thread.
  * @param {any | null} [call=null] - Call metadata used to update thread id.
  * @returns {Promise<any | null>}
  */
@@ -431,6 +435,7 @@ export async function uploadFile(
   channelName = slackCallChannelName,
   threadTs = null,
   blocks = null,
+  threadText = null,
   call = null,
 ) {
   try {
@@ -441,6 +446,7 @@ export async function uploadFile(
     if (blocks) {
       message = await app.client.chat.postMessage({
         channel: channelName,
+        text: threadText,
         blocks: blocks,
         unfurl_links: false,
         username: "Call Contact",
@@ -528,6 +534,7 @@ async function sendContactMessage(
     ];
     await app.client.chat.postMessage({
       channel: channelName,
+      text: contact.messageToSend(),
       thread_ts: thread_ts,
       blocks: blocks,
       unfurl_links: false,
@@ -590,12 +597,13 @@ async function startOutboundCallFlow({
     if (existingContact) {
       slackThreadId = existingContact.slackThreadId || null;
     } else {
+      const outboundCallText = `Outbound call requested by <@${userId}> to ${customerPhoneNumber}`;
       const outboundBlocks = [
         {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `Outbound call requested by <@${userId}> to ${customerPhoneNumber}`,
+            text: outboundCallText,
           },
         },
         {
@@ -628,6 +636,7 @@ async function startOutboundCallFlow({
       ];
 
       const slackMessage = await sendMessageBlocks(
+        outboundCallText,
         outboundBlocks,
         "New Call Bot",
         null,
@@ -717,12 +726,13 @@ async function startOutboundSmsFlow({
     if (existingContact) {
       slackThreadId = existingContact.slackThreadId || null;
     } else {
+      const outboundSmsText = `Outbound SMS sent by <@${userId}> to ${customerPhoneNumber}`;
       const outboundBlocks = [
         {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `Outbound SMS sent by <@${userId}> to ${customerPhoneNumber}`,
+            text: outboundSmsText,
           },
         },
         {
@@ -755,6 +765,7 @@ async function startOutboundSmsFlow({
       ];
 
       const slackMessage = await sendMessageBlocks(
+        outboundSmsText,
         outboundBlocks,
         "New Call Bot",
         null,
@@ -1711,6 +1722,7 @@ async function interactivity(req) {
             );
 
             const outboundMessage = await sendMessageBlocks(
+              `SMS To ${customerPhoneNumberText}\n${smsMessage}`,
               [
                 {
                   type: "section",
