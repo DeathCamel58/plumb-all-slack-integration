@@ -458,14 +458,31 @@ export async function uploadFile(
       await updateTwilioContactTs(call, threadTs);
     }
 
-    const result = await app.client.files.uploadV2({
+    const uploadParams = {
       channel_id: channelId,
       thread_ts: threadTs,
       filename: fileName,
       title: title,
       file: fileBuffer,
       initial_comment: initialComment,
-    });
+    };
+
+    let result;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        result = await app.client.files.uploadV2(uploadParams);
+        break;
+      } catch (uploadError) {
+        if (uploadError.data?.error === "file_update_failed" && attempt < 2) {
+          console.warn(
+            `Slack: file_update_failed on attempt ${attempt + 1}, retrying...`,
+          );
+          await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+          continue;
+        }
+        throw uploadError;
+      }
+    }
 
     console.info("Slack: Uploaded file to Slack!");
 
