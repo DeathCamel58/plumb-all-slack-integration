@@ -10,6 +10,7 @@ const modules = [
   "./util/web.js",
   "./util/apis/86Repairs.js",
   "./util/apis/CloudFlareWorkers.js",
+  "./util/apis/CallRail.js",
   "./util/apis/FleetSharp.js",
   "./util/apis/GoogleAds.js",
   "./util/apis/instrument.js",
