@@ -1090,11 +1090,30 @@ export async function handleRecordingDone(req, res) {
   if (call.direction === "inbound") {
     customerNumber = call.from;
     ourNumber = call.to;
+  } else if (thisCall.parentCallSid) {
+    // Recording fired on the child call — the child dialled the customer
+    customerNumber = thisCall.to;
+    ourNumber = thisCall.from;
   } else {
     const childCall = await client.calls.list({
-      parent: req.body.CallSid,
+      parent: call.sid,
       limit: 1,
     });
+
+    if (childCall.length === 0) {
+      Sentry.captureMessage(
+        "Recording handler: no child call found for parent",
+        {
+          level: "warning",
+          extra: {
+            parentCallSid: call.sid,
+            recordingSid: req.body.RecordingSid,
+            recordingCallSid: req.body.CallSid,
+          },
+        },
+      );
+      return;
+    }
 
     call = childCall[0];
     customerNumber = call.to;
@@ -1102,16 +1121,13 @@ export async function handleRecordingDone(req, res) {
   }
 
   if (customerNumber) {
-    const twilioContact = await prisma.twilioContact.findFirst({
+    const twilioContact = await prisma.twilioContact.findUnique({
       where: {
-        clientNumber: customerNumber,
-      },
-      orderBy: {
-        lastContactAt: "desc",
+        id: customerNumber,
       },
     });
 
-    if (twilioContact.slackThreadId) {
+    if (twilioContact?.slackThreadId) {
       events.emit(
         "slackbot-upload-file",
         callRecording,
@@ -1122,6 +1138,19 @@ export async function handleRecordingDone(req, res) {
         twilioContact.slackThreadId,
       );
     } else {
+      Sentry.captureMessage(
+        "Recording handler: no slackThreadId for customer",
+        {
+          level: "warning",
+          extra: {
+            customerNumber,
+            ourNumber,
+            recordingSid: req.body.RecordingSid,
+            recordingCallSid: req.body.CallSid,
+            twilioContact: twilioContact ?? null,
+          },
+        },
+      );
       let twilioNumber = await prisma.twilioNumber.findUnique({
         where: { id: ourNumber },
       });
