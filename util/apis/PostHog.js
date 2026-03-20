@@ -447,6 +447,47 @@ export async function logClient(jobberClient) {
 
   await useAPI("capture/", "post", identifyData);
 
+  // Search for old duplicate persons (created with random hex IDs) and merge them
+  try {
+    let duplicateIds = new Set();
+
+    let searchFields = [
+      ["name", jobberClient.name],
+      ["email", defaultEmail],
+      ["phone", defaultPhone],
+    ];
+
+    for (let [key, value] of searchFields) {
+      let results = await searchByKey(key, value);
+      if (results !== null) {
+        for (let result of results.results) {
+          for (let distinctId of result["distinct_ids"]) {
+            if (distinctId !== id) {
+              duplicateIds.add(distinctId);
+            }
+          }
+        }
+      }
+    }
+
+    for (let duplicateId of duplicateIds) {
+      console.info(
+        `PostHog: Merging duplicate person ${duplicateId} into ${id}`,
+      );
+      await useAPI("capture/", "post", {
+        api_key: process.env.POSTHOG_TOKEN,
+        event: "$merge_dangerously",
+        distinct_id: id,
+        properties: {
+          alias: duplicateId,
+        },
+      });
+    }
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("PostHog: Error merging duplicate persons:", e);
+  }
+
   return id;
 }
 
