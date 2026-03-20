@@ -254,61 +254,48 @@ export function getPlaceLocationPart(place, addressComponentIndex, key) {
 }
 
 /**
- * Logs the contact to PostHog, updating the client if they already exist
+ * Resolves an address to geo data via Google Maps for PostHog person properties
+ * @param {string|null|undefined} address The address to resolve
+ * @returns {Promise<object>} Geo properties object (empty if no address or lookup fails)
+ */
+async function resolveGeoData(address) {
+  if (!address || address === "") {
+    return {};
+  }
+
+  let place = await GoogleMaps.searchPlace(address);
+  if (place === null || place === undefined || place.length === null) {
+    console.error(`PostHog: No place found for ${address} on Google Maps.`);
+    return {};
+  }
+
+  return {
+    $geoip_city_name: getPlaceLocationPart(place, 2, "long_name"),
+    $geoip_country_code: getPlaceLocationPart(place, 5, "short_name"),
+    $geoip_country_name: getPlaceLocationPart(place, 5, "long_name"),
+    $geoip_postal_code: getPlaceLocationPart(place, 6, "long_name"),
+    $geoip_subdivision_1_name: getPlaceLocationPart(place, 3, "long_name"),
+    $initial_geoip_city_name: getPlaceLocationPart(place, 2, "long_name"),
+    $initial_geoip_country_code: getPlaceLocationPart(place, 5, "short_name"),
+    $initial_geoip_country_name: getPlaceLocationPart(place, 5, "long_name"),
+    $initial_geoip_postal_code: getPlaceLocationPart(place, 6, "long_name"),
+    $initial_geoip_subdivision_1_name: getPlaceLocationPart(
+      place,
+      3,
+      "long_name",
+    ),
+  };
+}
+
+/**
+ * Logs the contact to PostHog, updating the client if they already exist.
+ * Used for non-Jobber contacts (website forms, Google Ads leads, etc.)
+ * that don't have a stable Jobber client ID.
  * @param contact The client to log to PostHog
  * @returns {Promise<string>} The ID of the client in PostHog
  */
 export async function sendClientToPostHog(contact) {
-  // If the contact has an address, resolve it to a place object using Google Maps
-  let place;
-  if (
-    contact.address !== "" &&
-    contact.address !== undefined &&
-    contact.address !== null
-  ) {
-    place = await GoogleMaps.searchPlace(contact.address);
-
-    if (place === null) {
-      console.error(
-        `PostHog: No place found for ${contact.address} on Google Maps.`,
-      );
-    }
-  }
-
-  // Set the location data for the user if a place is resolved
-  let clientData = {};
-  if (place !== undefined && place !== null) {
-    if (place.length !== null) {
-      clientData = {
-        $geoip_city_name: getPlaceLocationPart(place, 2, "long_name"),
-        $geoip_country_code: getPlaceLocationPart(place, 5, "short_name"),
-        $geoip_country_name: getPlaceLocationPart(place, 5, "long_name"),
-        // $geoip_latitude: ADD THE LATITUDE,
-        // $geoip_longitude: ADD THE LONGITUDE,
-        $geoip_postal_code: getPlaceLocationPart(place, 6, "long_name"),
-        $geoip_subdivision_1_name: getPlaceLocationPart(place, 3, "long_name"),
-        $initial_geoip_city_name: getPlaceLocationPart(place, 2, "long_name"),
-        $initial_geoip_country_code: getPlaceLocationPart(
-          place,
-          5,
-          "short_name",
-        ),
-        $initial_geoip_country_name: getPlaceLocationPart(
-          place,
-          5,
-          "long_name",
-        ),
-        // $initial_geoip_latitude: ADD THE LATITUDE,
-        // $initial_geoip_longitude: ADD THE LONGITUDE,
-        $initial_geoip_postal_code: getPlaceLocationPart(place, 6, "long_name"),
-        $initial_geoip_subdivision_1_name: getPlaceLocationPart(
-          place,
-          3,
-          "long_name",
-        ),
-      };
-    }
-  }
+  let clientData = await resolveGeoData(contact.address);
 
   // Search for the person in PostHog
   let id = crypto.randomBytes(16).toString("hex");
@@ -399,8 +386,11 @@ export async function logContact(contact, originalMessage) {
 events.on("posthog-log-contact", logContact);
 
 /**
- * Logs a created client in Jobber to PostHog
- * @param jobberClient The Contact that was parsed
+ * Logs a created client in Jobber to PostHog.
+ * Uses the Jobber client ID as the distinct_id to guarantee a stable identity
+ * and avoid duplicate persons from race conditions or search mismatches.
+ * @param jobberClient The Jobber client object (with phones, emails, billingAddress, etc.)
+ * @returns {Promise<string>} The Jobber client ID used as PostHog distinct_id
  */
 export async function logClient(jobberClient) {
   let defaultEmail;
@@ -440,18 +430,65 @@ export async function logClient(jobberClient) {
     }
   }
 
-  let contact = new Contact(
-    null,
-    jobberClient.name,
-    defaultPhone,
-    defaultPhone !== undefined ? defaultPhone : null,
-    defaultEmail !== undefined ? defaultEmail : null,
-    address !== "" ? address : null,
-    null,
-    null,
-  );
+  let id = jobberClient.id;
+  let clientData = await resolveGeoData(address !== "" ? address : null);
 
-  return await sendClientToPostHog(contact);
+  clientData.name = jobberClient.name;
+  clientData.phone = defaultPhone || null;
+  clientData.email = defaultEmail || null;
+  clientData.address = address !== "" ? address : null;
+
+  let identifyData = {
+    api_key: process.env.POSTHOG_TOKEN,
+    distinct_id: id,
+    event: "$identify",
+    $set: clientData,
+  };
+
+  await useAPI("capture/", "post", identifyData);
+
+  // Search for old duplicate persons (created with random hex IDs) and merge them
+  try {
+    let duplicateIds = new Set();
+
+    let searchFields = [
+      ["name", jobberClient.name],
+      ["email", defaultEmail],
+      ["phone", defaultPhone],
+    ];
+
+    for (let [key, value] of searchFields) {
+      let results = await searchByKey(key, value);
+      if (results !== null) {
+        for (let result of results.results) {
+          for (let distinctId of result["distinct_ids"]) {
+            if (distinctId !== id) {
+              duplicateIds.add(distinctId);
+            }
+          }
+        }
+      }
+    }
+
+    for (let duplicateId of duplicateIds) {
+      console.info(
+        `PostHog: Merging duplicate person ${duplicateId} into ${id}`,
+      );
+      await useAPI("capture/", "post", {
+        api_key: process.env.POSTHOG_TOKEN,
+        event: "$merge_dangerously",
+        distinct_id: id,
+        properties: {
+          alias: duplicateId,
+        },
+      });
+    }
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("PostHog: Error merging duplicate persons:", e);
+  }
+
+  return id;
 }
 
 /**
@@ -971,6 +1008,207 @@ export async function logRequestUpdate(jobberRequest, clientID) {
       source: jobberRequest.source,
       title: jobberRequest.title,
       updatedAt: jobberRequest.updatedAt,
+    },
+  };
+  await useAPI("capture/", "post", captureData);
+}
+
+/**
+ * Logs an inbound call to PostHog
+ * @param {object} callData
+ * @param {string} callData.from - Customer phone number
+ * @param {string} callData.to - Twilio number that was called
+ * @param {string} callData.routedTo - Employee number or fallback the call was routed to
+ * @param {string|null} callData.assignedEmployee - Slack user ID of assigned employee
+ * @param {string|null} callData.assignedEmployeeName - Name of assigned employee
+ */
+export async function logInboundCall(callData) {
+  let id = await sendClientToPostHog(
+    new Contact(null, null, callData.from, null, null, null, null),
+  );
+
+  let captureData = {
+    api_key: process.env.POSTHOG_TOKEN,
+    event: "inbound call",
+    properties: {
+      distinct_id: id,
+      from: callData.from,
+      to: callData.to,
+      routedTo: callData.routedTo,
+      assignedEmployee: callData.assignedEmployee,
+      assignedEmployeeName: callData.assignedEmployeeName,
+    },
+  };
+  await useAPI("capture/", "post", captureData);
+}
+
+/**
+ * Logs a missed call to PostHog
+ * @param {object} callData
+ * @param {string} callData.from - Customer phone number
+ * @param {string} callData.to - Twilio number that was called
+ * @param {string} callData.reason - Why the call was missed
+ */
+export async function logMissedCall(callData) {
+  let id = await sendClientToPostHog(
+    new Contact(null, null, callData.from, null, null, null, null),
+  );
+
+  let captureData = {
+    api_key: process.env.POSTHOG_TOKEN,
+    event: "missed call",
+    properties: {
+      distinct_id: id,
+      from: callData.from,
+      to: callData.to,
+      reason: callData.reason,
+    },
+  };
+  await useAPI("capture/", "post", captureData);
+}
+
+/**
+ * Logs a voicemail to PostHog
+ * @param {object} callData
+ * @param {string} callData.from - Customer phone number
+ * @param {string} callData.to - Twilio number that was called
+ * @param {number} callData.duration - Voicemail duration in seconds
+ */
+export async function logVoicemail(callData) {
+  let id = await sendClientToPostHog(
+    new Contact(null, null, callData.from, null, null, null, null),
+  );
+
+  let captureData = {
+    api_key: process.env.POSTHOG_TOKEN,
+    event: "voicemail left",
+    properties: {
+      distinct_id: id,
+      from: callData.from,
+      to: callData.to,
+      duration: callData.duration,
+    },
+  };
+  await useAPI("capture/", "post", captureData);
+}
+
+/**
+ * Logs an outbound call to PostHog
+ * @param {object} callData
+ * @param {string} callData.customerPhone - Customer phone number
+ * @param {string} callData.employeePhone - Employee phone number
+ * @param {string} callData.twilioNumber - Twilio number used for the call
+ * @param {string} callData.callSid - Twilio call SID
+ */
+export async function logOutboundCall(callData) {
+  let id = await sendClientToPostHog(
+    new Contact(null, null, callData.customerPhone, null, null, null, null),
+  );
+
+  let captureData = {
+    api_key: process.env.POSTHOG_TOKEN,
+    event: "outbound call",
+    properties: {
+      distinct_id: id,
+      customerPhone: callData.customerPhone,
+      employeePhone: callData.employeePhone,
+      twilioNumber: callData.twilioNumber,
+      callSid: callData.callSid,
+    },
+  };
+  await useAPI("capture/", "post", captureData);
+}
+
+/**
+ * Logs an inbound SMS to PostHog
+ * @param {object} smsData
+ * @param {string} smsData.from - Customer phone number
+ * @param {string} smsData.to - Twilio number that received the message
+ * @param {string|null} smsData.body - Message body
+ * @param {number} smsData.mediaCount - Number of media attachments
+ * @param {string|null} smsData.assignedEmployee - Slack user ID of assigned employee
+ */
+export async function logInboundSms(smsData) {
+  let id = await sendClientToPostHog(
+    new Contact(null, null, smsData.from, null, null, null, null),
+  );
+
+  let captureData = {
+    api_key: process.env.POSTHOG_TOKEN,
+    event: "inbound sms",
+    properties: {
+      distinct_id: id,
+      from: smsData.from,
+      to: smsData.to,
+      body: smsData.body,
+      mediaCount: smsData.mediaCount,
+      assignedEmployee: smsData.assignedEmployee,
+    },
+  };
+  await useAPI("capture/", "post", captureData);
+}
+
+/**
+ * Logs an outbound SMS to PostHog
+ * @param {object} smsData
+ * @param {string} smsData.customerPhone - Customer phone number
+ * @param {string} smsData.employeePhone - Employee phone number
+ * @param {string} smsData.twilioNumber - Twilio number used
+ * @param {string|null} smsData.body - Message body
+ * @param {boolean} smsData.hasMedia - Whether media was attached
+ */
+export async function logOutboundSms(smsData) {
+  let id = await sendClientToPostHog(
+    new Contact(null, null, smsData.customerPhone, null, null, null, null),
+  );
+
+  let captureData = {
+    api_key: process.env.POSTHOG_TOKEN,
+    event: "outbound sms",
+    properties: {
+      distinct_id: id,
+      customerPhone: smsData.customerPhone,
+      employeePhone: smsData.employeePhone,
+      twilioNumber: smsData.twilioNumber,
+      body: smsData.body,
+      hasMedia: smsData.hasMedia,
+    },
+  };
+  await useAPI("capture/", "post", captureData);
+}
+
+/**
+ * Logs a call recording completion to PostHog
+ * @param {object} recordingData
+ * @param {string} recordingData.customerPhone - Customer phone number
+ * @param {string} recordingData.ourNumber - Twilio number used
+ * @param {string} recordingData.direction - Call direction (inbound/outbound)
+ * @param {number} recordingData.duration - Recording duration in seconds
+ * @param {string} recordingData.callSid - Twilio call SID
+ */
+export async function logCallRecording(recordingData) {
+  let id = await sendClientToPostHog(
+    new Contact(
+      null,
+      null,
+      recordingData.customerPhone,
+      null,
+      null,
+      null,
+      null,
+    ),
+  );
+
+  let captureData = {
+    api_key: process.env.POSTHOG_TOKEN,
+    event: "call recorded",
+    properties: {
+      distinct_id: id,
+      customerPhone: recordingData.customerPhone,
+      ourNumber: recordingData.ourNumber,
+      direction: recordingData.direction,
+      duration: recordingData.duration,
+      callSid: recordingData.callSid,
     },
   };
   await useAPI("capture/", "post", captureData);

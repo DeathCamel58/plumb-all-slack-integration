@@ -16,6 +16,7 @@ const { default: Contact } = await import("../../util/contact.js");
 
 function buildResponse(body, status = 200) {
   return {
+    ok: status >= 200 && status < 300,
     status,
     text: async () => JSON.stringify(body),
   };
@@ -236,6 +237,7 @@ describe("PostHog", () => {
 
     test("Log Client", async () => {
       const client = {
+        id: "Z2lkOi8vSm9iYmVyL0NsaWVudC82MjI3MDc0Mg==",
         name: "TEST TEST",
         companyName: null,
         defaultEmails: [],
@@ -250,8 +252,90 @@ describe("PostHog", () => {
         billingAddress: null,
       };
 
-      await expect(PostHog.logClient(client)).resolves.not.toThrow();
+      const clientID = await PostHog.logClient(client);
+      expect(clientID).toBe("Z2lkOi8vSm9iYmVyL0NsaWVudC82MjI3MDc0Mg==");
       expect(getCaptureEvents()).toContain("$identify");
+
+      // Verify the $identify call uses the Jobber client ID as distinct_id
+      const identifyCall = fetchMock.mock.calls.find(
+        ([url, opts]) =>
+          String(url).includes("/capture/") &&
+          opts &&
+          JSON.parse(opts.body).event === "$identify",
+      );
+      expect(identifyCall).toBeDefined();
+      const identifyBody = JSON.parse(identifyCall[1].body);
+      expect(identifyBody.distinct_id).toBe(
+        "Z2lkOi8vSm9iYmVyL0NsaWVudC82MjI3MDc0Mg==",
+      );
+    });
+
+    test("Log Client merges duplicate persons", async () => {
+      const client = {
+        id: "Z2lkOi8vSm9iYmVyL0NsaWVudC85OTk5",
+        name: "Dylan Corrales",
+        companyName: null,
+        defaultEmails: ["deathcamel57@gmail.com"],
+        phones: [{ number: "(339) 526-9875", primary: true }],
+        emails: [{ address: "deathcamel57@gmail.com", primary: true }],
+        firstName: "Dylan",
+        lastName: "Corrales",
+        isCompany: false,
+        jobberWebUri: "https://secure.getjobber.com/clients/9999",
+        secondaryName: null,
+        title: null,
+        billingAddress: null,
+      };
+
+      await PostHog.logClient(client);
+
+      const events = getCaptureEvents();
+      expect(events).toContain("$identify");
+      expect(events).toContain("$merge_dangerously");
+
+      // Find all merge calls
+      const mergeCalls = fetchMock.mock.calls.filter(
+        ([url, opts]) =>
+          String(url).includes("/capture/") &&
+          opts &&
+          JSON.parse(opts.body).event === "$merge_dangerously",
+      );
+
+      // Should have merged the old duplicate persons found by name/email/phone search
+      expect(mergeCalls.length).toBeGreaterThan(0);
+
+      // Each merge should target the Jobber client ID and alias the old ID
+      for (const [, opts] of mergeCalls) {
+        const body = JSON.parse(opts.body);
+        expect(body.distinct_id).toBe("Z2lkOi8vSm9iYmVyL0NsaWVudC85OTk5");
+        expect(body.properties.alias).not.toBe(
+          "Z2lkOi8vSm9iYmVyL0NsaWVudC85OTk5",
+        );
+      }
+    });
+
+    test("Log Client does not merge when no duplicates found", async () => {
+      const client = {
+        id: "Z2lkOi8vSm9iYmVyL0NsaWVudC82MjI3MDc0Mg==",
+        name: "TEST TEST",
+        companyName: null,
+        defaultEmails: [],
+        phones: [],
+        emails: [],
+        firstName: "TEST",
+        lastName: "TEST",
+        isCompany: false,
+        jobberWebUri: "https://secure.getjobber.com/clients/62270742",
+        secondaryName: null,
+        title: null,
+        billingAddress: null,
+      };
+
+      await PostHog.logClient(client);
+
+      const events = getCaptureEvents();
+      expect(events).toContain("$identify");
+      expect(events).not.toContain("$merge_dangerously");
     });
 
     test("Log Quote", async () => {
