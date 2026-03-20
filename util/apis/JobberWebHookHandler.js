@@ -333,6 +333,11 @@ async function paymentCreateHandle(req) {
       // Insert payment
       events.emit("db-PAYMENT_CREATE_UPDATE", payment);
       await PostHog.logPayment(payment, clientID);
+
+      if (payment.invoice) {
+        let invoice = await Jobber.getInvoiceData(payment.invoice.id);
+        events.emit("callrail-FIRST_INVOICE_PAYMENT", payment, invoice);
+      }
     }
   } catch (e) {
     Sentry.captureException(e);
