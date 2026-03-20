@@ -16,6 +16,7 @@ const { default: Contact } = await import("../../util/contact.js");
 
 function buildResponse(body, status = 200) {
   return {
+    ok: status >= 200 && status < 300,
     status,
     text: async () => JSON.stringify(body),
   };
@@ -236,6 +237,7 @@ describe("PostHog", () => {
 
     test("Log Client", async () => {
       const client = {
+        id: "Z2lkOi8vSm9iYmVyL0NsaWVudC82MjI3MDc0Mg==",
         name: "TEST TEST",
         companyName: null,
         defaultEmails: [],
@@ -250,8 +252,22 @@ describe("PostHog", () => {
         billingAddress: null,
       };
 
-      await expect(PostHog.logClient(client)).resolves.not.toThrow();
+      const clientID = await PostHog.logClient(client);
+      expect(clientID).toBe("Z2lkOi8vSm9iYmVyL0NsaWVudC82MjI3MDc0Mg==");
       expect(getCaptureEvents()).toContain("$identify");
+
+      // Verify the $identify call uses the Jobber client ID as distinct_id
+      const identifyCall = fetchMock.mock.calls.find(
+        ([url, opts]) =>
+          String(url).includes("/capture/") &&
+          opts &&
+          JSON.parse(opts.body).event === "$identify",
+      );
+      expect(identifyCall).toBeDefined();
+      const identifyBody = JSON.parse(identifyCall[1].body);
+      expect(identifyBody.distinct_id).toBe(
+        "Z2lkOi8vSm9iYmVyL0NsaWVudC82MjI3MDc0Mg==",
+      );
     });
 
     test("Log Quote", async () => {

@@ -254,61 +254,48 @@ export function getPlaceLocationPart(place, addressComponentIndex, key) {
 }
 
 /**
- * Logs the contact to PostHog, updating the client if they already exist
+ * Resolves an address to geo data via Google Maps for PostHog person properties
+ * @param {string|null|undefined} address The address to resolve
+ * @returns {Promise<object>} Geo properties object (empty if no address or lookup fails)
+ */
+async function resolveGeoData(address) {
+  if (!address || address === "") {
+    return {};
+  }
+
+  let place = await GoogleMaps.searchPlace(address);
+  if (place === null || place === undefined || place.length === null) {
+    console.error(`PostHog: No place found for ${address} on Google Maps.`);
+    return {};
+  }
+
+  return {
+    $geoip_city_name: getPlaceLocationPart(place, 2, "long_name"),
+    $geoip_country_code: getPlaceLocationPart(place, 5, "short_name"),
+    $geoip_country_name: getPlaceLocationPart(place, 5, "long_name"),
+    $geoip_postal_code: getPlaceLocationPart(place, 6, "long_name"),
+    $geoip_subdivision_1_name: getPlaceLocationPart(place, 3, "long_name"),
+    $initial_geoip_city_name: getPlaceLocationPart(place, 2, "long_name"),
+    $initial_geoip_country_code: getPlaceLocationPart(place, 5, "short_name"),
+    $initial_geoip_country_name: getPlaceLocationPart(place, 5, "long_name"),
+    $initial_geoip_postal_code: getPlaceLocationPart(place, 6, "long_name"),
+    $initial_geoip_subdivision_1_name: getPlaceLocationPart(
+      place,
+      3,
+      "long_name",
+    ),
+  };
+}
+
+/**
+ * Logs the contact to PostHog, updating the client if they already exist.
+ * Used for non-Jobber contacts (website forms, Google Ads leads, etc.)
+ * that don't have a stable Jobber client ID.
  * @param contact The client to log to PostHog
  * @returns {Promise<string>} The ID of the client in PostHog
  */
 export async function sendClientToPostHog(contact) {
-  // If the contact has an address, resolve it to a place object using Google Maps
-  let place;
-  if (
-    contact.address !== "" &&
-    contact.address !== undefined &&
-    contact.address !== null
-  ) {
-    place = await GoogleMaps.searchPlace(contact.address);
-
-    if (place === null) {
-      console.error(
-        `PostHog: No place found for ${contact.address} on Google Maps.`,
-      );
-    }
-  }
-
-  // Set the location data for the user if a place is resolved
-  let clientData = {};
-  if (place !== undefined && place !== null) {
-    if (place.length !== null) {
-      clientData = {
-        $geoip_city_name: getPlaceLocationPart(place, 2, "long_name"),
-        $geoip_country_code: getPlaceLocationPart(place, 5, "short_name"),
-        $geoip_country_name: getPlaceLocationPart(place, 5, "long_name"),
-        // $geoip_latitude: ADD THE LATITUDE,
-        // $geoip_longitude: ADD THE LONGITUDE,
-        $geoip_postal_code: getPlaceLocationPart(place, 6, "long_name"),
-        $geoip_subdivision_1_name: getPlaceLocationPart(place, 3, "long_name"),
-        $initial_geoip_city_name: getPlaceLocationPart(place, 2, "long_name"),
-        $initial_geoip_country_code: getPlaceLocationPart(
-          place,
-          5,
-          "short_name",
-        ),
-        $initial_geoip_country_name: getPlaceLocationPart(
-          place,
-          5,
-          "long_name",
-        ),
-        // $initial_geoip_latitude: ADD THE LATITUDE,
-        // $initial_geoip_longitude: ADD THE LONGITUDE,
-        $initial_geoip_postal_code: getPlaceLocationPart(place, 6, "long_name"),
-        $initial_geoip_subdivision_1_name: getPlaceLocationPart(
-          place,
-          3,
-          "long_name",
-        ),
-      };
-    }
-  }
+  let clientData = await resolveGeoData(contact.address);
 
   // Search for the person in PostHog
   let id = crypto.randomBytes(16).toString("hex");
@@ -399,8 +386,11 @@ export async function logContact(contact, originalMessage) {
 events.on("posthog-log-contact", logContact);
 
 /**
- * Logs a created client in Jobber to PostHog
- * @param jobberClient The Contact that was parsed
+ * Logs a created client in Jobber to PostHog.
+ * Uses the Jobber client ID as the distinct_id to guarantee a stable identity
+ * and avoid duplicate persons from race conditions or search mismatches.
+ * @param jobberClient The Jobber client object (with phones, emails, billingAddress, etc.)
+ * @returns {Promise<string>} The Jobber client ID used as PostHog distinct_id
  */
 export async function logClient(jobberClient) {
   let defaultEmail;
@@ -440,18 +430,24 @@ export async function logClient(jobberClient) {
     }
   }
 
-  let contact = new Contact(
-    null,
-    jobberClient.name,
-    defaultPhone,
-    defaultPhone !== undefined ? defaultPhone : null,
-    defaultEmail !== undefined ? defaultEmail : null,
-    address !== "" ? address : null,
-    null,
-    null,
-  );
+  let id = jobberClient.id;
+  let clientData = await resolveGeoData(address !== "" ? address : null);
 
-  return await sendClientToPostHog(contact);
+  clientData.name = jobberClient.name;
+  clientData.phone = defaultPhone || null;
+  clientData.email = defaultEmail || null;
+  clientData.address = address !== "" ? address : null;
+
+  let identifyData = {
+    api_key: process.env.POSTHOG_TOKEN,
+    distinct_id: id,
+    event: "$identify",
+    $set: clientData,
+  };
+
+  await useAPI("capture/", "post", identifyData);
+
+  return id;
 }
 
 /**
