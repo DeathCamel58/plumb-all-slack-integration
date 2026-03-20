@@ -437,6 +437,7 @@ export async function logClient(jobberClient) {
   clientData.phone = defaultPhone || null;
   clientData.email = defaultEmail || null;
   clientData.address = address !== "" ? address : null;
+  clientData.jobberWebUri = jobberClient.jobberWebUri || null;
 
   let identifyData = {
     api_key: process.env.POSTHOG_TOKEN,
