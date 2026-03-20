@@ -1012,3 +1012,204 @@ export async function logRequestUpdate(jobberRequest, clientID) {
   };
   await useAPI("capture/", "post", captureData);
 }
+
+/**
+ * Logs an inbound call to PostHog
+ * @param {object} callData
+ * @param {string} callData.from - Customer phone number
+ * @param {string} callData.to - Twilio number that was called
+ * @param {string} callData.routedTo - Employee number or fallback the call was routed to
+ * @param {string|null} callData.assignedEmployee - Slack user ID of assigned employee
+ * @param {string|null} callData.assignedEmployeeName - Name of assigned employee
+ */
+export async function logInboundCall(callData) {
+  let id = await sendClientToPostHog(
+    new Contact(null, null, callData.from, null, null, null, null),
+  );
+
+  let captureData = {
+    api_key: process.env.POSTHOG_TOKEN,
+    event: "inbound call",
+    properties: {
+      distinct_id: id,
+      from: callData.from,
+      to: callData.to,
+      routedTo: callData.routedTo,
+      assignedEmployee: callData.assignedEmployee,
+      assignedEmployeeName: callData.assignedEmployeeName,
+    },
+  };
+  await useAPI("capture/", "post", captureData);
+}
+
+/**
+ * Logs a missed call to PostHog
+ * @param {object} callData
+ * @param {string} callData.from - Customer phone number
+ * @param {string} callData.to - Twilio number that was called
+ * @param {string} callData.reason - Why the call was missed
+ */
+export async function logMissedCall(callData) {
+  let id = await sendClientToPostHog(
+    new Contact(null, null, callData.from, null, null, null, null),
+  );
+
+  let captureData = {
+    api_key: process.env.POSTHOG_TOKEN,
+    event: "missed call",
+    properties: {
+      distinct_id: id,
+      from: callData.from,
+      to: callData.to,
+      reason: callData.reason,
+    },
+  };
+  await useAPI("capture/", "post", captureData);
+}
+
+/**
+ * Logs a voicemail to PostHog
+ * @param {object} callData
+ * @param {string} callData.from - Customer phone number
+ * @param {string} callData.to - Twilio number that was called
+ * @param {number} callData.duration - Voicemail duration in seconds
+ */
+export async function logVoicemail(callData) {
+  let id = await sendClientToPostHog(
+    new Contact(null, null, callData.from, null, null, null, null),
+  );
+
+  let captureData = {
+    api_key: process.env.POSTHOG_TOKEN,
+    event: "voicemail left",
+    properties: {
+      distinct_id: id,
+      from: callData.from,
+      to: callData.to,
+      duration: callData.duration,
+    },
+  };
+  await useAPI("capture/", "post", captureData);
+}
+
+/**
+ * Logs an outbound call to PostHog
+ * @param {object} callData
+ * @param {string} callData.customerPhone - Customer phone number
+ * @param {string} callData.employeePhone - Employee phone number
+ * @param {string} callData.twilioNumber - Twilio number used for the call
+ * @param {string} callData.callSid - Twilio call SID
+ */
+export async function logOutboundCall(callData) {
+  let id = await sendClientToPostHog(
+    new Contact(null, null, callData.customerPhone, null, null, null, null),
+  );
+
+  let captureData = {
+    api_key: process.env.POSTHOG_TOKEN,
+    event: "outbound call",
+    properties: {
+      distinct_id: id,
+      customerPhone: callData.customerPhone,
+      employeePhone: callData.employeePhone,
+      twilioNumber: callData.twilioNumber,
+      callSid: callData.callSid,
+    },
+  };
+  await useAPI("capture/", "post", captureData);
+}
+
+/**
+ * Logs an inbound SMS to PostHog
+ * @param {object} smsData
+ * @param {string} smsData.from - Customer phone number
+ * @param {string} smsData.to - Twilio number that received the message
+ * @param {string|null} smsData.body - Message body
+ * @param {number} smsData.mediaCount - Number of media attachments
+ * @param {string|null} smsData.assignedEmployee - Slack user ID of assigned employee
+ */
+export async function logInboundSms(smsData) {
+  let id = await sendClientToPostHog(
+    new Contact(null, null, smsData.from, null, null, null, null),
+  );
+
+  let captureData = {
+    api_key: process.env.POSTHOG_TOKEN,
+    event: "inbound sms",
+    properties: {
+      distinct_id: id,
+      from: smsData.from,
+      to: smsData.to,
+      body: smsData.body,
+      mediaCount: smsData.mediaCount,
+      assignedEmployee: smsData.assignedEmployee,
+    },
+  };
+  await useAPI("capture/", "post", captureData);
+}
+
+/**
+ * Logs an outbound SMS to PostHog
+ * @param {object} smsData
+ * @param {string} smsData.customerPhone - Customer phone number
+ * @param {string} smsData.employeePhone - Employee phone number
+ * @param {string} smsData.twilioNumber - Twilio number used
+ * @param {string|null} smsData.body - Message body
+ * @param {boolean} smsData.hasMedia - Whether media was attached
+ */
+export async function logOutboundSms(smsData) {
+  let id = await sendClientToPostHog(
+    new Contact(null, null, smsData.customerPhone, null, null, null, null),
+  );
+
+  let captureData = {
+    api_key: process.env.POSTHOG_TOKEN,
+    event: "outbound sms",
+    properties: {
+      distinct_id: id,
+      customerPhone: smsData.customerPhone,
+      employeePhone: smsData.employeePhone,
+      twilioNumber: smsData.twilioNumber,
+      body: smsData.body,
+      hasMedia: smsData.hasMedia,
+    },
+  };
+  await useAPI("capture/", "post", captureData);
+}
+
+/**
+ * Logs a call recording completion to PostHog
+ * @param {object} recordingData
+ * @param {string} recordingData.customerPhone - Customer phone number
+ * @param {string} recordingData.ourNumber - Twilio number used
+ * @param {string} recordingData.direction - Call direction (inbound/outbound)
+ * @param {number} recordingData.duration - Recording duration in seconds
+ * @param {string} recordingData.callSid - Twilio call SID
+ */
+export async function logCallRecording(recordingData) {
+  let id = await sendClientToPostHog(
+    new Contact(
+      null,
+      null,
+      recordingData.customerPhone,
+      null,
+      null,
+      null,
+      null,
+    ),
+  );
+
+  let captureData = {
+    api_key: process.env.POSTHOG_TOKEN,
+    event: "call recorded",
+    properties: {
+      distinct_id: id,
+      customerPhone: recordingData.customerPhone,
+      ourNumber: recordingData.ourNumber,
+      direction: recordingData.direction,
+      duration: recordingData.duration,
+      callSid: recordingData.callSid,
+    },
+  };
+  await useAPI("capture/", "post", captureData);
+}

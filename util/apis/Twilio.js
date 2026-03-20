@@ -9,6 +9,7 @@ import {
   uploadFile,
 } from "./SlackBot.js";
 import * as Sentry from "@sentry/node";
+import * as PostHog from "./PostHog.js";
 import { extension } from "mime-types";
 
 /**
@@ -401,6 +402,17 @@ async function sendMissedCallBlocks(from, to, reason) {
     );
   }
 
+  if (from) {
+    PostHog.logMissedCall({
+      from,
+      to,
+      reason: reason || "unknown",
+    }).catch((e) => {
+      Sentry.captureException(e);
+      console.error("Twilio: PostHog logMissedCall error:", e);
+    });
+  }
+
   const slackMessage = await sendMessageBlocks(
     `${heading}${reasonText}`,
     blocks,
@@ -475,6 +487,17 @@ export async function handleInboundCall(req, _res) {
     console.info(
       `Twilio Voice: inbound call to=${to} from=${from || "<unknown>"} routingTo=${dialTarget}`,
     );
+
+    PostHog.logInboundCall({
+      from,
+      to,
+      routedTo: dialTarget,
+      assignedEmployee: twilioNumber?.assignedEmployee || null,
+      assignedEmployeeName: twilioNumber?.assignedEmployeeName || null,
+    }).catch((e) => {
+      Sentry.captureException(e);
+      console.error("Twilio: PostHog logInboundCall error:", e);
+    });
 
     if (dialTarget === fallbackNumber) {
       const dial = twiml.dial({
@@ -651,6 +674,14 @@ export async function handleVoicemailAction(req, res) {
   const duration = Number(req.body?.RecordingDuration || 0);
 
   if (duration > 0) {
+    PostHog.logVoicemail({
+      from: req.body?.From,
+      to: req.body?.To,
+      duration,
+    }).catch((e) => {
+      Sentry.captureException(e);
+      console.error("Twilio: PostHog logVoicemail error:", e);
+    });
     res.sendStatus(200);
     return;
   }
@@ -790,6 +821,16 @@ export async function callEmployeeThenCustomer(
     slackTs,
   );
 
+  PostHog.logOutboundCall({
+    customerPhone: toE164(customerPhoneNumber),
+    employeePhone: toE164(employeePhoneNumber),
+    twilioNumber: assignedTwilioNumber.phoneNumber,
+    callSid: call.sid,
+  }).catch((e) => {
+    Sentry.captureException(e);
+    console.error("Twilio: PostHog logOutboundCall error:", e);
+  });
+
   return call.sid;
 }
 
@@ -822,6 +863,17 @@ export async function textCustomer(
   }
 
   await client.messages.create(messageParams);
+
+  PostHog.logOutboundSms({
+    customerPhone: toE164(customerPhoneNumber),
+    employeePhone: toE164(employeePhoneNumber),
+    twilioNumber: assignedTwilioNumber.phoneNumber,
+    body: smsMessage,
+    hasMedia: !!mediaUrl,
+  }).catch((e) => {
+    Sentry.captureException(e);
+    console.error("Twilio: PostHog logOutboundSms error:", e);
+  });
 
   // TODO: This doesn't update the slack thread ID
   await updateTwilioContact(
@@ -944,6 +996,17 @@ export async function handleInboundSms(req, _res) {
 
     // Check if there were any MMS media attachments
     const media = await getMedia(req.body);
+
+    PostHog.logInboundSms({
+      from,
+      to,
+      body: req.body?.Body || null,
+      mediaCount: Number(req.body?.NumMedia || 0),
+      assignedEmployee: twilioNumber?.assignedEmployee || null,
+    }).catch((e) => {
+      Sentry.captureException(e);
+      console.error("Twilio: PostHog logInboundSms error:", e);
+    });
 
     // Optional: tiny bit of logging context (avoid logging sensitive data in production)
     console.info(
@@ -1208,6 +1271,17 @@ export async function handleRecordingDone(req, res) {
         call,
       );
     }
+
+    PostHog.logCallRecording({
+      customerPhone: customerNumber,
+      ourNumber,
+      direction: call.direction || "unknown",
+      duration: Number(req.body.RecordingDuration || 0),
+      callSid: req.body.CallSid,
+    }).catch((e) => {
+      Sentry.captureException(e);
+      console.error("Twilio: PostHog logCallRecording error:", e);
+    });
 
     console.log("Twilio: Deleting recording from twilio");
     await client.recordings(req.body.RecordingSid).remove();
