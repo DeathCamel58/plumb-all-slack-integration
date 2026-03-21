@@ -120,6 +120,12 @@ async function handleFirstInvoicePayment(payment, invoice) {
           let e164 = toE164(props.alternatePhone);
           if (e164) phoneSet.add(e164);
         }
+        if (Array.isArray(props.phones)) {
+          for (let p of props.phones) {
+            let e164 = toE164(p);
+            if (e164) phoneSet.add(e164);
+          }
+        }
       }
     } catch (e) {
       // PostHog lookup is best-effort; don't block on failure

@@ -19,6 +19,7 @@ function buildResponse(body, status = 200) {
     ok: status >= 200 && status < 300,
     status,
     text: async () => JSON.stringify(body),
+    json: async () => body,
   };
 }
 
@@ -33,8 +34,21 @@ function getQuery(url) {
 }
 
 function installFetchMock() {
-  fetchMock.mockImplementation(async (url) => {
+  fetchMock.mockImplementation(async (url, options) => {
     const requestUrl = String(url);
+
+    // Handle HogQL query endpoint (used by searchByPhone)
+    if (requestUrl.includes("/query/") && options?.body) {
+      const body = JSON.parse(options.body);
+      const hogql = body.query?.query || "";
+
+      // Check if the query contains a phone number we know about
+      if (hogql.includes("3395269875") || hogql.includes("(339) 526-9875")) {
+        return buildResponse({ results: [["phone-id"]] });
+      }
+
+      return buildResponse({ results: [] });
+    }
 
     if (requestUrl.includes("/persons/")) {
       const query = getQuery(requestUrl);

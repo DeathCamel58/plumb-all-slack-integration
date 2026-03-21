@@ -127,6 +127,82 @@ export async function individualSearch(searchQuery, parameter) {
 }
 
 /**
+ * Searches for PostHog persons that have a phone number in their `phones` array,
+ * `phone`, or `alternatePhone` properties using a HogQL query.
+ * @param {string} phone The phone number to search for
+ * @returns {Promise<string[]>} Array of matching distinct_ids
+ */
+export async function searchByPhone(phone) {
+  if (!phone) return [];
+
+  const maxRetries = 3;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    let response;
+    try {
+      // Escape single quotes in the phone number for HogQL
+      let safePhone = phone.replace(/'/g, "\\'");
+      response = await fetch(
+        `${process.env.POSTHOG_HOST}/api/projects/${process.env.POSTHOG_PROJECT_ID}/query/`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${process.env.POSTHOG_API_TOKEN}`,
+          },
+          body: JSON.stringify({
+            query: {
+              kind: "HogQLQuery",
+              query: `SELECT distinct_id FROM person_distinct_ids WHERE person.properties.phone = '${safePhone}' OR person.properties.alternatePhone = '${safePhone}' OR toString(person.properties.phones) LIKE '%${safePhone}%' LIMIT 20`,
+            },
+          }),
+        },
+      );
+    } catch (e) {
+      console.error(
+        `PostHog: HogQL phone search error (attempt ${attempt}/${maxRetries}): ${e}`,
+      );
+      if (attempt === maxRetries) {
+        Sentry.captureException(e);
+        return [];
+      }
+      continue;
+    }
+
+    if (!response.ok) {
+      console.error(
+        `PostHog: HogQL query returned status ${response.status} (attempt ${attempt}/${maxRetries})`,
+      );
+      if (attempt === maxRetries) {
+        Sentry.captureException(
+          new Error(
+            `PostHog: HogQL query returned status ${response.status} after ${maxRetries} attempts`,
+          ),
+        );
+        return [];
+      }
+      continue;
+    }
+
+    try {
+      let data = await response.json();
+      // Results are arrays of [distinct_id]
+      return (data.results || []).map((row) => row[0]);
+    } catch (e) {
+      console.error(
+        `PostHog: HogQL response parse error (attempt ${attempt}/${maxRetries}): ${e}`,
+      );
+      if (attempt === maxRetries) {
+        Sentry.captureException(e);
+        return [];
+      }
+    }
+  }
+
+  return [];
+}
+
+/**
  * Searches for a user based on a value and key.
  * @param key The key to search within
  * @param value The value to search for
@@ -198,17 +274,14 @@ export async function searchForUser(contact) {
       potentialIDs.push(result["distinct_ids"][0]);
     }
   }
-  results = await searchByKey("phone", contact.phone);
-  if (results !== null) {
-    for (let result of results.results) {
-      potentialIDs.push(result["distinct_ids"][0]);
-    }
+  // Search phone numbers via HogQL (checks phone, alternatePhone, and phones array)
+  let phoneIds = await searchByPhone(contact.phone);
+  for (let id of phoneIds) {
+    potentialIDs.push(id);
   }
-  results = await searchByKey("alternatePhone", contact.alternatePhone);
-  if (results !== null) {
-    for (let result of results.results) {
-      potentialIDs.push(result["distinct_ids"][0]);
-    }
+  let altPhoneIds = await searchByPhone(contact.alternatePhone);
+  for (let id of altPhoneIds) {
+    potentialIDs.push(id);
   }
   results = await searchByKey("address", contact.address);
   if (results !== null) {
@@ -251,6 +324,65 @@ export function getPlaceLocationPart(place, addressComponentIndex, key) {
       return "";
     }
   }
+}
+
+/**
+ * Merges new phone numbers into an existing phones array, deduplicating by
+ * normalized digits. Returns the merged array with original formatting preserved.
+ * @param {string[]} existingPhones - Current phones array from PostHog
+ * @param {string[]} newPhones - New phone numbers to add
+ * @returns {string[]} Merged array with no duplicates
+ */
+function mergePhoneArrays(existingPhones, newPhones) {
+  let seen = new Set();
+  let merged = [];
+
+  for (let phone of existingPhones) {
+    let digits = phone.replace(/\D/g, "");
+    if (digits.length >= 7) {
+      // Normalize to last 10 digits for comparison
+      if (digits.length === 11 && digits.startsWith("1")) {
+        digits = digits.slice(1);
+      }
+      if (!seen.has(digits)) {
+        seen.add(digits);
+        merged.push(phone);
+      }
+    }
+  }
+
+  for (let phone of newPhones) {
+    let digits = phone.replace(/\D/g, "");
+    if (digits.length >= 7) {
+      if (digits.length === 11 && digits.startsWith("1")) {
+        digits = digits.slice(1);
+      }
+      if (!seen.has(digits)) {
+        seen.add(digits);
+        merged.push(phone);
+      }
+    }
+  }
+
+  return merged;
+}
+
+/**
+ * Fetches the existing phones array for a PostHog person by distinct_id.
+ * @param {string} distinctId
+ * @returns {Promise<string[]>} The existing phones array, or empty array
+ */
+async function getExistingPhones(distinctId) {
+  try {
+    let result = await individualSearch(distinctId, "distinct_id");
+    if (result?.results?.length > 0) {
+      let phones = result.results[0].properties?.phones;
+      if (Array.isArray(phones)) return phones;
+    }
+  } catch (e) {
+    // Best-effort; don't block on failure
+  }
+  return [];
 }
 
 /**
@@ -300,6 +432,7 @@ export async function sendClientToPostHog(contact) {
   // Search for the person in PostHog
   let id = crypto.randomBytes(16).toString("hex");
   let posthogPerson = await searchForUser(contact);
+  let existingPhones = [];
 
   // If this is a new person, add them to PostHog
   if (posthogPerson === undefined) {
@@ -316,6 +449,11 @@ export async function sendClientToPostHog(contact) {
       fullPostHogPerson.results.length > 0
     ) {
       fullPostHogPerson = fullPostHogPerson.results[0];
+
+      // Capture existing phones for merging
+      if (Array.isArray(fullPostHogPerson.properties?.phones)) {
+        existingPhones = fullPostHogPerson.properties.phones;
+      }
 
       // If the person is the same as what we would set, don't send to PostHog. This cuts down on unnecessary events.
       let same = true;
@@ -340,13 +478,24 @@ export async function sendClientToPostHog(contact) {
     }
   }
 
-  // Identify the user to allow PostHog to display client details properly
-  clientData.name = contact.name;
-  clientData.phone = contact.phone;
-  clientData.alternatePhone = contact.alternatePhone;
-  clientData.email = contact.email;
-  clientData.address = contact.address;
-  clientData.latestContactSource = contact.type;
+  // Identify the user to allow PostHog to display client details properly.
+  // Only include non-null fields to avoid overwriting existing data with nulls
+  // (e.g. when a Twilio call logs only a phone number).
+  if (contact.name) clientData.name = contact.name;
+  if (contact.phone) clientData.phone = contact.phone;
+  if (contact.alternatePhone)
+    clientData.alternatePhone = contact.alternatePhone;
+  if (contact.email) clientData.email = contact.email;
+  if (contact.address) clientData.address = contact.address;
+  if (contact.type) clientData.latestContactSource = contact.type;
+
+  // Merge any new phone numbers into the existing phones array
+  let newPhones = [];
+  if (contact.phone) newPhones.push(contact.phone);
+  if (contact.alternatePhone) newPhones.push(contact.alternatePhone);
+  if (newPhones.length > 0 || existingPhones.length > 0) {
+    clientData.phones = mergePhoneArrays(existingPhones, newPhones);
+  }
   let identifyData = {
     api_key: process.env.POSTHOG_TOKEN,
     distinct_id: id,
@@ -438,6 +587,13 @@ export async function logClient(jobberClient) {
   clientData.email = defaultEmail || null;
   clientData.address = address !== "" ? address : null;
   clientData.jobberWebUri = jobberClient.jobberWebUri || null;
+
+  // Merge Jobber phone numbers with any existing phones in PostHog
+  // (e.g. a Twilio caller ID that Jobber doesn't know about)
+  let jobberPhones =
+    "phones" in jobberClient ? jobberClient.phones.map((p) => p.number) : [];
+  let existingPhones = await getExistingPhones(id);
+  clientData.phones = mergePhoneArrays(existingPhones, jobberPhones);
 
   let identifyData = {
     api_key: process.env.POSTHOG_TOKEN,
