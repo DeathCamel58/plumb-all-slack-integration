@@ -2,6 +2,7 @@ import fetch from "node-fetch";
 import events from "../events.js";
 import prisma from "../prismaClient.js";
 import { toE164 } from "../DataUtilities.js";
+import * as PostHog from "./PostHog.js";
 import * as Sentry from "@sentry/node";
 
 const CALLRAIL_API_KEY = process.env.CALLRAIL_API_KEY;
@@ -89,9 +90,43 @@ async function handleFirstInvoicePayment(payment, invoice) {
       return;
     }
 
-    // Extract primary phone (or first available)
+    // Collect all unique phone numbers from Jobber client + PostHog person
+    let phoneSet = new Set();
+
+    // Add Jobber client phones
     let phones = payment.client.phones;
-    if (!phones || phones.length === 0) {
+    if (phones && phones.length > 0) {
+      for (let phoneEntry of phones) {
+        let e164 = toE164(phoneEntry.number);
+        if (e164) phoneSet.add(e164);
+      }
+    }
+
+    // Also check PostHog for additional phone numbers (e.g. the calling number
+    // from Twilio that may differ from the Jobber callback number).
+    // Uses the Jobber client ID as the distinct_id for a direct lookup.
+    try {
+      let posthogResult = await PostHog.individualSearch(
+        payment.client.id,
+        "distinct_id",
+      );
+      if (posthogResult?.results?.length > 0) {
+        let props = posthogResult.results[0].properties || {};
+        if (props.phone) {
+          let e164 = toE164(props.phone);
+          if (e164) phoneSet.add(e164);
+        }
+        if (props.alternatePhone) {
+          let e164 = toE164(props.alternatePhone);
+          if (e164) phoneSet.add(e164);
+        }
+      }
+    } catch (e) {
+      // PostHog lookup is best-effort; don't block on failure
+      console.warn("CallRail: PostHog phone lookup failed:", e.message);
+    }
+
+    if (phoneSet.size === 0) {
       Sentry.captureMessage("CallRail: Client has no phone numbers", {
         level: "warning",
         extra: { clientId: payment.client.id },
@@ -102,23 +137,21 @@ async function handleFirstInvoicePayment(payment, invoice) {
       );
       return;
     }
-    let primaryPhone = phones.find((p) => p.primary);
-    let phone = primaryPhone ? primaryPhone.number : phones[0].number;
 
-    let phoneE164 = toE164(phone);
-    if (!phoneE164) {
-      Sentry.captureMessage("CallRail: Could not convert phone to E.164", {
-        level: "warning",
-        extra: { phone, clientId: payment.client.id },
-      });
-      console.warn("CallRail: Could not convert phone to E.164", phone);
-      return;
+    // Search CallRail with each phone number until we find a match
+    let call = null;
+    for (let phoneE164 of phoneSet) {
+      call = await searchCallByPhone(phoneE164);
+      if (call) {
+        console.log(`CallRail: Found call ${call.id} via ${phoneE164}`);
+        break;
+      }
     }
 
-    // Search for matching call in CallRail
-    let call = await searchCallByPhone(phoneE164);
     if (!call) {
-      console.log("CallRail: No matching call found for", phoneE164);
+      console.log("CallRail: No matching call found for any phone", [
+        ...phoneSet,
+      ]);
       return;
     }
 

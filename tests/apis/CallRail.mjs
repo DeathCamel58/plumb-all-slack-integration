@@ -4,6 +4,7 @@ const eventsEmitMock = jest.fn();
 const eventsOnMock = jest.fn();
 const prismaInvoiceCountMock = jest.fn();
 const fetchMock = jest.fn();
+const individualSearchMock = jest.fn();
 
 jest.unstable_mockModule("../../util/events.js", () => ({
   default: {
@@ -22,6 +23,10 @@ jest.unstable_mockModule("../../util/prismaClient.js", () => ({
 
 jest.unstable_mockModule("node-fetch", () => ({
   default: fetchMock,
+}));
+
+jest.unstable_mockModule("../../util/apis/PostHog.js", () => ({
+  individualSearch: individualSearchMock,
 }));
 
 process.env.CALLRAIL_API_KEY = "test-api-key";
@@ -66,6 +71,8 @@ beforeEach(() => {
   eventsEmitMock.mockReset();
   prismaInvoiceCountMock.mockReset();
   fetchMock.mockReset();
+  individualSearchMock.mockReset();
+  individualSearchMock.mockResolvedValue({ results: [] });
 });
 
 describe("CallRail", () => {
@@ -126,6 +133,69 @@ describe("CallRail", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toContain("/calls.json?search=");
+  });
+
+  test("First phone no match, second phone matches → PUT called", async () => {
+    prismaInvoiceCountMock.mockResolvedValue(1);
+    fetchMock
+      // First phone: no match
+      .mockResolvedValueOnce(mockFetchResponse({ calls: [] }))
+      // Second phone: match
+      .mockResolvedValueOnce(mockFetchResponse({ calls: [{ id: "call-99" }] }))
+      // PUT update
+      .mockResolvedValueOnce(mockFetchResponse({ id: "call-99", lead_status: "good_lead" }));
+
+    await handler(
+      makePayment({
+        phones: [
+          { number: "(555) 000-0000", primary: true },
+          { number: "(555) 123-4567", primary: false },
+        ],
+      }),
+      makeInvoice(),
+    );
+
+    // Two searches + one PUT
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[0][0]).toContain("/calls.json?search=");
+    expect(fetchMock.mock.calls[1][0]).toContain("/calls.json?search=");
+    expect(fetchMock.mock.calls[2][0]).toContain("/calls/call-99.json");
+  });
+
+  test("Jobber phones miss, PostHog alternatePhone matches → PUT called", async () => {
+    prismaInvoiceCountMock.mockResolvedValue(1);
+
+    // PostHog returns a person with an alternatePhone not in Jobber
+    individualSearchMock.mockResolvedValue({
+      results: [
+        {
+          properties: {
+            phone: "(555) 123-4567",
+            alternatePhone: "(770) 999-8888",
+          },
+        },
+      ],
+    });
+
+    fetchMock
+      // Jobber phone: no match
+      .mockResolvedValueOnce(mockFetchResponse({ calls: [] }))
+      // PostHog phone (same as Jobber, deduped): skipped
+      // PostHog alternatePhone: match
+      .mockResolvedValueOnce(mockFetchResponse({ calls: [{ id: "call-ph" }] }))
+      // PUT update
+      .mockResolvedValueOnce(mockFetchResponse({ id: "call-ph", lead_status: "good_lead" }));
+
+    await handler(makePayment(), makeInvoice());
+
+    // Two searches (Jobber phone + PostHog alternatePhone) + one PUT
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[0][0]).toContain("%2B15551234567");
+    expect(fetchMock.mock.calls[1][0]).toContain("%2B17709998888");
+    expect(fetchMock.mock.calls[2][0]).toContain("/calls/call-ph.json");
+
+    // Verify PostHog was searched by distinct_id (Jobber client ID)
+    expect(individualSearchMock).toHaveBeenCalledWith("client-1", "distinct_id");
   });
 
   test("CallRail API error → Sentry captures, no throw", async () => {
