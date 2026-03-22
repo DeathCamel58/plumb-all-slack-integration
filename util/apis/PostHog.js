@@ -465,10 +465,11 @@ export async function sendClientToPostHog(contact) {
         return id;
       }
     } else {
-      console.error(
-        "PostHog: ERROR: Issue parsing the person. Details follow.",
+      // Person matched by search but not yet indexed by distinct_id lookup —
+      // this can happen with newly created persons. Proceed with $identify.
+      console.info(
+        `PostHog: Person ${id} not yet available via distinct_id lookup, will identify anyway.`,
       );
-      console.info(`\tfullPostHogPerson:\t${fullPostHogPerson}`);
     }
   }
 
