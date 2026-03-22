@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import Contact from "../contact.js";
-import { toE164 } from "../DataUtilities.js";
+import { toE164, normalizePhoneNumber } from "../DataUtilities.js";
 import * as GoogleMaps from "./GoogleMaps.js";
 import events from "../events.js";
 
@@ -338,30 +338,14 @@ function mergePhoneArrays(existingPhones, newPhones) {
   let seen = new Set();
   let merged = [];
 
-  for (let phone of existingPhones) {
-    let digits = phone.replace(/\D/g, "");
-    if (digits.length >= 7) {
-      // Normalize to last 10 digits for comparison
-      if (digits.length === 11 && digits.startsWith("1")) {
-        digits = digits.slice(1);
-      }
-      if (!seen.has(digits)) {
-        seen.add(digits);
-        merged.push(phone);
-      }
-    }
-  }
+  for (let phone of [...existingPhones, ...newPhones]) {
+    let normalized = normalizePhoneNumber(phone);
+    if (!normalized) continue;
 
-  for (let phone of newPhones) {
-    let digits = phone.replace(/\D/g, "");
-    if (digits.length >= 7) {
-      if (digits.length === 11 && digits.startsWith("1")) {
-        digits = digits.slice(1);
-      }
-      if (!seen.has(digits)) {
-        seen.add(digits);
-        merged.push(phone);
-      }
+    let digits = normalized.replace(/\D/g, "");
+    if (!seen.has(digits)) {
+      seen.add(digits);
+      merged.push(normalized);
     }
   }
 
@@ -470,8 +454,6 @@ export async function sendClientToPostHog(contact) {
       if (
         contact.name !== fullPostHogPerson.properties.name ||
         contact.phone !== fullPostHogPerson.properties.phone ||
-        contact.alternatePhone !==
-          fullPostHogPerson.properties.alternatePhone ||
         contact.email !== fullPostHogPerson.properties.email ||
         contact.address !== fullPostHogPerson.properties.address
       ) {
@@ -493,8 +475,6 @@ export async function sendClientToPostHog(contact) {
   // (e.g. when a Twilio call logs only a phone number).
   if (contact.name) clientData.name = contact.name;
   if (contact.phone) clientData.phone = contact.phone;
-  if (contact.alternatePhone)
-    clientData.alternatePhone = contact.alternatePhone;
   if (contact.email) clientData.email = contact.email;
   if (contact.address) clientData.address = contact.address;
   if (contact.type) clientData.latestContactSource = contact.type;
