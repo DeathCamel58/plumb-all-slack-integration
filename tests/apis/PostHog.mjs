@@ -221,7 +221,8 @@ describe("PostHog", () => {
       );
 
       const clientID = await PostHog.sendClientToPostHog(contact);
-      expect(clientID.length).toBe(32);
+      // Uses E.164 phone as distinct_id when available
+      expect(clientID).toBe("+12345678901");
       expect(searchPlaceMock).toHaveBeenCalled();
       expect(getCaptureEvents()).toContain("$identify");
     });

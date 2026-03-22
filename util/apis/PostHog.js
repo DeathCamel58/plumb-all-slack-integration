@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import Contact from "../contact.js";
+import { toE164 } from "../DataUtilities.js";
 import * as GoogleMaps from "./GoogleMaps.js";
 import events from "../events.js";
 
@@ -430,13 +431,22 @@ export async function sendClientToPostHog(contact) {
   let clientData = await resolveGeoData(contact.address);
 
   // Search for the person in PostHog
-  let id = crypto.randomBytes(16).toString("hex");
+  let id;
+  // Use E.164 phone as a stable distinct_id when available, to prevent
+  // duplicates from race conditions (e.g. SASO call + outbound call within seconds).
+  // This will be merged into the Jobber client ID later by logClient's merge step.
+  let phoneE164 = contact.phone ? toE164(contact.phone) : null;
+  if (!phoneE164 && contact.alternatePhone) {
+    phoneE164 = toE164(contact.alternatePhone);
+  }
+  id = phoneE164 || crypto.randomBytes(16).toString("hex");
+
   let posthogPerson = await searchForUser(contact);
   let existingPhones = [];
 
   // If this is a new person, add them to PostHog
   if (posthogPerson === undefined) {
-    console.info(`PostHog: Adding ${contact.name} to PostHog`);
+    console.info(`PostHog: Adding ${contact.name || id} to PostHog`);
   } else {
     id = posthogPerson;
     console.info(`PostHog: Matched ${contact.name} to PostHog ID ${id}`);
