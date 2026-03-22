@@ -573,7 +573,7 @@ export async function logClient(jobberClient) {
   let clientData = await resolveGeoData(address !== "" ? address : null);
 
   clientData.name = jobberClient.name;
-  clientData.phone = defaultPhone || null;
+  clientData.phone = defaultPhone ? normalizePhoneNumber(defaultPhone) : null;
   clientData.email = defaultEmail || null;
   clientData.address = address !== "" ? address : null;
   clientData.jobberWebUri = jobberClient.jobberWebUri || null;
@@ -646,7 +646,9 @@ export async function logEmployee(jobberUser) {
   // Identify the user to allow PostHog to display employee details properly
   let userData = {
     name: jobberUser.name.full,
-    phone: jobberUser.phone.friendly,
+    phone:
+      normalizePhoneNumber(jobberUser.phone.friendly) ||
+      jobberUser.phone.friendly,
     email: jobberUser.email.raw,
     uuid: jobberUser.uuid,
     id: jobberUser.id,
