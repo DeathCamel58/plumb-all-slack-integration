@@ -433,7 +433,9 @@ export async function sendClientToPostHog(contact) {
     console.info(`PostHog: Adding ${contact.name || id} to PostHog`);
   } else {
     id = posthogPerson;
-    console.info(`PostHog: Matched ${contact.name} to PostHog ID ${id}`);
+    console.info(
+      `PostHog: Matched ${contact.name || contact.phone || id} to PostHog ID ${id}`,
+    );
 
     // Get the matched person in PostHog
     let fullPostHogPerson = await individualSearch(`${id}`, "distinct_id");
