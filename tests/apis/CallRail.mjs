@@ -95,7 +95,7 @@ describe("CallRail", () => {
     let putBody = JSON.parse(fetchMock.mock.calls[1][1].body);
     expect(putBody.customer_name).toBe("Test Client");
     expect(putBody.lead_status).toBe("good_lead");
-    expect(putBody.value).toBe(250.0);
+    expect(putBody.value).toBe("250");
     expect(putBody.note).toBe(
       "Client: https://app.getjobber.com/clients/client-1\nInvoice: https://app.getjobber.com/invoices/inv-1",
     );

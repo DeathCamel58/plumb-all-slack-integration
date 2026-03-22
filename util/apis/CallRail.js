@@ -43,31 +43,50 @@ async function searchCallByPhone(phoneE164) {
  * @param {string} params.note A note to attach
  * @returns {Promise<object>} The updated call
  */
-async function updateCall(callId, { value, note, customer_name }) {
-  let response = await fetch(`${BASE_URL}/calls/${callId}.json`, {
-    method: "PUT",
-    headers: {
-      Authorization: `Token token="${CALLRAIL_API_KEY}"`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      customer_name: customer_name,
-      lead_status: "good_lead",
-      value: value,
-      note: note,
-      tags: ["invoice-paid"],
-      append_tags: true,
-    }),
-  });
+async function updateCall(callId, { value, note, customer_name, lead_status }) {
+  const maxRetries = 3;
 
-  if (!response.ok) {
+  let payload = {
+    customer_name: customer_name,
+    value: String(value),
+    note: note,
+    tags: ["invoice-paid"],
+    append_tags: true,
+  };
+  if (lead_status) {
+    payload.lead_status = lead_status;
+  }
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    let response = await fetch(`${BASE_URL}/calls/${callId}.json`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Token token="${CALLRAIL_API_KEY}"`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (response.ok) {
+      return await response.json();
+    }
+
     let body = await response.text().catch(() => "");
+
+    // Retry on 5xx errors
+    if (response.status >= 500 && attempt < maxRetries) {
+      let delay = 1000 * Math.pow(2, attempt - 1);
+      console.warn(
+        `CallRail: Update failed with ${response.status} (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms: ${body}`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      continue;
+    }
+
     throw new Error(
       `CallRail update failed: ${response.status} ${response.statusText}: ${body}`,
     );
   }
-
-  return await response.json();
 }
 
 /**
@@ -173,10 +192,14 @@ async function handleFirstInvoicePayment(payment, invoice) {
     console.log(`CallRail: Selected most recent unqualified call ${call.id}`);
 
     // Update the call with conversion data
+    // Skip setting lead_status if already previously marked (API returns 400)
+    let leadStatus =
+      call.lead_status === "previously_marked_good_lead" ? null : "good_lead";
     await updateCall(call.id, {
       value: invoice.amounts.total,
       note: `Client: ${payment.client.jobberWebUri}\nInvoice: ${invoice.jobberWebUri}`,
       customer_name: payment.client.name,
+      lead_status: leadStatus,
     });
 
     console.log(
