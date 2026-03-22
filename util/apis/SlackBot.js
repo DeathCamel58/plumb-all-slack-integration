@@ -915,39 +915,48 @@ async function unfurlMessage(event) {
   ];
 
   // Check for references in multiple formats and add them to `needToUnfurl`
-  // Remove all user references first, as user references can make the regex return a false positive
+  // Remove user references and URLs first, as they can cause false positive matches
   let tmp = event.text.replace(/<@.{11}>/gi, "");
-  // - Q[number], J[number], I[number]
-  // - Q#[number], J#[number], I#[number]
+  tmp = tmp.replace(/<[^>]+>/g, "");
+  // - Q#[number], J#[number], I#[number] (single letter requires #)
   // - Quote [number], Job [number], Invoice [number]
   // - Quote #[number], Job #[number], Invoice #[number]
-  tmp = tmp.match(/(QUOTE|JOB|INVOICE|Q|J|I)+ *#* *(\d+)/gi);
+  tmp = tmp.match(/\b(?:(QUOTE|JOB|INVOICE) *#? *(\d+)|(Q|J|I)#+ *(\d+))/gi);
   if (tmp) {
     for (let i = 0; i < tmp.length; i++) {
       let number = tmp[i].match(/\d+/g)[0];
 
       // Check what type this references, and push it into the proper array
-      switch (tmp[i][0]) {
-        case "Q":
-        case "q":
-          let quote = await Jobber.getQuoteSearchData("quoteNumber", number);
-          needToUnfurl.quotes.push(quote);
-          break;
-        case "J":
-        case "j":
-          let job = await Jobber.getJobSearchData(number);
-          needToUnfurl.jobs.push(job);
-          break;
-        case "I":
-        case "i":
-          let invoice = await Jobber.getInvoiceSearchData(number);
-          needToUnfurl.invoices.push(invoice);
-          break;
-        default:
-          console.warn(
-            `Slack: Didn't push unfurl reference into array. String didn't start with [QqJjIi]: ${tmp[i]}`,
-          );
-          break;
+      // Each lookup is wrapped in try/catch so one failure doesn't stop the rest
+      try {
+        switch (tmp[i][0]) {
+          case "Q":
+          case "q":
+            let quote = await Jobber.getQuoteSearchData("quoteNumber", number);
+            needToUnfurl.quotes.push(quote);
+            break;
+          case "J":
+          case "j":
+            let job = await Jobber.getJobSearchData(number);
+            needToUnfurl.jobs.push(job);
+            break;
+          case "I":
+          case "i":
+            let invoice = await Jobber.getInvoiceSearchData(number);
+            needToUnfurl.invoices.push(invoice);
+            break;
+          default:
+            console.warn(
+              `Slack: Didn't push unfurl reference into array. String didn't start with [QqJjIi]: ${tmp[i]}`,
+            );
+            break;
+        }
+      } catch (e) {
+        console.error(
+          `Slack: Failed to look up reference ${tmp[i]}:`,
+          e.message,
+        );
+        Sentry.captureException(e);
       }
     }
   }
