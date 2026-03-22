@@ -580,6 +580,8 @@ export async function logClient(jobberClient) {
   clientData.email = defaultEmail || null;
   clientData.address = address !== "" ? address : null;
   clientData.jobberWebUri = jobberClient.jobberWebUri || null;
+  clientData.isCompany = jobberClient.isCompany || false;
+  clientData.companyName = jobberClient.companyName || null;
 
   // Merge Jobber phone numbers with any existing phones in PostHog
   // (e.g. a Twilio caller ID that Jobber doesn't know about)
