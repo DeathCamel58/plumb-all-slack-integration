@@ -620,6 +620,16 @@ export async function logClient(jobberClient) {
       }
     }
 
+    // Also search by all client phones via HogQL (finds persons in phone, alternatePhone, and phones array)
+    for (let phoneEntry of jobberClient.phones || []) {
+      let phoneIds = await searchByPhone(phoneEntry.number);
+      for (let phoneId of phoneIds) {
+        if (phoneId !== id) {
+          duplicateIds.add(phoneId);
+        }
+      }
+    }
+
     for (let duplicateId of duplicateIds) {
       console.info(
         `PostHog: Merging duplicate person ${duplicateId} into ${id}`,

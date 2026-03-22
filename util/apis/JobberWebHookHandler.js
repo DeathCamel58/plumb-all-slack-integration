@@ -4,6 +4,7 @@ import * as PostHog from "./PostHog.js";
 import Contact from "../contact.js";
 import * as APICoordinator from "../APICoordinator.js";
 import events from "../events.js";
+import prisma from "../prismaClient.js";
 import * as Sentry from "@sentry/node";
 
 /**
@@ -128,6 +129,34 @@ async function clientHandle(req) {
       // Insert/Update client
       events.emit("db-CLIENT_CREATE_UPDATE", client);
       await PostHog.logClient(client);
+
+      // Re-attempt CallRail first-invoice conversion if applicable
+      // (handles case where phones were added after payment)
+      try {
+        let invoiceCount = await prisma.invoice.count({
+          where: { clientId: client.id },
+        });
+        if (invoiceCount >= 1) {
+          let invoice = await prisma.invoice.findFirst({
+            where: { clientId: client.id },
+            orderBy: { createdAt: "asc" },
+          });
+          if (invoice) {
+            let jobberInvoice = await Jobber.getInvoiceData(invoice.id);
+            let payment = { client, invoice: { id: invoice.id } };
+            events.emit(
+              "callrail-FIRST_INVOICE_PAYMENT",
+              payment,
+              jobberInvoice,
+            );
+          }
+        }
+      } catch (e) {
+        console.warn(
+          "Jobber: CallRail re-trigger on CLIENT_UPDATE failed:",
+          e.message,
+        );
+      }
     }
   } catch (e) {
     Sentry.captureException(e);

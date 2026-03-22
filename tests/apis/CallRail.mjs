@@ -64,6 +64,7 @@ function mockFetchResponse(data, ok = true, status = 200) {
     status,
     statusText: ok ? "OK" : "Error",
     json: async () => data,
+    text: async () => JSON.stringify(data),
   };
 }
 
@@ -207,5 +208,60 @@ describe("CallRail", () => {
 
     // Only one fetch call (the search that failed)
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("Call already has value → skip update", async () => {
+    prismaInvoiceCountMock.mockResolvedValue(1);
+    fetchMock.mockResolvedValueOnce(
+      mockFetchResponse({ calls: [{ id: "call-50", value: "150.00" }] }),
+    );
+
+    await handler(makePayment(), makeInvoice());
+
+    // Only the search call, no PUT
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("Search returns multiple calls, first qualified, second not → updates second", async () => {
+    prismaInvoiceCountMock.mockResolvedValue(1);
+    fetchMock
+      .mockResolvedValueOnce(
+        mockFetchResponse({
+          calls: [
+            { id: "call-A", value: "100.00", start_time: "2026-03-01T10:00:00Z" },
+            { id: "call-B", value: null, start_time: "2026-03-10T10:00:00Z" },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        mockFetchResponse({ id: "call-B", lead_status: "good_lead" }),
+      );
+
+    await handler(makePayment(), makeInvoice());
+
+    // One search + one PUT
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][0]).toContain("/calls/call-B.json");
+  });
+
+  test("Multiple unqualified calls → picks most recent by start_time", async () => {
+    prismaInvoiceCountMock.mockResolvedValue(1);
+    fetchMock
+      .mockResolvedValueOnce(
+        mockFetchResponse({
+          calls: [
+            { id: "call-old", value: null, start_time: "2025-06-01T10:00:00Z" },
+            { id: "call-new", value: null, start_time: "2026-03-20T10:00:00Z" },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        mockFetchResponse({ id: "call-new", lead_status: "good_lead" }),
+      );
+
+    await handler(makePayment(), makeInvoice());
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][0]).toContain("/calls/call-new.json");
   });
 });

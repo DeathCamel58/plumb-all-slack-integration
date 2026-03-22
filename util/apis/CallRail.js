@@ -10,9 +10,9 @@ const CALLRAIL_ACCOUNT_ID = process.env.CALLRAIL_ACCOUNT_ID;
 const BASE_URL = `https://api.callrail.com/v3/a/${CALLRAIL_ACCOUNT_ID}`;
 
 /**
- * Search CallRail for a call matching the given phone number
+ * Search CallRail for calls matching the given phone number
  * @param {string} phoneE164 Phone number in E.164 format
- * @returns {Promise<object|null>} The first matching call or null
+ * @returns {Promise<object[]>} All matching calls (empty array if none)
  */
 async function searchCallByPhone(phoneE164) {
   let response = await fetch(
@@ -25,16 +25,14 @@ async function searchCallByPhone(phoneE164) {
   );
 
   if (!response.ok) {
+    let body = await response.text().catch(() => "");
     throw new Error(
-      `CallRail search failed: ${response.status} ${response.statusText}`,
+      `CallRail search failed: ${response.status} ${response.statusText}: ${body}`,
     );
   }
 
   let data = await response.json();
-  if (data.calls && data.calls.length > 0) {
-    return data.calls[0];
-  }
-  return null;
+  return data.calls || [];
 }
 
 /**
@@ -63,8 +61,9 @@ async function updateCall(callId, { value, note, customer_name }) {
   });
 
   if (!response.ok) {
+    let body = await response.text().catch(() => "");
     throw new Error(
-      `CallRail update failed: ${response.status} ${response.statusText}`,
+      `CallRail update failed: ${response.status} ${response.statusText}: ${body}`,
     );
   }
 
@@ -144,22 +143,34 @@ async function handleFirstInvoicePayment(payment, invoice) {
       return;
     }
 
-    // Search CallRail with each phone number until we find a match
-    let call = null;
+    // Search CallRail with each phone number, collecting all unqualified calls
+    let unqualifiedCalls = [];
     for (let phoneE164 of phoneSet) {
-      call = await searchCallByPhone(phoneE164);
-      if (call) {
-        console.log(`CallRail: Found call ${call.id} via ${phoneE164}`);
-        break;
+      let calls = await searchCallByPhone(phoneE164);
+      for (let candidate of calls) {
+        if (candidate.value && parseFloat(candidate.value) > 0) {
+          console.log(
+            `CallRail: Call ${candidate.id} already qualified (value: ${candidate.value}), skipping`,
+          );
+          continue;
+        }
+        unqualifiedCalls.push(candidate);
       }
     }
 
-    if (!call) {
-      console.log("CallRail: No matching call found for any phone", [
-        ...phoneSet,
-      ]);
+    if (unqualifiedCalls.length === 0) {
+      console.log(
+        "CallRail: No matching unqualified call found for any phone",
+        [...phoneSet],
+      );
       return;
     }
+
+    // Pick the most recent unqualified call
+    let call = unqualifiedCalls.sort(
+      (a, b) => new Date(b.start_time) - new Date(a.start_time),
+    )[0];
+    console.log(`CallRail: Selected most recent unqualified call ${call.id}`);
 
     // Update the call with conversion data
     await updateCall(call.id, {
