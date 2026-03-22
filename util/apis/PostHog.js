@@ -2,6 +2,7 @@ import crypto from "crypto";
 import Contact from "../contact.js";
 import { toE164, normalizePhoneNumber } from "../DataUtilities.js";
 import * as GoogleMaps from "./GoogleMaps.js";
+import * as CallRail from "./CallRail.js";
 import events from "../events.js";
 
 import fetch from "node-fetch";
@@ -481,6 +482,13 @@ export async function sendClientToPostHog(contact) {
   if (contact.email) clientData.email = contact.email;
   if (contact.address) clientData.address = contact.address;
   if (contact.type) clientData.latestContactSource = contact.type;
+
+  // Look up CallRail source using the actual calling number
+  let callrailPhone = contact.alternatePhone || contact.phone;
+  if (callrailPhone) {
+    let source = await CallRail.getCallSource(callrailPhone);
+    if (source) clientData.callrailSource = source;
+  }
 
   // Merge any new phone numbers into the existing phones array
   let newPhones = [];

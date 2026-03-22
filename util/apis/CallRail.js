@@ -16,7 +16,7 @@ const BASE_URL = `https://api.callrail.com/v3/a/${CALLRAIL_ACCOUNT_ID}`;
  */
 async function searchCallByPhone(phoneE164) {
   let response = await fetch(
-    `${BASE_URL}/calls.json?search=${encodeURIComponent(phoneE164)}`,
+    `${BASE_URL}/calls.json?search=${encodeURIComponent(phoneE164)}&fields=source`,
     {
       headers: {
         Authorization: `Token token="${CALLRAIL_API_KEY}"`,
@@ -213,3 +213,27 @@ async function handleFirstInvoicePayment(payment, invoice) {
 }
 
 events.on("callrail-FIRST_INVOICE_PAYMENT", handleFirstInvoicePayment);
+
+/**
+ * Get the marketing source of the most recent CallRail call for a phone number
+ * @param {string} phone Raw phone number (will be converted to E.164)
+ * @returns {Promise<string|null>} The call's source (e.g. "Google Ads") or null
+ */
+export async function getCallSource(phone) {
+  let e164 = toE164(phone);
+  if (!e164) return null;
+
+  try {
+    let calls = await searchCallByPhone(e164);
+    if (calls.length === 0) return null;
+
+    // Pick the most recent call
+    let call = calls.sort(
+      (a, b) => new Date(b.start_time) - new Date(a.start_time),
+    )[0];
+    return call.source || null;
+  } catch (e) {
+    console.warn("CallRail: Source lookup failed:", e.message);
+    return null;
+  }
+}

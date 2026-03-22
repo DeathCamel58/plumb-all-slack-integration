@@ -11,6 +11,11 @@ jest.unstable_mockModule("../../util/apis/GoogleMaps.js", () => ({
   searchPlace: searchPlaceMock,
 }));
 
+const getCallSourceMock = jest.fn();
+jest.unstable_mockModule("../../util/apis/CallRail.js", () => ({
+  getCallSource: getCallSourceMock,
+}));
+
 const PostHog = await import("../../util/apis/PostHog.js");
 const { default: Contact } = await import("../../util/contact.js");
 
@@ -110,6 +115,8 @@ beforeEach(() => {
 
   fetchMock.mockReset();
   searchPlaceMock.mockReset();
+  getCallSourceMock.mockReset();
+  getCallSourceMock.mockResolvedValue(null);
 
   searchPlaceMock.mockResolvedValue([
     {
