@@ -191,18 +191,8 @@ async function invoiceCreateUpdate(data) {
   for (const job of data.jobs.nodes) {
     await ensureJobExists(job.id);
 
-    // Check if this job-invoice relation already exists
-    const existing = await prisma.jobsOnInvoices.findUnique({
-      where: {
-        invoiceId_jobId: {
-          invoiceId: data.id,
-          jobId: job.id,
-        },
-      },
-    });
-
-    // Create it if it doesn't exist
-    if (!existing) {
+    // Link job to invoice, ignoring if already linked (race-safe)
+    try {
       await prisma.jobsOnInvoices.create({
         data: {
           invoice: {
@@ -214,8 +204,12 @@ async function invoiceCreateUpdate(data) {
         },
       });
       console.log(`Linked job ${job.id} to invoice ${data.id}`);
-    } else {
-      console.log(`Job ${job.id} already linked to invoice ${data.id}`);
+    } catch (e) {
+      if (e.code === "P2002") {
+        console.log(`Job ${job.id} already linked to invoice ${data.id}`);
+      } else {
+        throw e;
+      }
     }
   }
 
@@ -403,18 +397,8 @@ async function quoteCreateUpdate(data) {
   for (const job of data.jobs.nodes) {
     await ensureJobExists(job.id);
 
-    // Check if this job-invoice relation already exists
-    const existing = await prisma.quotesOnJobs.findUnique({
-      where: {
-        jobId_quoteId: {
-          quoteId: data.id,
-          jobId: job.id,
-        },
-      },
-    });
-
-    // Create it if it doesn't exist
-    if (!existing) {
+    // Link job to quote, ignoring if already linked (race-safe)
+    try {
       await prisma.quotesOnJobs.create({
         data: {
           quote: {
@@ -426,8 +410,12 @@ async function quoteCreateUpdate(data) {
         },
       });
       console.log(`Linked job ${job.id} to quote ${data.id}`);
-    } else {
-      console.log(`Job ${job.id} already linked to quote ${data.id}`);
+    } catch (e) {
+      if (e.code === "P2002") {
+        console.log(`Job ${job.id} already linked to quote ${data.id}`);
+      } else {
+        throw e;
+      }
     }
   }
 
