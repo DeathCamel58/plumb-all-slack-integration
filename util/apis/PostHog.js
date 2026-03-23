@@ -641,10 +641,12 @@ export async function logClient(jobberClient) {
       let results = await searchByKey(key, value);
       if (results !== null) {
         for (let result of results.results) {
+          // If this person already has our Jobber ID, they're already merged — skip
+          if (result["distinct_ids"].includes(id)) {
+            continue;
+          }
           for (let distinctId of result["distinct_ids"]) {
-            if (distinctId !== id) {
-              duplicateIds.add(distinctId);
-            }
+            duplicateIds.add(distinctId);
           }
         }
       }
@@ -660,7 +662,21 @@ export async function logClient(jobberClient) {
       }
     }
 
+    // Look up distinct_ids already on this person so we don't re-merge them
+    let ownIds = new Set([id]);
+    try {
+      let ownPerson = await individualSearch(id, "distinct_id");
+      if (ownPerson?.results?.length > 0) {
+        for (let ownDistinctId of ownPerson.results[0]["distinct_ids"] || []) {
+          ownIds.add(ownDistinctId);
+        }
+      }
+    } catch (_e) {
+      // Non-critical — worst case we re-merge already-merged ids
+    }
+
     for (let duplicateId of duplicateIds) {
+      if (ownIds.has(duplicateId)) continue;
       console.info(
         `PostHog: Merging duplicate person ${duplicateId} into ${id}`,
       );
