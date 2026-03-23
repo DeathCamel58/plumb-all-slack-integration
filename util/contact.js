@@ -153,7 +153,7 @@ export default class Contact {
         );
       }
     } else {
-      if (this.contactPhone !== undefined && this.contactPhone !== "") {
+      if (this.contactPhone) {
         if (!markdown) {
           contactInfoParts.push(`( ${this.contactPhone} )`);
         } else {
@@ -165,7 +165,7 @@ export default class Contact {
     }
 
     // If there is an email, use it.
-    if (this.contactEmail !== undefined && this.contactEmail !== "") {
+    if (this.contactEmail) {
       contactInfoParts.push(`( ${this.contactEmail} )`);
     }
 
@@ -177,7 +177,7 @@ export default class Contact {
       parenthesisContactInfo += contactInfoParts[i];
     }
 
-    message += `Caller: ${this.contactName} ${parenthesisContactInfo}\n`;
+    message += `Caller: ${this.contactName || "Unknown"} ${parenthesisContactInfo}\n`;
 
     // If there's an address, use it.
     let tmp = this.contactAddress;
@@ -192,7 +192,7 @@ export default class Contact {
       tmp = tmp.replace(/Na/g, "");
       tmp = tmp.replace(/nA/g, "");
     }
-    if (typeof tmp !== "undefined" && tmp !== "" && tmp !== "Ga") {
+    if (tmp && tmp !== "" && tmp !== "Ga") {
       isAddress = true;
     }
 
