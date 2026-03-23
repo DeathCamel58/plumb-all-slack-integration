@@ -136,11 +136,15 @@ async function clientDestroy(id) {
     where: { client: id },
   });
 
-  // Now safely delete the client
-  await prisma.client.delete({
+  // Now safely delete the client (may not exist if never synced)
+  let deleted = await prisma.client.deleteMany({
     where: { id },
   });
-  console.log("Postgres: Destroyed client");
+  if (deleted.count > 0) {
+    console.log("Postgres: Destroyed client");
+  } else {
+    console.log("Postgres: Client not found in DB, nothing to delete");
+  }
 }
 events.on("db-CLIENT_DESTROY", clientDestroy);
 
