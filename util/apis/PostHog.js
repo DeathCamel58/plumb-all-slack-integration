@@ -142,7 +142,15 @@ export async function searchByPhone(phone) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     let response;
     try {
-      // Escape single quotes in the phone number for HogQL
+      // Extract digits for format-agnostic matching
+      // e.g. "(678) 914-1874" -> "6789141874", "+16789141874" -> "16789141874"
+      let digits = phone.replace(/\D/g, "");
+      // Strip leading 1 for US numbers to get the 10-digit core
+      let digits10 =
+        digits.length === 11 && digits.startsWith("1")
+          ? digits.slice(1)
+          : digits;
+      // Escape single quotes in the original phone for HogQL
       let safePhone = phone.replace(/'/g, "\\'");
       response = await fetch(
         `${process.env.POSTHOG_HOST}/api/projects/${process.env.POSTHOG_PROJECT_ID}/query/`,
@@ -155,7 +163,7 @@ export async function searchByPhone(phone) {
           body: JSON.stringify({
             query: {
               kind: "HogQLQuery",
-              query: `SELECT distinct_id FROM person_distinct_ids WHERE person.properties.phone = '${safePhone}' OR person.properties.alternatePhone = '${safePhone}' OR toString(person.properties.phones) LIKE '%${safePhone}%' LIMIT 20`,
+              query: `SELECT distinct_id FROM person_distinct_ids WHERE replaceRegexpAll(person.properties.phone, '[^0-9]', '') LIKE '%${digits10}' OR replaceRegexpAll(person.properties.alternatePhone, '[^0-9]', '') LIKE '%${digits10}' OR replaceRegexpAll(toString(person.properties.phones), '[^0-9,]', '') LIKE '%${digits10}%' LIMIT 20`,
             },
           }),
         },
