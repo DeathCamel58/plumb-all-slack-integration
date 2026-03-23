@@ -608,71 +608,64 @@ async function startOutboundCallFlow({
   }
 
   try {
-    let slackThreadId;
-    const existingContact = await prisma.twilioContact.findUnique({
-      where: { id: customerPhoneNumber },
-    });
-
-    if (existingContact) {
-      slackThreadId = existingContact.slackThreadId || null;
-    } else {
-      const outboundCallText = `Outbound call requested by <@${userId}> to ${customerPhoneNumber}`;
-      const outboundBlocks = [
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: outboundCallText,
+    // Always create a new thread for each outbound call so recordings
+    // don't end up in an old thread from a previous contact
+    const outboundCallText = `Outbound call requested by <@${userId}> to ${customerPhoneNumber}`;
+    const outboundBlocks = [
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: outboundCallText,
+        },
+      },
+      {
+        type: "divider",
+      },
+      {
+        type: "actions",
+        elements: [
+          {
+            type: "button",
+            text: {
+              type: "plain_text",
+              text: "Call",
+            },
+            style: "primary",
+            value: customerPhoneNumber,
+            action_id: "outbound-call-0",
           },
-        },
-        {
-          type: "divider",
-        },
-        {
-          type: "actions",
-          elements: [
-            {
-              type: "button",
-              text: {
-                type: "plain_text",
-                text: "Call",
-              },
-              style: "primary",
-              value: customerPhoneNumber,
-              action_id: "outbound-call-0",
+          {
+            type: "button",
+            text: {
+              type: "plain_text",
+              text: "Text",
             },
-            {
-              type: "button",
-              text: {
-                type: "plain_text",
-                text: "Text",
-              },
-              value: customerPhoneNumber,
-              action_id: "outbound-text-0",
-            },
-          ],
-        },
-      ];
+            value: customerPhoneNumber,
+            action_id: "outbound-text-0",
+          },
+        ],
+      },
+    ];
 
-      const slackMessage = await sendMessageBlocks(
-        outboundCallText,
-        outboundBlocks,
-        "New Call Bot",
-        null,
-        process.env.SLACK_CHANNEL || slackCallChannelName,
-      );
+    const slackMessage = await sendMessageBlocks(
+      outboundCallText,
+      outboundBlocks,
+      "New Call Bot",
+      null,
+      process.env.SLACK_CHANNEL || slackCallChannelName,
+    );
 
-      slackThreadId = slackMessage?.ts || null;
+    let slackThreadId = slackMessage?.ts || null;
 
-      const assignedTwilioNumber =
-        await getOrAssignEmployeeNumber(employeePhoneNumber);
+    const assignedTwilioNumber =
+      await getOrAssignEmployeeNumber(employeePhoneNumber);
 
-      await updateTwilioContact(
-        customerPhoneNumber,
-        assignedTwilioNumber.phoneNumber,
-        slackThreadId,
-      );
-    }
+    await updateTwilioContact(
+      customerPhoneNumber,
+      assignedTwilioNumber.phoneNumber,
+      slackThreadId,
+    );
 
     const sid = await callEmployeeThenCustomer(
       employeePhoneNumber,
