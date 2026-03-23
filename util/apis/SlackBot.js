@@ -1643,7 +1643,7 @@ async function interactivity(req) {
                     },
                     label: {
                       type: "plain_text",
-                      text: "Attachment (optional)",
+                      text: "Attachment",
                       emoji: true,
                     },
                     optional: true,
@@ -1781,7 +1781,7 @@ async function interactivity(req) {
                     },
                     label: {
                       type: "plain_text",
-                      text: "Attachment (optional)",
+                      text: "Attachment",
                       emoji: true,
                     },
                     optional: true,
