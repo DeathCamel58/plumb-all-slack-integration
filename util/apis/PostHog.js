@@ -436,6 +436,7 @@ export async function sendClientToPostHog(contact) {
 
   let posthogPerson = await searchForUser(contact);
   let existingPhones = [];
+  let isJobberPerson = false;
 
   // If this is a new person, add them to PostHog
   if (posthogPerson === undefined) {
@@ -458,6 +459,12 @@ export async function sendClientToPostHog(contact) {
       // Capture existing phones for merging
       if (Array.isArray(fullPostHogPerson.properties?.phones)) {
         existingPhones = fullPostHogPerson.properties.phones;
+      }
+
+      // If this person already has Jobber data, don't overwrite core fields
+      // (name, phone, email, address) — Jobber is the source of truth
+      if (fullPostHogPerson.properties?.jobberWebUri) {
+        isJobberPerson = true;
       }
 
       // If the person is the same as what we would set, don't send to PostHog. This cuts down on unnecessary events.
@@ -485,10 +492,15 @@ export async function sendClientToPostHog(contact) {
   // Identify the user to allow PostHog to display client details properly.
   // Only include non-null fields to avoid overwriting existing data with nulls
   // (e.g. when a Twilio call logs only a phone number).
-  if (contact.name) clientData.name = contact.name;
-  if (contact.phone) clientData.phone = contact.phone;
-  if (contact.email) clientData.email = contact.email;
-  if (contact.address) clientData.address = contact.address;
+  // If the person already has Jobber data, don't overwrite core fields —
+  // Jobber is the source of truth for name, phone, email, address.
+  if (!isJobberPerson) {
+    if (contact.name) clientData.name = contact.name;
+    if (contact.phone) clientData.phone = contact.phone;
+    if (contact.email) clientData.email = contact.email;
+    if (contact.address) clientData.address = contact.address;
+  }
+  // Always update contact source and CallRail source regardless
   if (contact.type) clientData.latestContactSource = contact.type;
 
   // Look up CallRail source using the actual calling number
