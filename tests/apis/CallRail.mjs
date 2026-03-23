@@ -126,14 +126,17 @@ describe("CallRail", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  test("No CallRail call match → search called, no PUT", async () => {
+  test("No CallRail call or SMS match → searches both, no PUT", async () => {
     prismaInvoiceCountMock.mockResolvedValue(1);
-    fetchMock.mockResolvedValueOnce(mockFetchResponse({ calls: [] }));
+    fetchMock
+      .mockResolvedValueOnce(mockFetchResponse({ calls: [] }))
+      .mockResolvedValueOnce(mockFetchResponse({ conversations: [] }));
 
     await handler(makePayment(), makeInvoice());
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0][0]).toContain("/calls.json?search=");
+    expect(fetchMock.mock.calls[1][0]).toContain("/text-messages.json?search=");
   });
 
   test("First phone no match, second phone matches → PUT called", async () => {
@@ -210,16 +213,19 @@ describe("CallRail", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  test("Call already has value → skip update", async () => {
+  test("Call already has value → skip call, falls back to SMS search", async () => {
     prismaInvoiceCountMock.mockResolvedValue(1);
-    fetchMock.mockResolvedValueOnce(
-      mockFetchResponse({ calls: [{ id: "call-50", value: "150.00" }] }),
-    );
+    fetchMock
+      .mockResolvedValueOnce(
+        mockFetchResponse({ calls: [{ id: "call-50", value: "150.00" }] }),
+      )
+      .mockResolvedValueOnce(mockFetchResponse({ conversations: [] }));
 
     await handler(makePayment(), makeInvoice());
 
-    // Only the search call, no PUT
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // Call search + SMS search, no PUT
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][0]).toContain("/text-messages.json");
   });
 
   test("Search returns multiple calls, first qualified, second not → updates second", async () => {
@@ -263,5 +269,96 @@ describe("CallRail", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[1][0]).toContain("/calls/call-new.json");
+  });
+
+  test("No calls found → falls back to SMS thread, qualifies it", async () => {
+    prismaInvoiceCountMock.mockResolvedValue(1);
+    fetchMock
+      // Call search: no results
+      .mockResolvedValueOnce(mockFetchResponse({ calls: [] }))
+      // SMS search: one unqualified thread
+      .mockResolvedValueOnce(
+        mockFetchResponse({
+          conversations: [
+            { id: "sms-1", value: null, last_message_at: "2026-03-20T10:00:00Z" },
+          ],
+        }),
+      )
+      // SMS thread update
+      .mockResolvedValueOnce(
+        mockFetchResponse({ id: "sms-1", lead_qualification: "good_lead" }),
+      );
+
+    await handler(makePayment(), makeInvoice());
+
+    // Call search + SMS search + SMS PUT
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[0][0]).toContain("/calls.json?search=");
+    expect(fetchMock.mock.calls[1][0]).toContain("/text-messages.json?search=");
+    expect(fetchMock.mock.calls[2][0]).toContain("/sms-threads/sms-1.json");
+
+    let putBody = JSON.parse(fetchMock.mock.calls[2][1].body);
+    expect(putBody.lead_qualification).toBe("good_lead");
+    expect(putBody.value).toBe("250");
+    expect(putBody.tags).toEqual(["invoice-paid"]);
+    expect(putBody.append_tags).toBe(true);
+  });
+
+  test("No calls, SMS already qualified → no update", async () => {
+    prismaInvoiceCountMock.mockResolvedValue(1);
+    fetchMock
+      .mockResolvedValueOnce(mockFetchResponse({ calls: [] }))
+      .mockResolvedValueOnce(
+        mockFetchResponse({
+          conversations: [
+            { id: "sms-2", value: "100.00", last_message_at: "2026-03-20T10:00:00Z" },
+          ],
+        }),
+      );
+
+    await handler(makePayment(), makeInvoice());
+
+    // Call search + SMS search, no PUT
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("No calls, multiple SMS → picks most recent by last_message_at", async () => {
+    prismaInvoiceCountMock.mockResolvedValue(1);
+    fetchMock
+      .mockResolvedValueOnce(mockFetchResponse({ calls: [] }))
+      .mockResolvedValueOnce(
+        mockFetchResponse({
+          conversations: [
+            { id: "sms-old", value: null, last_message_at: "2025-06-01T10:00:00Z" },
+            { id: "sms-new", value: null, last_message_at: "2026-03-22T10:00:00Z" },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        mockFetchResponse({ id: "sms-new", lead_qualification: "good_lead" }),
+      );
+
+    await handler(makePayment(), makeInvoice());
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[2][0]).toContain("/sms-threads/sms-new.json");
+  });
+
+  test("Call exists → does NOT search SMS (no double counting)", async () => {
+    prismaInvoiceCountMock.mockResolvedValue(1);
+    fetchMock
+      .mockResolvedValueOnce(
+        mockFetchResponse({ calls: [{ id: "call-1", value: null, start_time: "2026-03-20T10:00:00Z" }] }),
+      )
+      .mockResolvedValueOnce(
+        mockFetchResponse({ id: "call-1", lead_status: "good_lead" }),
+      );
+
+    await handler(makePayment(), makeInvoice());
+
+    // Only call search + call PUT — no SMS search
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0][0]).toContain("/calls.json");
+    expect(fetchMock.mock.calls[1][0]).toContain("/calls/call-1.json");
   });
 });

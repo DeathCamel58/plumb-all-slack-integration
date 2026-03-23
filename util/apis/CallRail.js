@@ -90,6 +90,85 @@ async function updateCall(callId, { value, note, customer_name, lead_status }) {
 }
 
 /**
+ * Search CallRail for SMS conversations matching the given phone number
+ * @param {string} phoneE164 Phone number in E.164 format
+ * @returns {Promise<object[]>} All matching conversations (empty array if none)
+ */
+async function searchSMSByPhone(phoneE164) {
+  let response = await fetch(
+    `${BASE_URL}/text-messages.json?search=${encodeURIComponent(phoneE164)}&fields=source,lead_status`,
+    {
+      headers: {
+        Authorization: `Token token="${CALLRAIL_API_KEY}"`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    let body = await response.text().catch(() => "");
+    throw new Error(
+      `CallRail SMS search failed: ${response.status} ${response.statusText}: ${body}`,
+    );
+  }
+
+  let data = await response.json();
+  return data.conversations || [];
+}
+
+/**
+ * Update a CallRail SMS thread with lead qualification, value, notes, and tags
+ * @param {string} threadId The SMS thread ID
+ * @param {object} params
+ * @param {string} params.value The monetary value
+ * @param {string} params.notes Notes to attach
+ * @param {string|null} params.lead_qualification "good_lead", "not_a_lead", or null
+ * @returns {Promise<object>} The updated thread
+ */
+async function updateSMSThread(threadId, { value, notes, lead_qualification }) {
+  const maxRetries = 3;
+
+  let payload = {
+    value: String(value),
+    notes: notes,
+    tags: ["invoice-paid"],
+    append_tags: true,
+  };
+  if (lead_qualification) {
+    payload.lead_qualification = lead_qualification;
+  }
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    let response = await fetch(`${BASE_URL}/sms-threads/${threadId}.json`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Token token="${CALLRAIL_API_KEY}"`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (response.ok) {
+      return await response.json();
+    }
+
+    let body = await response.text().catch(() => "");
+
+    if (response.status >= 500 && attempt < maxRetries) {
+      let delay = 1000 * Math.pow(2, attempt - 1);
+      console.warn(
+        `CallRail: SMS update failed with ${response.status} (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms: ${body}`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      continue;
+    }
+
+    throw new Error(
+      `CallRail SMS update failed: ${response.status} ${response.statusText}: ${body}`,
+    );
+  }
+}
+
+/**
  * Handle first invoice payment: report conversion to CallRail
  * @param {object} payment The Jobber payment record (with enriched client)
  * @param {object} invoice The Jobber invoice data
@@ -177,34 +256,74 @@ async function handleFirstInvoicePayment(payment, invoice) {
       }
     }
 
-    if (unqualifiedCalls.length === 0) {
+    let conversionNote = `Client: ${payment.client.jobberWebUri}\nInvoice: ${invoice.jobberWebUri}`;
+
+    // Try calls first
+    if (unqualifiedCalls.length > 0) {
+      let call = unqualifiedCalls.sort(
+        (a, b) => new Date(b.start_time) - new Date(a.start_time),
+      )[0];
+      console.log(`CallRail: Selected most recent unqualified call ${call.id}`);
+
+      let leadStatus =
+        call.lead_status === "previously_marked_good_lead" ? null : "good_lead";
+      await updateCall(call.id, {
+        value: invoice.amounts.total,
+        note: conversionNote,
+        customer_name: payment.client.name,
+        lead_status: leadStatus,
+      });
+
       console.log(
-        "CallRail: No matching unqualified call found for any phone",
+        "CallRail: Reported first invoice conversion for call",
+        call.id,
+      );
+      return;
+    }
+
+    // No unqualified calls — fall back to SMS threads
+    console.log("CallRail: No unqualified calls found, searching SMS threads");
+
+    let unqualifiedSMS = [];
+    for (let phoneE164 of phoneSet) {
+      let threads = await searchSMSByPhone(phoneE164);
+      for (let candidate of threads) {
+        if (candidate.value && parseFloat(candidate.value) > 0) {
+          console.log(
+            `CallRail: SMS thread ${candidate.id} already qualified (value: ${candidate.value}), skipping`,
+          );
+          continue;
+        }
+        unqualifiedSMS.push(candidate);
+      }
+    }
+
+    if (unqualifiedSMS.length === 0) {
+      console.log(
+        "CallRail: No matching unqualified call or SMS found for any phone",
         [...phoneSet],
       );
       return;
     }
 
-    // Pick the most recent unqualified call
-    let call = unqualifiedCalls.sort(
-      (a, b) => new Date(b.start_time) - new Date(a.start_time),
+    let sms = unqualifiedSMS.sort(
+      (a, b) => new Date(b.last_message_at) - new Date(a.last_message_at),
     )[0];
-    console.log(`CallRail: Selected most recent unqualified call ${call.id}`);
+    console.log(
+      `CallRail: Selected most recent unqualified SMS thread ${sms.id}`,
+    );
 
-    // Update the call with conversion data
-    // Skip setting lead_status if already previously marked (API returns 400)
-    let leadStatus =
-      call.lead_status === "previously_marked_good_lead" ? null : "good_lead";
-    await updateCall(call.id, {
+    let leadQualification =
+      sms.lead_status === "previously_marked_good_lead" ? null : "good_lead";
+    await updateSMSThread(sms.id, {
       value: invoice.amounts.total,
-      note: `Client: ${payment.client.jobberWebUri}\nInvoice: ${invoice.jobberWebUri}`,
-      customer_name: payment.client.name,
-      lead_status: leadStatus,
+      notes: conversionNote,
+      lead_qualification: leadQualification,
     });
 
     console.log(
-      "CallRail: Reported first invoice conversion for call",
-      call.id,
+      "CallRail: Reported first invoice conversion for SMS thread",
+      sms.id,
     );
   } catch (e) {
     Sentry.captureException(e);
@@ -224,14 +343,25 @@ export async function getCallSource(phone) {
   if (!e164) return null;
 
   try {
+    // Check calls first
     let calls = await searchCallByPhone(e164);
-    if (calls.length === 0) return null;
+    if (calls.length > 0) {
+      let call = calls.sort(
+        (a, b) => new Date(b.start_time) - new Date(a.start_time),
+      )[0];
+      if (call.source) return call.source;
+    }
 
-    // Pick the most recent call
-    let call = calls.sort(
-      (a, b) => new Date(b.start_time) - new Date(a.start_time),
-    )[0];
-    return call.source || null;
+    // Fall back to SMS threads
+    let threads = await searchSMSByPhone(e164);
+    if (threads.length > 0) {
+      let sms = threads.sort(
+        (a, b) => new Date(b.last_message_at) - new Date(a.last_message_at),
+      )[0];
+      if (sms.source) return sms.source;
+    }
+
+    return null;
   } catch (e) {
     console.warn("CallRail: Source lookup failed:", e.message);
     return null;

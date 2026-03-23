@@ -6,6 +6,8 @@ import events from "../events.js";
 import * as Sentry from "@sentry/node";
 import { findUserInvoices, findUserJobs } from "./Jobber.js";
 import prisma from "../prismaClient.js";
+import Contact from "../contact.js";
+import * as CallRail from "./CallRail.js";
 import {
   callEmployeeThenCustomer,
   getOrAssignEmployeeNumber,
@@ -1242,6 +1244,131 @@ async function invoicesModal(trigger_id, user) {
 }
 
 /**
+ * Parses a CallRail Slack message into structured data.
+ * Raw Slack text uses &gt; for blockquotes and &amp; in URLs.
+ * @param {string} text The Slack message text
+ * @param {Array<object>} [blocks] The Slack message blocks (SMS message content is in a separate block)
+ * @returns {{type: string, name: string|null, phone: string|null, source: string|null, message: string|null}|null}
+ */
+function parseCallRailMessage(text, blocks) {
+  if (!text) return null;
+
+  // Call format (raw Slack text):
+  // &gt; *New Call* - <url|Plumb-All> (duration)
+  // &gt; From: *Customer Name* +1XXXXXXXXXX
+  // &gt; To: *Source Name* +1XXXXXXXXXX
+  let callMatch = text.match(/\*New Call\*/);
+  if (callMatch) {
+    let fromMatch = text.match(/From:\s*\*([^*]*)\*\s*(\+?\d+)/);
+    let toMatch = text.match(/To:\s*\*(?:<[^|]*\|)?([^*>]*)>?\*\s*(\+?\d+)/);
+    return {
+      type: "CallRail Call",
+      name: fromMatch ? fromMatch[1].trim() : null,
+      phone: fromMatch ? fromMatch[2].trim() : null,
+      source: toMatch ? toMatch[1].trim() : null,
+      message: null,
+    };
+  }
+
+  // SMS format (raw Slack text):
+  // &gt; *Text Message Received* - Plumb-All
+  // &gt;From: *<url|+1XXXXXXXXXX>*
+  // &gt;To: *<url|Source Name>*
+  // Message content is in a SEPARATE block from CallRail
+  let smsMatch = text.match(/\*Text Message Received\*/);
+  if (smsMatch) {
+    let fromMatch = text.match(/From:\s*\*(?:<[^|]*\|)?(\+?\d+)>?\*/);
+    let toMatch = text.match(/To:\s*\*(?:<[^|]*\|)?([^*>]*)>?\*/);
+
+    // Extract message from the second block's text (where CallRail puts it)
+    let smsMessage = null;
+    if (blocks && blocks.length > 1) {
+      let contentBlock = blocks[1]?.text?.text || "";
+      // Format: "&gt; *Message Content:*\n&gt; actual message"
+      let msgMatch = contentBlock.match(/\*Message Content:\*\n&gt;\s*(.*)/s);
+      if (msgMatch) {
+        smsMessage = msgMatch[1].trim();
+      }
+    }
+
+    return {
+      type: "CallRail SMS",
+      name: null,
+      phone: fromMatch ? fromMatch[1].trim() : null,
+      source: toMatch ? toMatch[1].trim() : null,
+      message: smsMessage,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Handles a CallRail message in the call-logs channel by replying with a button.
+ * @param {{channel: string, ts: string, text: string}} event
+ * @returns {Promise<void>}
+ */
+async function handleCallRailLogMessage(event) {
+  let parsed = parseCallRailMessage(event.text, event.blocks);
+  if (!parsed || !parsed.phone) return;
+
+  let label = parsed.type === "CallRail SMS" ? "SMS" : "Call";
+  let buttonValue = JSON.stringify({
+    phone: parsed.phone,
+    name: parsed.name,
+    source: parsed.source,
+    message: parsed.message,
+    type: parsed.type,
+    ts: event.ts,
+  });
+
+  // Slack button values have a 2000 char limit; truncate message if needed
+  if (buttonValue.length > 2000) {
+    parsed.message = parsed.message?.substring(0, 1800) || null;
+    buttonValue = JSON.stringify({
+      phone: parsed.phone,
+      name: parsed.name,
+      source: parsed.source,
+      message: parsed.message,
+      type: parsed.type,
+      ts: event.ts,
+    });
+  }
+
+  try {
+    await app.client.chat.postMessage({
+      channel: event.channel,
+      thread_ts: event.ts,
+      text: `Send ${label} from ${parsed.phone} as contact`,
+      blocks: [
+        {
+          type: "actions",
+          elements: [
+            {
+              type: "button",
+              text: {
+                type: "plain_text",
+                text: `Send as contact`,
+              },
+              style: "primary",
+              value: buttonValue,
+              action_id: "send-callrail-contact-0",
+            },
+          ],
+        },
+      ],
+      unfurl_links: false,
+      username: "Call Bot",
+      icon_url:
+        "https://plumb-all.com/wp-content/uploads/2018/08/cropped-icon.png",
+    });
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Slack: Failed to reply to CallRail message:", e.message);
+  }
+}
+
+/**
  * Handles Slack event webhooks.
  * @param {import("express").Request} req
  * @returns {Promise<void>}
@@ -1287,6 +1414,21 @@ export async function event(req) {
       }
       break;
     case "message":
+      // Handle CallRail messages in the call-logs channel
+      if (
+        process.env.SLACK_CALL_LOGS &&
+        (event.subtype === "bot_message" || !event.subtype) &&
+        !event.thread_ts // Don't reply to thread messages
+      ) {
+        let callLogsChannelId = await resolveChannelId(
+          process.env.SLACK_CALL_LOGS,
+        );
+        if (event.channel === callLogsChannelId) {
+          await handleCallRailLogMessage(event);
+          break;
+        }
+      }
+
       switch (event.subtype) {
         // If this was a message deletion
         case "message_deleted":
@@ -1654,6 +1796,73 @@ async function interactivity(req) {
                 ],
               },
             });
+
+            break;
+          case "send-callrail-contact-0":
+            console.log("Slack: User sending CallRail entry as contact!");
+
+            try {
+              let callRailData = JSON.parse(action.value);
+
+              // Look up the CallRail source if not already in the parsed data
+              let source = callRailData.source || null;
+              if (!source && callRailData.phone) {
+                source = await CallRail.getCallSource(callRailData.phone);
+              }
+
+              // Build a Contact the same way as Twilio/Website contacts
+              let contact = new Contact(
+                callRailData.type || "CallRail",
+                callRailData.name,
+                callRailData.phone,
+                null, // alternatePhone
+                null, // email
+                null, // address
+                callRailData.message,
+                source,
+              );
+
+              // Emit contact-made so it goes through the normal flow
+              // (Slack contact card, Mattermost, PostHog, Trello)
+              events.emit(
+                "contact-made",
+                contact,
+                JSON.stringify(callRailData),
+              );
+
+              // Update the button message to show it was sent
+              try {
+                await app.client.chat.update({
+                  channel: event.channel?.id,
+                  ts: event.container?.message_ts,
+                  text: `Sent as contact by <@${event.user.id}>`,
+                  blocks: [
+                    {
+                      type: "section",
+                      text: {
+                        type: "mrkdwn",
+                        text: `Sent as contact by <@${event.user.id}>`,
+                      },
+                    },
+                  ],
+                });
+              } catch (_e) {
+                // Non-critical — button was still handled
+              }
+
+              console.log(
+                `Slack: CallRail contact sent for ${callRailData.phone}`,
+              );
+            } catch (e) {
+              Sentry.captureException(e);
+              console.error("Slack: Failed to send CallRail contact:", e);
+
+              await app.client.chat.postEphemeral({
+                channel: event.channel?.id,
+                user: event.user.id,
+                text: "Failed to send as contact. Please try again.",
+              });
+            }
 
             break;
           case "unassign-number-0":
