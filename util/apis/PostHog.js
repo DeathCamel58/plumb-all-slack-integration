@@ -271,31 +271,34 @@ export async function searchForUser(contact) {
   // This will store all found IDs that match (can store the same one multiple times)
   let potentialIDs = [];
 
-  // Search all contact parts
-  let results = await searchByKey("name", contact.name);
-  if (results !== null) {
-    for (let result of results.results) {
+  // Search all contact parts in parallel — these are independent queries
+  let [nameResults, emailResults, phoneIds, altPhoneIds, addressResults] =
+    await Promise.all([
+      searchByKey("name", contact.name),
+      searchByKey("email", contact.email),
+      searchByPhone(contact.phone),
+      searchByPhone(contact.alternatePhone),
+      searchByKey("address", contact.address),
+    ]);
+
+  if (nameResults !== null) {
+    for (let result of nameResults.results) {
       potentialIDs.push(result["distinct_ids"][0]);
     }
   }
-  results = await searchByKey("email", contact.email);
-  if (results !== null) {
-    for (let result of results.results) {
+  if (emailResults !== null) {
+    for (let result of emailResults.results) {
       potentialIDs.push(result["distinct_ids"][0]);
     }
   }
-  // Search phone numbers via HogQL (checks phone, alternatePhone, and phones array)
-  let phoneIds = await searchByPhone(contact.phone);
   for (let id of phoneIds) {
     potentialIDs.push(id);
   }
-  let altPhoneIds = await searchByPhone(contact.alternatePhone);
   for (let id of altPhoneIds) {
     potentialIDs.push(id);
   }
-  results = await searchByKey("address", contact.address);
-  if (results !== null) {
-    for (let result of results.results) {
+  if (addressResults !== null) {
+    for (let result of addressResults.results) {
       potentialIDs.push(result["distinct_ids"][0]);
     }
   }
