@@ -90,13 +90,13 @@ async function updateCall(callId, { value, note, customer_name, lead_status }) {
 }
 
 /**
- * Search CallRail for SMS conversations matching the given phone number
+ * Search CallRail for SMS threads matching the given phone number
  * @param {string} phoneE164 Phone number in E.164 format
- * @returns {Promise<object[]>} All matching conversations (empty array if none)
+ * @returns {Promise<object[]>} All matching SMS threads (empty array if none)
  */
 async function searchSMSByPhone(phoneE164) {
   let response = await fetch(
-    `${BASE_URL}/text-messages.json?search=${encodeURIComponent(phoneE164)}&fields=source,lead_status`,
+    `${BASE_URL}/sms-threads.json?search=${encodeURIComponent(phoneE164)}&fields=last_message_at`,
     {
       headers: {
         Authorization: `Token token="${CALLRAIL_API_KEY}"`,
@@ -107,22 +107,22 @@ async function searchSMSByPhone(phoneE164) {
   if (!response.ok) {
     let body = await response.text().catch(() => "");
     throw new Error(
-      `CallRail SMS search failed: ${response.status} ${response.statusText}: ${body}`,
+      `CallRail SMS thread search failed: ${response.status} ${response.statusText}: ${body}`,
     );
   }
 
   let data = await response.json();
-  return data.conversations || [];
+  return data.sms_threads || [];
 }
 
 /**
- * Update a CallRail text message conversation with lead qualification, value, notes, and tags
- * @param {string} threadId The text message conversation ID
+ * Update a CallRail SMS thread with lead qualification, value, notes, and tags
+ * @param {string} threadId The SMS thread ID
  * @param {object} params
  * @param {string} params.value The monetary value
  * @param {string} params.notes Notes to attach
  * @param {string|null} params.lead_qualification "good_lead", "not_a_lead", or null
- * @returns {Promise<object>} The updated thread
+ * @returns {Promise<object>} The updated SMS thread
  */
 async function updateSMSThread(threadId, { value, notes, lead_qualification }) {
   const maxRetries = 3;
@@ -138,7 +138,7 @@ async function updateSMSThread(threadId, { value, notes, lead_qualification }) {
   }
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    let response = await fetch(`${BASE_URL}/text-messages/${threadId}.json`, {
+    let response = await fetch(`${BASE_URL}/sms-threads/${threadId}.json`, {
       method: "PUT",
       headers: {
         Authorization: `Token token="${CALLRAIL_API_KEY}"`,
@@ -156,14 +156,14 @@ async function updateSMSThread(threadId, { value, notes, lead_qualification }) {
     if (response.status >= 500 && attempt < maxRetries) {
       let delay = 1000 * Math.pow(2, attempt - 1);
       console.warn(
-        `CallRail: SMS update failed with ${response.status} (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms: ${body}`,
+        `CallRail: SMS thread update failed with ${response.status} (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms: ${body}`,
       );
       await new Promise((resolve) => setTimeout(resolve, delay));
       continue;
     }
 
     throw new Error(
-      `CallRail SMS update failed: ${response.status} ${response.statusText}: ${body}`,
+      `CallRail SMS thread update failed: ${response.status} ${response.statusText}: ${body}`,
     );
   }
 }
@@ -314,7 +314,7 @@ async function handleFirstInvoicePayment(payment, invoice) {
     );
 
     let leadQualification =
-      sms.lead_status === "previously_marked_good_lead" ? null : "good_lead";
+      sms.lead_qualification === "good_lead" ? null : "good_lead";
     await updateSMSThread(sms.id, {
       value: invoice.amounts.total,
       notes: conversionNote,
