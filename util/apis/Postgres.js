@@ -49,7 +49,7 @@ async function propertyUpsert(data) {
     country: data.address.country,
     id: data.id,
     latitude: data.address.coordinates
-      ? data.address.coordinates.longitude
+      ? data.address.coordinates.latitude
       : null,
     longitude: data.address.coordinates
       ? data.address.coordinates.longitude
