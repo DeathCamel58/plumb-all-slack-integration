@@ -327,16 +327,18 @@ export async function searchForUser(contact) {
  * @returns {string} The data, or empty string
  */
 export function getPlaceLocationPart(place, addressComponentIndex, key) {
+  // Guard against empty/malformed place data
+  if (!place || !place[0] || !place[0].address_components) {
+    return "";
+  }
   // Check that the index exists in address_components
   if (place[0].address_components.length > addressComponentIndex) {
     // Check if we should return long_name or short_name
     if (key in place[0].address_components[addressComponentIndex]) {
       return place[0].address_components[addressComponentIndex][key];
-    } else {
-      // Neither short_name nor long_name exist at index. Return empty string
-      return "";
     }
   }
+  return "";
 }
 
 /**
@@ -393,7 +395,7 @@ async function resolveGeoData(address) {
   }
 
   let place = await GoogleMaps.searchPlace(address);
-  if (place === null || place === undefined || place.length === null) {
+  if (place === null || place === undefined || place.length === 0) {
     console.error(`PostHog: No place found for ${address} on Google Maps.`);
     return {};
   }
