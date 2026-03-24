@@ -19,6 +19,8 @@ import {
 } from "./Twilio.js";
 import fetch from "node-fetch";
 import { hostFile } from "../mediaStore.js";
+import { transcribeDualChannel } from "./Deepgram.js";
+import { analyzeConversation } from "./OpenAI.js";
 
 const slackCallChannelName = process.env.SLACK_CHANNEL || "calls";
 
@@ -2196,6 +2198,26 @@ async function command(req, res) {
 
       break;
     }
+    case "/analyze": {
+      const threadTs = req.body?.thread_ts;
+      const channelId = req.body?.channel_id;
+
+      if (!threadTs || !channelId) {
+        res.send("This command can only be used inside a call thread.");
+        break;
+      }
+
+      // Respond immediately so Slack doesn't time out
+      res.send("");
+
+      // Run analysis asynchronously
+      runAnalysis(channelId, threadTs, userId).catch((e) => {
+        Sentry.captureException(e);
+        console.error("Slack: /analyze error:", e);
+      });
+
+      break;
+    }
     default:
       console.warn(`Slack: Unsupported command: ${commandName}`);
       res.send(`Unsupported command ${commandName}. Try /dial <phone_number>.`);
@@ -2203,3 +2225,287 @@ async function command(req, res) {
   }
 }
 events.on("slack-COMMAND", command);
+
+/**
+ * Runs the full /analyze flow: fetch thread, transcribe recordings, send to OpenAI, post result.
+ * @param {string} channelId - Slack channel ID
+ * @param {string} threadTs - Thread parent timestamp
+ * @param {string} userId - Slack user ID (for ephemeral messages in debug mode)
+ * @returns {Promise<void>}
+ */
+async function runAnalysis(channelId, threadTs, userId) {
+  const ephemeral = process.env.SLACK_ANALYZE_EPHEMERAL === "TRUE";
+
+  // Post a "Processing..." message in the thread
+  let statusMsg;
+  try {
+    if (ephemeral) {
+      statusMsg = await app.client.chat.postEphemeral({
+        channel: channelId,
+        thread_ts: threadTs,
+        user: userId,
+        text: ":hourglass_flowing_sand: Analyzing conversation... this may take a minute.",
+      });
+    } else {
+      statusMsg = await app.client.chat.postMessage({
+        channel: channelId,
+        thread_ts: threadTs,
+        text: ":hourglass_flowing_sand: Analyzing conversation... this may take a minute.",
+      });
+    }
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Slack: Failed to post analysis status message:", e);
+    return;
+  }
+
+  try {
+    // Fetch all messages in the thread
+    let allMessages = [];
+    let cursor;
+    do {
+      const result = await app.client.conversations.replies({
+        channel: channelId,
+        ts: threadTs,
+        limit: 200,
+        cursor: cursor,
+      });
+      allMessages = allMessages.concat(result.messages || []);
+      cursor = result.response_metadata?.next_cursor;
+    } while (cursor);
+
+    // Filter to bot messages only
+    const botMessages = allMessages.filter(
+      (msg) => msg.subtype === "bot_message" || msg.bot_id,
+    );
+
+    if (botMessages.length === 0) {
+      await analysisReply(
+        channelId,
+        threadTs,
+        userId,
+        statusMsg,
+        ephemeral,
+        "No bot messages found in this thread. Nothing to analyze.",
+      );
+      return;
+    }
+
+    // Separate recordings from text messages and build a timeline
+    const timeline = [];
+
+    for (const msg of botMessages) {
+      const timestamp = new Date(parseFloat(msg.ts) * 1000);
+      const timeStr = timestamp.toISOString().replace("T", " ").slice(0, 19);
+
+      const audioFiles = (msg.files || []).filter(
+        (f) => f.mimetype && f.mimetype.startsWith("audio/"),
+      );
+
+      if (audioFiles.length > 0) {
+        // This message has call recordings
+        for (const file of audioFiles) {
+          timeline.push({
+            type: "recording",
+            time: timeStr,
+            ts: parseFloat(msg.ts),
+            file: file,
+          });
+        }
+      } else {
+        // This is a text message (initial contact, SMS, etc.)
+        const text = msg.text || "";
+        if (text.trim()) {
+          // Determine if this is an SMS or the initial contact
+          let label = "BOT MESSAGE";
+          if (parseFloat(msg.ts) === parseFloat(threadTs)) {
+            label = "INITIAL CONTACT";
+          } else if (text.includes("SMS To") || text.includes("SMS From")) {
+            label = "SMS";
+          } else if (text.includes("Outbound call")) {
+            label = "OUTBOUND CALL INITIATED";
+          } else if (text.includes("Call Recorded")) {
+            label = "CALL NOTE";
+          }
+          timeline.push({
+            type: "text",
+            time: timeStr,
+            ts: parseFloat(msg.ts),
+            label: label,
+            text: text,
+          });
+        }
+      }
+    }
+
+    // Sort chronologically
+    timeline.sort((a, b) => a.ts - b.ts);
+
+    // Download and transcribe recordings
+    for (const item of timeline) {
+      if (item.type !== "recording") continue;
+
+      try {
+        // Get private download URL
+        const fileInfo = await app.client.files.info({
+          file: item.file.id,
+        });
+        const downloadUrl = fileInfo.file.url_private_download;
+
+        // Download from Slack with auth
+        const resp = await fetch(downloadUrl, {
+          headers: {
+            Authorization: `Bearer ${process.env.SLACK_TOKEN}`,
+          },
+        });
+        const audioBuffer = Buffer.from(await resp.arrayBuffer());
+
+        // Transcribe with Deepgram
+        const utterances = await transcribeDualChannel(audioBuffer);
+
+        if (utterances.length > 0) {
+          item.transcript = utterances
+            .map((u) => `${u.speaker}: ${u.text}`)
+            .join("\n");
+        } else {
+          item.transcript = "(No speech detected in recording)";
+        }
+      } catch (e) {
+        Sentry.captureException(e);
+        console.error(
+          `Slack: Failed to transcribe recording ${item.file.id}:`,
+          e,
+        );
+        item.transcript = "(Failed to transcribe recording)";
+      }
+    }
+
+    // Build the full conversation transcript
+    let fullTranscript = "";
+    for (const item of timeline) {
+      if (item.type === "text") {
+        fullTranscript += `[${item.time}] ${item.label}:\n${item.text}\n\n`;
+      } else if (item.type === "recording") {
+        fullTranscript += `[${item.time}] CALL RECORDING:\n${item.transcript}\n\n`;
+      }
+    }
+
+    if (!fullTranscript.trim()) {
+      await analysisReply(
+        channelId,
+        threadTs,
+        userId,
+        statusMsg,
+        ephemeral,
+        "No conversation content found to analyze.",
+      );
+      return;
+    }
+
+    // Send to OpenAI
+    const analysis = await analyzeConversation(fullTranscript);
+
+    // Post the result
+    const resultText = `:clipboard: *Sales Coach Analysis*\n\n${analysis}`;
+
+    if (resultText.length <= 3000) {
+      await analysisReply(
+        channelId,
+        threadTs,
+        userId,
+        statusMsg,
+        ephemeral,
+        resultText,
+      );
+    } else {
+      // Analysis is long — update status and post follow-up replies
+      await analysisReply(
+        channelId,
+        threadTs,
+        userId,
+        statusMsg,
+        ephemeral,
+        ":clipboard: *Sales Coach Analysis*\n\n_(See below)_",
+      );
+
+      // Split into chunks
+      const chunks = [];
+      let remaining = analysis;
+      while (remaining.length > 0) {
+        chunks.push(remaining.slice(0, 3000));
+        remaining = remaining.slice(3000);
+      }
+
+      for (const chunk of chunks) {
+        if (ephemeral) {
+          await app.client.chat.postEphemeral({
+            channel: channelId,
+            thread_ts: threadTs,
+            user: userId,
+            text: chunk,
+          });
+        } else {
+          await app.client.chat.postMessage({
+            channel: channelId,
+            thread_ts: threadTs,
+            text: chunk,
+          });
+        }
+      }
+    }
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Slack: /analyze processing error:", e);
+
+    // Post an error message
+    if (statusMsg?.ts) {
+      try {
+        await analysisReply(
+          channelId,
+          threadTs,
+          userId,
+          statusMsg,
+          ephemeral,
+          ":x: Analysis failed. Please try again later.",
+        );
+      } catch (updateErr) {
+        console.error("Slack: Failed to update error status:", updateErr);
+      }
+    }
+  }
+}
+
+/**
+ * Posts or updates an analysis message. In ephemeral mode, posts a new
+ * ephemeral message (since ephemeral messages can't be updated).
+ * In normal mode, updates the existing status message.
+ * @param {string} channelId
+ * @param {string} threadTs
+ * @param {string} userId
+ * @param {object} statusMsg - The original status message (with .ts)
+ * @param {boolean} ephemeral - Whether to use ephemeral messages
+ * @param {string} text - The message text
+ */
+async function analysisReply(
+  channelId,
+  threadTs,
+  userId,
+  statusMsg,
+  ephemeral,
+  text,
+) {
+  if (ephemeral) {
+    await app.client.chat.postEphemeral({
+      channel: channelId,
+      thread_ts: threadTs,
+      user: userId,
+      text: text,
+    });
+  } else {
+    await app.client.chat.update({
+      channel: channelId,
+      ts: statusMsg.ts,
+      text: text,
+    });
+  }
+}
