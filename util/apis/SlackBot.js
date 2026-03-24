@@ -2271,6 +2271,9 @@ async function runAnalysis(channelId, threadTs, userId) {
 
   try {
     // Fetch all messages in the thread
+    console.log(
+      `Analyze: Fetching thread history for ${channelId}/${threadTs}`,
+    );
     let allMessages = [];
     let cursor;
     do {
@@ -2284,9 +2287,17 @@ async function runAnalysis(channelId, threadTs, userId) {
       cursor = result.response_metadata?.next_cursor;
     } while (cursor);
 
+    console.log(
+      `Analyze: Found ${allMessages.length} total message(s) in thread`,
+    );
+
     // Filter to bot messages only
     const botMessages = allMessages.filter(
       (msg) => msg.subtype === "bot_message" || msg.bot_id,
+    );
+
+    console.log(
+      `Analyze: ${botMessages.length} bot message(s) after filtering`,
     );
 
     if (botMessages.length === 0) {
@@ -2351,33 +2362,72 @@ async function runAnalysis(channelId, threadTs, userId) {
     // Sort chronologically
     timeline.sort((a, b) => a.ts - b.ts);
 
+    const recordingCount = timeline.filter(
+      (i) => i.type === "recording",
+    ).length;
+    const textCount = timeline.filter((i) => i.type === "text").length;
+    console.log(
+      `Analyze: Timeline has ${recordingCount} recording(s) and ${textCount} text message(s)`,
+    );
+
     // Download and transcribe recordings
+    let recordingIndex = 0;
     for (const item of timeline) {
       if (item.type !== "recording") continue;
+      recordingIndex++;
 
       try {
+        console.log(
+          `Analyze: Processing recording ${recordingIndex}/${recordingCount} (file: ${item.file.id}, name: ${item.file.name}, mimetype: ${item.file.mimetype})`,
+        );
+
         // Get private download URL
         const fileInfo = await app.client.files.info({
           file: item.file.id,
         });
         const downloadUrl = fileInfo.file.url_private_download;
 
+        if (!downloadUrl) {
+          console.error(`Analyze: No download URL for file ${item.file.id}`);
+          item.transcript = "(Recording not downloadable)";
+          continue;
+        }
+
         // Download from Slack with auth
+        console.log(`Analyze: Downloading recording from Slack...`);
         const resp = await fetch(downloadUrl, {
           headers: {
             Authorization: `Bearer ${process.env.SLACK_TOKEN}`,
           },
         });
+
+        if (!resp.ok) {
+          console.error(
+            `Analyze: Slack file download failed with status ${resp.status}`,
+          );
+          item.transcript = "(Failed to download recording)";
+          continue;
+        }
+
         const audioBuffer = Buffer.from(await resp.arrayBuffer());
+        console.log(
+          `Analyze: Downloaded ${audioBuffer.length} bytes, sending to Deepgram...`,
+        );
 
         // Transcribe with Deepgram
         const utterances = await transcribeDualChannel(audioBuffer);
 
         if (utterances.length > 0) {
+          console.log(
+            `Analyze: Transcription returned ${utterances.length} utterance(s)`,
+          );
           item.transcript = utterances
             .map((u) => `${u.speaker}: ${u.text}`)
             .join("\n");
         } else {
+          console.warn(
+            `Analyze: No speech detected in recording ${item.file.id}`,
+          );
           item.transcript = "(No speech detected in recording)";
         }
       } catch (e) {
@@ -2400,6 +2450,8 @@ async function runAnalysis(channelId, threadTs, userId) {
       }
     }
 
+    console.log(`Analyze: Built transcript (${fullTranscript.length} chars)`);
+
     if (!fullTranscript.trim()) {
       await analysisReply(
         channelId,
@@ -2413,7 +2465,11 @@ async function runAnalysis(channelId, threadTs, userId) {
     }
 
     // Send to OpenAI
+    console.log("Analyze: Sending transcript to OpenAI for analysis...");
     const analysis = await analyzeConversation(fullTranscript);
+    console.log(
+      `Analyze: Received analysis from OpenAI (${analysis.length} chars)`,
+    );
 
     // Post the result
     const resultText = `:clipboard: *Sales Coach Analysis*\n\n${analysis}`;

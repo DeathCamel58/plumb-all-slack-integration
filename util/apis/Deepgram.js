@@ -12,6 +12,10 @@ const CHANNEL_LABELS = ["Plumber", "Customer"];
  */
 export async function transcribeDualChannel(audioBuffer) {
   try {
+    console.log(
+      `Deepgram: Sending ${audioBuffer.length} byte audio buffer for transcription`,
+    );
+
     const deepgram = new DeepgramClient({
       apiKey: process.env.DEEPGRAM_API_KEY,
     });
@@ -24,13 +28,20 @@ export async function transcribeDualChannel(audioBuffer) {
       smart_format: true,
     });
 
+    console.log("Deepgram: Received transcription response");
+
     const utterances = [];
 
     // Each channel is a separate array of alternatives
     const channels = result?.result?.results?.channels ?? [];
+    console.log(`Deepgram: Response contains ${channels.length} channel(s)`);
+
     for (let channelIndex = 0; channelIndex < channels.length; channelIndex++) {
       const speaker = CHANNEL_LABELS[channelIndex] ?? `Channel ${channelIndex}`;
       const words = channels[channelIndex]?.alternatives?.[0]?.words ?? [];
+      console.log(
+        `Deepgram: Channel ${channelIndex} (${speaker}): ${words.length} word(s)`,
+      );
 
       if (words.length === 0) continue;
 
@@ -61,6 +72,10 @@ export async function transcribeDualChannel(audioBuffer) {
 
     // Sort by start time so the conversation reads chronologically
     utterances.sort((a, b) => a.start - b.start);
+
+    console.log(
+      `Deepgram: Transcription complete — ${utterances.length} utterance(s)`,
+    );
 
     return utterances;
   } catch (e) {
