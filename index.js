@@ -18,6 +18,7 @@ const modules = [
   "./util/apis/Mailchimp.js",
   "./util/apis/Mattermost.js",
   "./util/apis/Postgres.js",
+  "./util/apis/Rentvine.js",
   "./util/apis/SasoWebHookHandler.js",
   "./util/apis/SlackBot.js",
   "./util/apis/Twilio.js",

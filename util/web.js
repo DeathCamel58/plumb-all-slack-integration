@@ -366,6 +366,23 @@ app.post("/86repairs/call", (req, res) => {
   }
 });
 
+/**
+ * Rentvine Work Order Assignment
+ */
+app.post("/rentvine/work_order", (req, res) => {
+  try {
+    req.body = JSON.parse(req.body);
+  } catch (e) {
+    return res.status(400).send("Invalid JSON");
+  }
+  let data = req.body;
+
+  console.info("Web: Got a work order email from Rentvine!");
+  res.sendStatus(200);
+
+  events.emit("rentvine-work-order", data);
+});
+
 const corsOptions = {
   origin: "https://plumb-all.com",
   methods: ["POST", "OPTIONS"],
