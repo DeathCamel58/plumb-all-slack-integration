@@ -1770,7 +1770,7 @@ async function interactivity(req) {
                       text: "Message",
                       emoji: true,
                     },
-                    optional: false,
+                    optional: true,
                   },
                   {
                     type: "input",
@@ -1997,13 +1997,23 @@ async function interactivity(req) {
               .new_outbound_sms_number_action.value;
           const smsMessageText =
             event.view.state.values.new_outbound_sms_message
-              .new_outbound_sms_message_action.value;
+              ?.new_outbound_sms_message_action?.value || "";
 
           // Download attached file from Slack (if any) and host it temporarily for Twilio
           let smsMediaUrl = null;
           const uploadedFiles =
             event.view.state.values.new_outbound_sms_file
               ?.new_outbound_sms_file_action?.files;
+
+          if (
+            !smsMessageText.trim() &&
+            (!uploadedFiles || uploadedFiles.length === 0)
+          ) {
+            console.warn(
+              "Slack: SMS modal submitted with no message and no attachment",
+            );
+            break;
+          }
           if (uploadedFiles?.length > 0) {
             const slackFile = uploadedFiles[0];
             try {
