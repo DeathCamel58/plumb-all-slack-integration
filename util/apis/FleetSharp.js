@@ -7,7 +7,13 @@ import events from "../events.js";
  * @constructor
  */
 async function AlertHandle(req) {
-  let body = JSON.parse(req.body);
+  let body;
+  try {
+    body = JSON.parse(req.body);
+  } catch (e) {
+    console.error("FleetSharp: Invalid JSON in webhook body");
+    return;
+  }
 
   if (process.env.DEBUG === "TRUE") {
     console.log("FleetSharp: Data was");

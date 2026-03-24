@@ -92,7 +92,13 @@ app.post("/jobber/:WEBHOOK_TYPE", (req, res) => {
       "content-type" in req.headers &&
       req.headers["content-type"] === "application/json"
     ) {
-      req.body = JSON.parse(req.body);
+      try {
+        req.body = JSON.parse(req.body);
+      } catch (e) {
+        console.error("Web: Invalid JSON in Jobber webhook body");
+        res.sendStatus(400);
+        return;
+      }
     }
 
     // Process Request
@@ -163,7 +169,13 @@ app.post("/slack/EVENT", (req, res) => {
   // Verify that the webhook came from Slack
   if (Slack.verifyWebhook(req)) {
     // Webhook was valid.
-    req.body = JSON.parse(req.body);
+    try {
+      req.body = JSON.parse(req.body);
+    } catch (e) {
+      console.error("Web: Invalid JSON in Slack EVENT body");
+      res.sendStatus(400);
+      return;
+    }
 
     // Check if this is a request to verify the endpoint
     if ("challenge" in req.body) {
@@ -193,7 +205,13 @@ app.post("/slack/INTERACTIVITY", (req, res) => {
   // Verify that the webhook came from Slack
   if (Slack.verifyWebhook(req, true)) {
     // Webhook was valid.
-    req.body.payload = JSON.parse(req.body.payload);
+    try {
+      req.body.payload = JSON.parse(req.body.payload);
+    } catch (e) {
+      console.error("Web: Invalid JSON in Slack INTERACTIVITY payload");
+      res.sendStatus(400);
+      return;
+    }
 
     events.emit("slack-INTERACTIVITY", req);
 

@@ -10,7 +10,13 @@ import events from "../events.js";
  * @constructor
  */
 async function LeadFormHandle(rawData) {
-  let data = JSON.parse(rawData.body);
+  let data;
+  try {
+    data = JSON.parse(rawData.body);
+  } catch (e) {
+    console.error("GoogleAds: Invalid JSON in lead form body");
+    return;
+  }
 
   // Map all data into a dict
   let userData = {};

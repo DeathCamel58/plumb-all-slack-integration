@@ -57,7 +57,12 @@ export async function getBoard(boardName) {
     "get",
     null,
   );
-  boardsResponse = JSON.parse(boardsResponse);
+  try {
+    boardsResponse = JSON.parse(boardsResponse);
+  } catch (e) {
+    console.error("Trello: Invalid JSON in boards response");
+    return null;
+  }
 
   for (let i = 0; i < boardsResponse.length; i++) {
     if (boardsResponse[i].name === boardName) {
@@ -84,7 +89,12 @@ export async function getList(boardId, listName) {
   if (!listResponse) {
     return null;
   }
-  listResponse = JSON.parse(listResponse);
+  try {
+    listResponse = JSON.parse(listResponse);
+  } catch (e) {
+    console.error("Trello: Invalid JSON in list response");
+    return null;
+  }
 
   for (let i = 0; i < listResponse.length; i++) {
     if (listResponse[i].name === listName) {

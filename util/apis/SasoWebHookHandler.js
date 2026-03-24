@@ -8,7 +8,13 @@ import events from "../events.js";
  * @returns {Promise<void>}
  */
 async function leadHandle(req) {
-  let body = JSON.parse(req.body);
+  let body;
+  try {
+    body = JSON.parse(req.body);
+  } catch (e) {
+    console.error("SASO: Invalid JSON in webhook body");
+    return;
+  }
 
   let message = "";
   if (body.ticket_message) {
