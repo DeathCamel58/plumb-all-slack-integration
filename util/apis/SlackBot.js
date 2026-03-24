@@ -2317,7 +2317,16 @@ async function runAnalysis(channelId, threadTs, userId) {
 
     for (const msg of botMessages) {
       const timestamp = new Date(parseFloat(msg.ts) * 1000);
-      const timeStr = timestamp.toISOString().replace("T", " ").slice(0, 19);
+      const timeStr = timestamp.toLocaleString("en-US", {
+        timeZone: "America/New_York",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
+      });
 
       const audioFiles = (msg.files || []).filter(
         (f) => f.mimetype && f.mimetype.startsWith("audio/"),
