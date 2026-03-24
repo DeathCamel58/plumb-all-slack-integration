@@ -1,11 +1,10 @@
-import { DeepgramClient } from "@deepgram/sdk";
-import { Readable } from "stream";
+import fetch from "node-fetch";
 import * as Sentry from "@sentry/node";
 
 const CHANNEL_LABELS = ["Plumber", "Customer"];
 
 /**
- * Transcribes a dual-channel audio buffer using Deepgram.
+ * Transcribes a dual-channel audio buffer using the Deepgram REST API directly.
  * Left channel (0) = Plumber, Right channel (1) = Customer.
  * @param {Buffer} audioBuffer - The audio file buffer (MP3/WAV)
  * @returns {Promise<Array<{speaker: string, text: string, start: number, end: number}>>}
@@ -16,24 +15,40 @@ export async function transcribeDualChannel(audioBuffer) {
       `Deepgram: Sending ${audioBuffer.length} byte audio buffer for transcription`,
     );
 
-    const deepgram = new DeepgramClient({
-      apiKey: process.env.DEEPGRAM_API_KEY,
-    });
-
-    const stream = Readable.from(audioBuffer);
-
-    const result = await deepgram.listen.v1.media.transcribeFile(stream, {
+    const params = new URLSearchParams({
       model: "nova-3",
-      multichannel: true,
-      smart_format: true,
+      multichannel: "true",
+      smart_format: "true",
     });
+
+    const response = await fetch(
+      `https://api.deepgram.com/v1/listen?${params}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Token ${process.env.DEEPGRAM_API_KEY}`,
+          "Content-Type": "audio/mpeg",
+        },
+        body: audioBuffer,
+      },
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(
+        `Deepgram: API returned status ${response.status}: ${errorText}`,
+      );
+      return [];
+    }
+
+    const result = await response.json();
 
     console.log("Deepgram: Received transcription response");
 
     const utterances = [];
 
     // Each channel is a separate array of alternatives
-    const channels = result?.result?.results?.channels ?? [];
+    const channels = result?.results?.channels ?? [];
     console.log(`Deepgram: Response contains ${channels.length} channel(s)`);
 
     for (let channelIndex = 0; channelIndex < channels.length; channelIndex++) {
