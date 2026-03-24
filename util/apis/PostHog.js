@@ -421,8 +421,6 @@ async function resolveGeoData(address) {
  * @returns {Promise<string>} The ID of the client in PostHog
  */
 export async function sendClientToPostHog(contact) {
-  let clientData = await resolveGeoData(contact.address);
-
   // Search for the person in PostHog
   let id;
   // Use E.164 phone as a stable distinct_id when available, to prevent
@@ -437,6 +435,7 @@ export async function sendClientToPostHog(contact) {
   let posthogPerson = await searchForUser(contact);
   let existingPhones = [];
   let isJobberPerson = false;
+  let existingAddress = null;
 
   // If this is a new person, add them to PostHog
   if (posthogPerson === undefined) {
@@ -460,6 +459,9 @@ export async function sendClientToPostHog(contact) {
       if (Array.isArray(fullPostHogPerson.properties?.phones)) {
         existingPhones = fullPostHogPerson.properties.phones;
       }
+
+      // Track the existing address so we can skip geo resolution if unchanged
+      existingAddress = fullPostHogPerson.properties?.address ?? null;
 
       // If this person already has Jobber data, don't overwrite core fields
       // (name, phone, email, address) — Jobber is the source of truth
@@ -487,6 +489,14 @@ export async function sendClientToPostHog(contact) {
         `PostHog: Person ${id} not yet available via distinct_id lookup, will identify anyway.`,
       );
     }
+  }
+
+  // Only resolve geo data if the address is new or changed, to avoid
+  // unnecessary Google Maps API calls for existing persons.
+  let clientData = {};
+  let addressChanged = contact.address && contact.address !== existingAddress;
+  if (addressChanged || posthogPerson === undefined) {
+    clientData = await resolveGeoData(contact.address);
   }
 
   // Identify the user to allow PostHog to display client details properly.
@@ -601,12 +611,29 @@ export async function logClient(jobberClient) {
   }
 
   let id = jobberClient.id;
-  let clientData = await resolveGeoData(address !== "" ? address : null);
+  let resolvedAddress = address !== "" ? address : null;
+
+  // Only resolve geo data if the address is new or changed, to avoid
+  // unnecessary Google Maps API calls for existing persons.
+  let existingPerson = await individualSearch(`${id}`, "distinct_id");
+  let existingAddress = null;
+  let existingPhones = [];
+  if (existingPerson?.results?.length > 0) {
+    existingAddress = existingPerson.results[0].properties?.address ?? null;
+    if (Array.isArray(existingPerson.results[0].properties?.phones)) {
+      existingPhones = existingPerson.results[0].properties.phones;
+    }
+  }
+
+  let clientData = {};
+  if (resolvedAddress && resolvedAddress !== existingAddress) {
+    clientData = await resolveGeoData(resolvedAddress);
+  }
 
   clientData.name = jobberClient.name;
   clientData.phone = defaultPhone ? normalizePhoneNumber(defaultPhone) : null;
   clientData.email = defaultEmail || null;
-  clientData.address = address !== "" ? address : null;
+  clientData.address = resolvedAddress;
   clientData.jobberWebUri = jobberClient.jobberWebUri || null;
   clientData.isCompany = jobberClient.isCompany || false;
   clientData.companyName = jobberClient.companyName || null;
@@ -615,7 +642,6 @@ export async function logClient(jobberClient) {
   // (e.g. a Twilio caller ID that Jobber doesn't know about)
   let jobberPhones =
     "phones" in jobberClient ? jobberClient.phones.map((p) => p.number) : [];
-  let existingPhones = await getExistingPhones(id);
   clientData.phones = mergePhoneArrays(existingPhones, jobberPhones);
 
   let identifyData = {
