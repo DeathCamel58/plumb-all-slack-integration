@@ -233,15 +233,15 @@ export async function searchByKey(key, value) {
         type: "person",
       },
     ];
-    // TODO: Add sentry here
-    let results = await individualSearch(query, null).catch((e) =>
-      console.error(e),
-    );
-    if (
-      typeof results.results === "undefined" ||
-      results.results.length === undefined ||
-      results.results.length === 0
-    ) {
+    let results;
+    try {
+      results = await individualSearch(query, null);
+    } catch (e) {
+      Sentry.captureException(e);
+      console.error(`PostHog: searchByKey error for ${key}:`, e);
+      return null;
+    }
+    if (!results || !results.results || results.results.length === 0) {
       return null;
     } else {
       return results;
