@@ -1,4 +1,5 @@
-import { createClient } from "@deepgram/sdk";
+import { DeepgramClient } from "@deepgram/sdk";
+import { Readable } from "stream";
 import * as Sentry from "@sentry/node";
 
 const CHANNEL_LABELS = ["Plumber", "Customer"];
@@ -11,21 +12,22 @@ const CHANNEL_LABELS = ["Plumber", "Customer"];
  */
 export async function transcribeDualChannel(audioBuffer) {
   try {
-    const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
+    const deepgram = new DeepgramClient({
+      apiKey: process.env.DEEPGRAM_API_KEY,
+    });
 
-    const { result } = await deepgram.listen.prerecorded.transcribeFile(
-      audioBuffer,
-      {
-        model: "nova-3",
-        multichannel: true,
-        smart_format: true,
-      },
-    );
+    const stream = Readable.from(audioBuffer);
+
+    const result = await deepgram.listen.v1.media.transcribeFile(stream, {
+      model: "nova-3",
+      multichannel: true,
+      smart_format: true,
+    });
 
     const utterances = [];
 
     // Each channel is a separate array of alternatives
-    const channels = result?.results?.channels ?? [];
+    const channels = result?.result?.results?.channels ?? [];
     for (let channelIndex = 0; channelIndex < channels.length; channelIndex++) {
       const speaker = CHANNEL_LABELS[channelIndex] ?? `Channel ${channelIndex}`;
       const words = channels[channelIndex]?.alternatives?.[0]?.words ?? [];
