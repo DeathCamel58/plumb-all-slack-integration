@@ -116,8 +116,8 @@ async function searchSMSByPhone(phoneE164) {
 }
 
 /**
- * Update a CallRail SMS thread with lead qualification, value, notes, and tags
- * @param {string} threadId The SMS thread ID
+ * Update a CallRail text message conversation with lead qualification, value, notes, and tags
+ * @param {string} threadId The text message conversation ID
  * @param {object} params
  * @param {string} params.value The monetary value
  * @param {string} params.notes Notes to attach
@@ -138,7 +138,7 @@ async function updateSMSThread(threadId, { value, notes, lead_qualification }) {
   }
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    let response = await fetch(`${BASE_URL}/sms-threads/${threadId}.json`, {
+    let response = await fetch(`${BASE_URL}/text-messages/${threadId}.json`, {
       method: "PUT",
       headers: {
         Authorization: `Token token="${CALLRAIL_API_KEY}"`,
