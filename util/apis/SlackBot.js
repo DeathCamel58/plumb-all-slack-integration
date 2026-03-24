@@ -2104,6 +2104,36 @@ async function interactivity(req) {
       }
 
       break;
+    case "message_action":
+      switch (event.callback_id) {
+        case "analyze_conversation": {
+          const channelId = event.channel?.id;
+          // Use the thread parent if available, otherwise the message itself
+          const threadTs = event.message?.thread_ts || event.message?.ts;
+          const userId = event.user?.id;
+
+          if (!channelId || !threadTs) {
+            console.warn(
+              "Slack: /analyze shortcut missing channel or thread context",
+            );
+            break;
+          }
+
+          // Run analysis asynchronously
+          runAnalysis(channelId, threadTs, userId).catch((e) => {
+            Sentry.captureException(e);
+            console.error("Slack: analyze shortcut error:", e);
+          });
+
+          break;
+        }
+        default:
+          console.warn(
+            `Slack: Unhandled message_action callback_id: ${event.callback_id}`,
+          );
+          break;
+      }
+      break;
     default:
       console.info(
         `Slack: Slack sent an unhandled INTERACTIVITY type: ${event.type}`,
@@ -2195,26 +2225,6 @@ async function command(req, res) {
       }
 
       res.send(smsResult.userMessage);
-
-      break;
-    }
-    case "/analyze": {
-      const threadTs = req.body?.thread_ts;
-      const channelId = req.body?.channel_id;
-
-      if (!threadTs || !channelId) {
-        res.send("This command can only be used inside a call thread.");
-        break;
-      }
-
-      // Respond immediately so Slack doesn't time out
-      res.send("");
-
-      // Run analysis asynchronously
-      runAnalysis(channelId, threadTs, userId).catch((e) => {
-        Sentry.captureException(e);
-        console.error("Slack: /analyze error:", e);
-      });
 
       break;
     }
