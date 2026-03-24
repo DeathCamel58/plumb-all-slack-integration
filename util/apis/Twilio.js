@@ -250,6 +250,13 @@ export async function getOrAssignEmployeeNumber(employeePhoneNumber) {
  * @returns {Promise<void>}
  */
 export async function updateTwilioContactTs(call, threadTs) {
+  if (!call?.from) {
+    console.warn(
+      "Twilio: updateTwilioContactTs called with no call.from, skipping",
+    );
+    return;
+  }
+
   const now = new Date();
 
   const ops = [
@@ -1268,6 +1275,7 @@ export async function handleRecordingDone(req, res) {
         process.env.SLACK_CHANNEL,
         twilioContact.slackThreadId,
         blocks,
+        `Call To ${toName} From ${normalizePhoneNumber(customerNumber)}`,
         call,
       );
     }
