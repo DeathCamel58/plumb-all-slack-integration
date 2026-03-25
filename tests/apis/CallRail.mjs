@@ -130,13 +130,13 @@ describe("CallRail", () => {
     prismaInvoiceCountMock.mockResolvedValue(1);
     fetchMock
       .mockResolvedValueOnce(mockFetchResponse({ calls: [] }))
-      .mockResolvedValueOnce(mockFetchResponse({ conversations: [] }));
+      .mockResolvedValueOnce(mockFetchResponse({ sms_threads: [] }));
 
     await handler(makePayment(), makeInvoice());
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0][0]).toContain("/calls.json?search=");
-    expect(fetchMock.mock.calls[1][0]).toContain("/text-messages.json?search=");
+    expect(fetchMock.mock.calls[1][0]).toContain("/sms-threads.json?search=");
   });
 
   test("First phone no match, second phone matches → PUT called", async () => {
@@ -219,13 +219,13 @@ describe("CallRail", () => {
       .mockResolvedValueOnce(
         mockFetchResponse({ calls: [{ id: "call-50", value: "150.00" }] }),
       )
-      .mockResolvedValueOnce(mockFetchResponse({ conversations: [] }));
+      .mockResolvedValueOnce(mockFetchResponse({ sms_threads: [] }));
 
     await handler(makePayment(), makeInvoice());
 
     // Call search + SMS search, no PUT
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[1][0]).toContain("/text-messages.json");
+    expect(fetchMock.mock.calls[1][0]).toContain("/sms-threads.json");
   });
 
   test("Search returns multiple calls, first qualified, second not → updates second", async () => {
@@ -279,7 +279,7 @@ describe("CallRail", () => {
       // SMS search: one unqualified thread
       .mockResolvedValueOnce(
         mockFetchResponse({
-          conversations: [
+          sms_threads: [
             { id: "sms-1", value: null, last_message_at: "2026-03-20T10:00:00Z" },
           ],
         }),
@@ -294,7 +294,7 @@ describe("CallRail", () => {
     // Call search + SMS search + SMS PUT
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls[0][0]).toContain("/calls.json?search=");
-    expect(fetchMock.mock.calls[1][0]).toContain("/text-messages.json?search=");
+    expect(fetchMock.mock.calls[1][0]).toContain("/sms-threads.json?search=");
     expect(fetchMock.mock.calls[2][0]).toContain("/sms-threads/sms-1.json");
 
     let putBody = JSON.parse(fetchMock.mock.calls[2][1].body);
@@ -310,7 +310,7 @@ describe("CallRail", () => {
       .mockResolvedValueOnce(mockFetchResponse({ calls: [] }))
       .mockResolvedValueOnce(
         mockFetchResponse({
-          conversations: [
+          sms_threads: [
             { id: "sms-2", value: "100.00", last_message_at: "2026-03-20T10:00:00Z" },
           ],
         }),
@@ -328,7 +328,7 @@ describe("CallRail", () => {
       .mockResolvedValueOnce(mockFetchResponse({ calls: [] }))
       .mockResolvedValueOnce(
         mockFetchResponse({
-          conversations: [
+          sms_threads: [
             { id: "sms-old", value: null, last_message_at: "2025-06-01T10:00:00Z" },
             { id: "sms-new", value: null, last_message_at: "2026-03-22T10:00:00Z" },
           ],
