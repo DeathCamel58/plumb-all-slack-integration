@@ -1,30 +1,42 @@
-import { GoogleAdsApi } from "google-ads-api";
+import fetch from "node-fetch";
 import * as Sentry from "@sentry/node";
 
-let clientInstance = null;
+const GOOGLE_ADS_API_VERSION = "v23";
 
 /**
- * Returns a lazily-initialized Google Ads API client.
- * @returns {GoogleAdsApi}
+ * Gets a fresh OAuth2 access token using the refresh token.
+ * @returns {Promise<string>} Access token
  */
-function getClient() {
-  if (!clientInstance) {
-    clientInstance = new GoogleAdsApi({
+async function getAccessToken() {
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
       client_id: process.env.GOOGLE_ADS_CLIENT_ID,
       client_secret: process.env.GOOGLE_ADS_CLIENT_SECRET,
-      developer_token: process.env.GOOGLE_ADS_DEVELOPER_TOKEN,
-    });
+      refresh_token: process.env.GOOGLE_ADS_REFRESH_TOKEN,
+      grant_type: "refresh_token",
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(
+      `GoogleAds: OAuth token refresh failed (${response.status}): ${text}`,
+    );
   }
-  return clientInstance;
+
+  const data = await response.json();
+  return data.access_token;
 }
 
 /**
- * Uploads a conversion value adjustment to Google Ads.
+ * Uploads a conversion value adjustment to Google Ads via the REST API.
  * This restates the value of an existing conversion that was originally sent with $0.
  *
  * @param {object} params
  * @param {string} params.gclid - The Google Click ID from the original ad click
- * @param {string} params.conversionDateTime - ISO 8601 datetime of the original conversion (must match exactly)
+ * @param {string} params.conversionDateTime - ISO 8601 datetime of the original conversion
  * @param {number} params.adjustedValue - The new dollar value to set
  * @returns {Promise<boolean>} true if successful
  */
@@ -49,43 +61,68 @@ export async function uploadConversionAdjustment({
   }
 
   try {
-    const client = getClient();
-    const customer = client.Customer({
-      customer_id: process.env.GOOGLE_ADS_CUSTOMER_ID,
-      refresh_token: process.env.GOOGLE_ADS_REFRESH_TOKEN,
-    });
-
-    // Google Ads requires the datetime in "yyyy-MM-dd HH:mm:ss+/-HH:mm" format
+    const accessToken = await getAccessToken();
+    const customerId = process.env.GOOGLE_ADS_CUSTOMER_ID;
     const formattedDateTime = formatDateTimeForGoogleAds(conversionDateTime);
+    const adjustmentDateTime = formatDateTimeForGoogleAds(
+      new Date().toISOString(),
+    );
 
     console.log(
       `GoogleAds: Uploading conversion adjustment — gclid=${gclid} value=$${adjustedValue} datetime=${formattedDateTime}`,
     );
 
-    const response = await customer.conversionAdjustments.upload(
-      [
-        {
-          adjustment_type: "RESTATEMENT",
-          conversion_action: process.env.GOOGLE_ADS_CONVERSION_ACTION_ID,
-          gclid_date_time_pair: {
-            gclid: gclid,
-            conversion_date_time: formattedDateTime,
-          },
-          restatement_value: {
-            adjusted_value: adjustedValue,
-            currency_code: "USD",
-          },
-        },
-      ],
-      {
-        partial_failure: true,
-      },
-    );
+    const url = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${customerId}:uploadConversionAdjustments`;
 
-    if (response.partial_failure_error) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "developer-token": process.env.GOOGLE_ADS_DEVELOPER_TOKEN,
+      },
+      body: JSON.stringify({
+        conversionAdjustments: [
+          {
+            conversionAction: process.env.GOOGLE_ADS_CONVERSION_ACTION_ID,
+            adjustmentType: "RESTATEMENT",
+            gclidDateTimePair: {
+              gclid: gclid,
+              conversionDateTime: formattedDateTime,
+            },
+            adjustmentDateTime: adjustmentDateTime,
+            restatementValue: {
+              adjustedValue: adjustedValue,
+            },
+          },
+        ],
+        partialFailure: true,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error(
+        `GoogleAds: API returned ${response.status}:`,
+        JSON.stringify(result),
+      );
+      Sentry.captureMessage("GoogleAds: Conversion adjustment API error", {
+        level: "error",
+        extra: {
+          gclid,
+          conversionDateTime: formattedDateTime,
+          adjustedValue,
+          result,
+        },
+      });
+      return false;
+    }
+
+    if (result.partialFailureError) {
       console.error(
         "GoogleAds: Partial failure in conversion adjustment:",
-        JSON.stringify(response.partial_failure_error),
+        JSON.stringify(result.partialFailureError),
       );
       Sentry.captureMessage(
         "GoogleAds: Conversion adjustment partial failure",
@@ -95,7 +132,7 @@ export async function uploadConversionAdjustment({
             gclid,
             conversionDateTime: formattedDateTime,
             adjustedValue,
-            error: response.partial_failure_error,
+            error: result.partialFailureError,
           },
         },
       );
@@ -121,7 +158,6 @@ export async function uploadConversionAdjustment({
  */
 function formatDateTimeForGoogleAds(isoDateTime) {
   const date = new Date(isoDateTime);
-  // Format in Eastern Time since all our calls are Eastern
   const formatted = date.toLocaleString("sv-SE", {
     timeZone: "America/New_York",
     year: "numeric",
@@ -133,11 +169,6 @@ function formatDateTimeForGoogleAds(isoDateTime) {
     hour12: false,
   });
 
-  // sv-SE locale gives "yyyy-MM-dd HH:mm:ss" — just need to add the offset
-  // Determine if Eastern is EDT (-04:00) or EST (-05:00)
-  const offsetMinutes = date.getTimezoneOffset();
-  // getTimezoneOffset returns minutes for the local machine, but we need Eastern
-  // Use a different approach: format with timeZoneName to detect
   const tzName = date.toLocaleString("en-US", {
     timeZone: "America/New_York",
     timeZoneName: "short",
