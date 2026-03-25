@@ -1,1 +1,2 @@
 npx lint-staged
+node --experimental-vm-modules node_modules/jest/bin/jest.js --testPathIgnorePatterns='./tests/apis/(GoogleMaps|PostHog).mjs'
