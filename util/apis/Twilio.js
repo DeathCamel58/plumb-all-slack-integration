@@ -1134,37 +1134,52 @@ export async function handleInboundSms(req, _res) {
  * @returns {Promise<void>}
  */
 export async function handleRecordingDone(req, res) {
-  console.log(`Twilio: Recording done for call ${req.body.CallSid}`);
+  const recordingSid = req.body.RecordingSid;
+  const recordingCallSid = req.body.CallSid;
+  console.log(
+    `Twilio: Recording done for call ${recordingCallSid} (recording: ${recordingSid})`,
+  );
 
   // Don't post recordings with duration 0
   if (req.body.RecordingDuration === 0) {
     console.log(
-      `Twilio: Recording had duration 0; not posting recording. (Recording SID: ${req.body.RecordingSid})`,
+      `Twilio: Recording had duration 0; not posting recording. (Recording SID: ${recordingSid})`,
     );
     return;
   }
 
   const callRecording = await downloadTwilioRecording(req.body.RecordingUrl);
 
-  const thisCall = await client.calls(req.body.CallSid).fetch();
+  const thisCall = await client.calls(recordingCallSid).fetch();
   let call = thisCall;
+
+  console.log(
+    `Twilio Recording: thisCall sid=${thisCall.sid} direction=${thisCall.direction} from=${thisCall.from} to=${thisCall.to} parentCallSid=${thisCall.parentCallSid || "none"}`,
+  );
 
   if (thisCall.parentCallSid && thisCall.parentCallSid !== "") {
     call = await client.calls(thisCall.parentCallSid).fetch();
+    console.log(
+      `Twilio Recording: parentCall sid=${call.sid} direction=${call.direction} from=${call.from} to=${call.to}`,
+    );
   }
 
   let customerNumber;
   let ourNumber;
+  let resolutionPath;
 
   // For an inbound call, we can use the `from` field to look up the sid, otherwise we need to look up the child call
   if (call.direction === "inbound") {
     customerNumber = call.from;
     ourNumber = call.to;
+    resolutionPath = "inbound";
   } else if (thisCall.parentCallSid) {
     // Recording fired on the child call — the child dialled the customer
     customerNumber = thisCall.to;
     ourNumber = thisCall.from;
+    resolutionPath = "outbound-child";
   } else {
+    resolutionPath = "outbound-parent-lookup";
     const childCall = await client.calls.list({
       parent: call.sid,
       limit: 1,
@@ -1177,10 +1192,13 @@ export async function handleRecordingDone(req, res) {
           level: "warning",
           extra: {
             parentCallSid: call.sid,
-            recordingSid: req.body.RecordingSid,
-            recordingCallSid: req.body.CallSid,
+            recordingSid,
+            recordingCallSid,
           },
         },
+      );
+      console.warn(
+        `Twilio Recording: No child call found for parent ${call.sid}. Cannot determine customer number.`,
       );
       return;
     }
@@ -1188,7 +1206,14 @@ export async function handleRecordingDone(req, res) {
     call = childCall[0];
     customerNumber = call.to;
     ourNumber = thisCall.from;
+    console.log(
+      `Twilio Recording: Found child call sid=${call.sid} to=${call.to} from=${call.from}`,
+    );
   }
+
+  console.log(
+    `Twilio Recording: Resolved via ${resolutionPath} — customer=${customerNumber} our=${ourNumber}`,
+  );
 
   if (customerNumber) {
     const twilioContact = await prisma.twilioContact.findUnique({
@@ -1197,7 +1222,14 @@ export async function handleRecordingDone(req, res) {
       },
     });
 
+    console.log(
+      `Twilio Recording: TwilioContact lookup for ${customerNumber}: ${twilioContact ? `found (slackThreadId=${twilioContact.slackThreadId || "null"}, createdAt=${twilioContact.createdAt})` : "NOT FOUND"}`,
+    );
+
     if (twilioContact?.slackThreadId) {
+      console.log(
+        `Twilio Recording: Uploading to existing thread ${twilioContact.slackThreadId}`,
+      );
       events.emit(
         "slackbot-upload-file",
         callRecording,
@@ -1208,6 +1240,9 @@ export async function handleRecordingDone(req, res) {
         twilioContact.slackThreadId,
       );
     } else {
+      console.log(
+        `Twilio Recording: No slackThreadId — creating new thread for recording`,
+      );
       Sentry.captureMessage(
         "Recording handler: no slackThreadId for customer",
         {
@@ -1215,9 +1250,17 @@ export async function handleRecordingDone(req, res) {
           extra: {
             customerNumber,
             ourNumber,
-            recordingSid: req.body.RecordingSid,
-            recordingCallSid: req.body.CallSid,
+            recordingSid,
+            recordingCallSid,
+            resolutionPath,
             twilioContact: twilioContact ?? null,
+            thisCallSid: thisCall.sid,
+            thisCallDirection: thisCall.direction,
+            thisCallFrom: thisCall.from,
+            thisCallTo: thisCall.to,
+            thisCallParent: thisCall.parentCallSid || null,
+            resolvedCallSid: call.sid,
+            resolvedCallDirection: call.direction,
           },
         },
       );
@@ -1225,7 +1268,7 @@ export async function handleRecordingDone(req, res) {
         where: { id: ourNumber },
       });
 
-      const toName = twilioNumber.assignedEmployee
+      const toName = twilioNumber?.assignedEmployee
         ? `<@${twilioNumber.assignedEmployee}>`
         : ourNumber;
 
@@ -1273,7 +1316,7 @@ export async function handleRecordingDone(req, res) {
         "Call recording",
         "Call Recorded",
         process.env.SLACK_CHANNEL,
-        twilioContact.slackThreadId,
+        null,
         blocks,
         `Call To ${toName} From ${normalizePhoneNumber(customerNumber)}`,
         call,
