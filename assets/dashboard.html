@@ -44,6 +44,7 @@
       <label for="forwardingPhone">New forwarding number</label>
       <input type="tel" id="forwardingPhone" placeholder="(770) 123-4567" autocomplete="off">
       <button id="forwardingBtn" onclick="updateForwarding()">Update All Forwarding Numbers</button>
+      <button id="resetBtn" onclick="resetToAnsweringService()" style="background: #7f8c8d; margin-top: 8px; display: none;">Reset to Answering Service</button>
       <div class="feedback" id="forwardingFeedback"></div>
     </div>
 
@@ -95,6 +96,19 @@
   </div>
 
   <script>
+    let answeringServiceNumber = null;
+
+    function updateResetButtonVisibility() {
+      const resetBtn = document.getElementById('resetBtn');
+      const current = document.getElementById('currentNumber').textContent;
+      if (answeringServiceNumber && current !== answeringServiceNumber) {
+        resetBtn.style.display = 'block';
+        resetBtn.textContent = `Reset to Answering Service (${answeringServiceNumber})`;
+      } else {
+        resetBtn.style.display = 'none';
+      }
+    }
+
     async function loadForwarding() {
       try {
         const resp = await fetch('/dashboard/forwarding');
@@ -104,7 +118,11 @@
         }
         const data = await resp.json();
         document.getElementById('currentNumber').textContent = data.phone || 'Not set';
-        document.getElementById('forwardingPhone').value = data.phone || '';
+
+        if (data.answeringService) {
+          answeringServiceNumber = data.answeringService;
+        }
+        updateResetButtonVisibility();
       } catch (e) {
         document.getElementById('currentNumber').textContent = 'Error loading';
       }
@@ -132,6 +150,7 @@
         if (resp.ok && data.ok) {
           showFeedback(fb, `Updated ${data.count} tracker(s) to ${data.phone}`, true);
           document.getElementById('currentNumber').textContent = data.phone;
+          updateResetButtonVisibility();
         } else {
           showFeedback(fb, data.error || 'Update failed', false);
         }
@@ -140,6 +159,39 @@
       } finally {
         btn.disabled = false;
         btn.textContent = 'Update All Forwarding Numbers';
+      }
+    }
+
+    async function resetToAnsweringService() {
+      if (!answeringServiceNumber) return;
+
+      const btn = document.getElementById('resetBtn');
+      const fb = document.getElementById('forwardingFeedback');
+
+      btn.disabled = true;
+      btn.textContent = 'Resetting...';
+      fb.className = 'feedback';
+      fb.style.display = 'none';
+
+      try {
+        const resp = await fetch('/dashboard/forwarding', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: answeringServiceNumber }),
+        });
+        const data = await resp.json();
+        if (resp.ok && data.ok) {
+          showFeedback(fb, `Reset ${data.count} tracker(s) to answering service (${data.phone})`, true);
+          document.getElementById('currentNumber').textContent = data.phone;
+          updateResetButtonVisibility();
+        } else {
+          showFeedback(fb, data.error || 'Reset failed', false);
+        }
+      } catch (e) {
+        showFeedback(fb, 'Network error', false);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = `Reset to Answering Service (${answeringServiceNumber})`;
       }
     }
 

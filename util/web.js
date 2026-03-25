@@ -12,7 +12,7 @@ import cors from "cors";
 import { fileURLToPath } from "url";
 import { getFile } from "./mediaStore.js";
 import { listTrackers, updateAllTrackerDestinations } from "./apis/CallRail.js";
-import { toE164 } from "./DataUtilities.js";
+import { toE164, normalizePhoneNumber } from "./DataUtilities.js";
 import Contact from "./contact.js";
 import * as APICoordinator from "./APICoordinator.js";
 import {
@@ -578,8 +578,14 @@ app.get("/dashboard", dashboardAuth, (req, res) => {
 app.get("/dashboard/forwarding", dashboardAuth, async (req, res) => {
   try {
     let trackers = await listTrackers();
-    let phone = trackers.length > 0 ? trackers[0].destination_number : null;
-    res.json({ phone });
+    let raw = trackers.length > 0 ? trackers[0].destination_number : null;
+    let phone = raw ? normalizePhoneNumber(raw) || raw : null;
+    let answeringService = process.env.DASHBOARD_ANSWERING_SERVICE_PHONE_NUMBER
+      ? normalizePhoneNumber(
+          process.env.DASHBOARD_ANSWERING_SERVICE_PHONE_NUMBER,
+        ) || process.env.DASHBOARD_ANSWERING_SERVICE_PHONE_NUMBER
+      : null;
+    res.json({ phone, answeringService });
   } catch (e) {
     Sentry.captureException(e);
     console.error("Web: Dashboard forwarding fetch error:", e);
@@ -606,7 +612,8 @@ app.post("/dashboard/forwarding", dashboardAuth, async (req, res) => {
 
   try {
     let count = await updateAllTrackerDestinations(phone);
-    res.json({ ok: true, count, phone });
+    let friendly = normalizePhoneNumber(phone) || phone;
+    res.json({ ok: true, count, phone: friendly });
   } catch (e) {
     Sentry.captureException(e);
     console.error("Web: Dashboard forwarding update error:", e);
