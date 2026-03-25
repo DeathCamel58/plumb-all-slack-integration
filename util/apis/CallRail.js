@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import fetch from "node-fetch";
 import events from "../events.js";
 import prisma from "../prismaClient.js";
@@ -7,7 +8,37 @@ import * as Sentry from "@sentry/node";
 
 const CALLRAIL_API_KEY = process.env.CALLRAIL_API_KEY;
 const CALLRAIL_ACCOUNT_ID = process.env.CALLRAIL_ACCOUNT_ID;
+const CALLRAIL_SIGNING_KEY = process.env.CALLRAIL_SIGNING_KEY;
 const BASE_URL = `https://api.callrail.com/v3/a/${CALLRAIL_ACCOUNT_ID}`;
+
+/**
+ * Verifies a CallRail webhook signature using HMAC-SHA1.
+ * @param {import("express").Request & {rawBody?: string}} req
+ * @returns {boolean}
+ */
+export function verifyWebhook(req) {
+  if (process.env.DEBUG === "TRUE") {
+    return true;
+  }
+
+  if (!CALLRAIL_SIGNING_KEY) {
+    console.warn("CallRail: No signing key configured, skipping verification");
+    return true;
+  }
+
+  const signature = req.headers["signature"];
+  if (!signature) {
+    console.warn("CallRail: Webhook missing Signature header");
+    return false;
+  }
+
+  const body = req.rawBody || req.body;
+  const hmac = crypto.createHmac("sha1", CALLRAIL_SIGNING_KEY);
+  hmac.update(typeof body === "string" ? body : JSON.stringify(body));
+  const computed = hmac.digest("base64");
+
+  return computed === signature;
+}
 
 /**
  * Search CallRail for calls matching the given phone number
@@ -435,4 +466,50 @@ export async function updateAllTrackerDestinations(newNumber) {
     `CallRail: Updated ${updated}/${trackers.length} tracker destination(s) to ${newNumber}`,
   );
   return updated;
+}
+
+/**
+ * Fetches all CallRail calls that have both a value and a GCLID,
+ * paginating through all results. Used for backfilling Google Ads conversions.
+ * @returns {Promise<Array<{id: string, value: string, gclid: string, start_time: string}>>}
+ */
+export async function listCallsWithValueAndGclid() {
+  let allCalls = [];
+  let page = 1;
+  let totalPages = 1;
+
+  while (page <= totalPages) {
+    let response = await fetch(
+      `${BASE_URL}/calls.json?fields=value,gclid&per_page=250&page=${page}`,
+      {
+        headers: {
+          Authorization: `Token token="${CALLRAIL_API_KEY}"`,
+        },
+      },
+    );
+
+    if (!response.ok) {
+      let body = await response.text().catch(() => "");
+      throw new Error(
+        `CallRail call list failed: ${response.status} ${response.statusText}: ${body}`,
+      );
+    }
+
+    let data = await response.json();
+    totalPages = data.total_pages || 1;
+
+    for (let call of data.calls || []) {
+      let value = call.value ? parseFloat(call.value) : 0;
+      if (value > 0 && call.gclid) {
+        allCalls.push(call);
+      }
+    }
+
+    page++;
+  }
+
+  console.log(
+    `CallRail: Found ${allCalls.length} call(s) with value and GCLID across ${totalPages} page(s)`,
+  );
+  return allCalls;
 }

@@ -93,6 +93,16 @@
       <button id="contactBtn" onclick="submitContact()">Submit Contact</button>
       <div class="feedback" id="contactFeedback"></div>
     </div>
+
+    <!-- Backfill Section -->
+    <div class="card" style="margin-top: 40px; border-top: 3px solid #e74c3c;">
+      <h2 style="color: #7f8c8d; font-size: 1em;">Admin Tools</h2>
+      <p style="font-size: 0.85em; color: #999; margin-bottom: 12px;">
+        Backfill Google Ads conversion values from CallRail. Finds all calls with a value and GCLID, then uploads conversion adjustments. Only works for conversions within the last 55 days.
+      </p>
+      <button id="backfillBtn" onclick="runBackfill()" style="background: #e74c3c;">Backfill Google Ads Conversion Values</button>
+      <div class="feedback" id="backfillFeedback"></div>
+    </div>
   </div>
 
   <script>
@@ -238,6 +248,37 @@
       } finally {
         btn.disabled = false;
         btn.textContent = 'Submit Contact';
+      }
+    }
+
+    async function runBackfill() {
+      const btn = document.getElementById('backfillBtn');
+      const fb = document.getElementById('backfillFeedback');
+
+      if (!confirm('This will upload conversion values to Google Ads for all CallRail calls with a value and GCLID. Continue?')) return;
+
+      btn.disabled = true;
+      btn.textContent = 'Backfilling...';
+      fb.className = 'feedback';
+      fb.style.display = 'none';
+
+      try {
+        const resp = await fetch('/dashboard/backfill-conversions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const data = await resp.json();
+        if (resp.ok && data.ok) {
+          showFeedback(fb, `Backfill complete: ${data.uploaded} adjustment(s) uploaded, ${data.skipped} skipped, ${data.failed} failed out of ${data.total} eligible call(s).`, true);
+        } else {
+          showFeedback(fb, data.error || 'Backfill failed', false);
+        }
+      } catch (e) {
+        showFeedback(fb, 'Network error', false);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Backfill Google Ads Conversion Values';
       }
     }
 

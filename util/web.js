@@ -11,7 +11,13 @@ import * as Sentry from "@sentry/node";
 import cors from "cors";
 import { fileURLToPath } from "url";
 import { getFile } from "./mediaStore.js";
-import { listTrackers, updateAllTrackerDestinations } from "./apis/CallRail.js";
+import {
+  listTrackers,
+  updateAllTrackerDestinations,
+  listCallsWithValueAndGclid,
+  verifyWebhook as verifyCallRailWebhook,
+} from "./apis/CallRail.js";
+import { uploadConversionAdjustment } from "./apis/GoogleAdsConversions.js";
 import { toE164, normalizePhoneNumber } from "./DataUtilities.js";
 import Contact from "./contact.js";
 import * as APICoordinator from "./APICoordinator.js";
@@ -121,6 +127,51 @@ app.post("/jobber/:WEBHOOK_TYPE", (req, res) => {
   }
 
   // Send the response
+  res.sendStatus(responseStatus);
+});
+
+/**
+ * Handle CallRail POST Webhooks
+ */
+app.post("/callrail/:WEBHOOK_TYPE", (req, res) => {
+  console.info(`Web: Got a ${req.params.WEBHOOK_TYPE} webhook from CallRail!`);
+
+  if (process.env.DEBUG === "TRUE") {
+    console.log("CallRail Webhook: Data was");
+    console.log(req.body);
+  }
+
+  let responseStatus = 200;
+
+  if (verifyCallRailWebhook(req)) {
+    if (
+      "content-type" in req.headers &&
+      req.headers["content-type"].includes("application/json")
+    ) {
+      try {
+        req.body = JSON.parse(req.body);
+      } catch (e) {
+        console.error("Web: Invalid JSON in CallRail webhook body");
+        res.sendStatus(400);
+        return;
+      }
+    }
+
+    const listenerName = `callrail-${req.params.WEBHOOK_TYPE}`;
+    if (events.listenerCount(listenerName) > 0) {
+      events.emit(listenerName, req);
+    } else {
+      console.log(
+        `Web: No handler for CallRail webhook type: ${req.params.WEBHOOK_TYPE}`,
+      );
+      console.log("Web: Data for unhandled CallRail webhook was");
+      console.log(req.body);
+      responseStatus = 405;
+    }
+  } else {
+    responseStatus = 401;
+  }
+
   res.sendStatus(responseStatus);
 });
 
@@ -657,6 +708,60 @@ app.post("/dashboard/contact", dashboardAuth, async (req, res) => {
     Sentry.captureException(e);
     console.error("Web: Dashboard contact submit error:", e);
     res.status(500).json({ error: "Failed to submit contact" });
+  }
+});
+
+/**
+ * Dashboard: Backfill Google Ads conversion values from CallRail
+ */
+app.post("/dashboard/backfill-conversions", dashboardAuth, async (req, res) => {
+  try {
+    console.log("Web: Starting Google Ads conversion backfill");
+
+    let calls = await listCallsWithValueAndGclid();
+    let uploaded = 0;
+    let skipped = 0;
+    let failed = 0;
+
+    // Only process calls within the 55-day adjustment window
+    let cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 55);
+
+    for (let call of calls) {
+      let callDate = new Date(call.start_time);
+      if (callDate < cutoff) {
+        skipped++;
+        console.log(
+          `Web: Backfill skipping call ${call.id} — too old (${call.start_time})`,
+        );
+        continue;
+      }
+
+      try {
+        let success = await uploadConversionAdjustment({
+          gclid: call.gclid,
+          conversionDateTime: call.start_time,
+          adjustedValue: parseFloat(call.value),
+        });
+        if (success) {
+          uploaded++;
+        } else {
+          failed++;
+        }
+      } catch (e) {
+        failed++;
+        console.error(`Web: Backfill failed for call ${call.id}:`, e);
+      }
+    }
+
+    console.log(
+      `Web: Backfill complete — ${uploaded} uploaded, ${skipped} skipped, ${failed} failed out of ${calls.length} total`,
+    );
+    res.json({ ok: true, total: calls.length, uploaded, skipped, failed });
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Web: Backfill error:", e);
+    res.status(500).json({ error: "Backfill failed" });
   }
 });
 
