@@ -80,6 +80,9 @@ export async function uploadConversionAdjustment({
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
         "developer-token": process.env.GOOGLE_ADS_DEVELOPER_TOKEN,
+        ...(process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID
+          ? { "login-customer-id": process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID }
+          : {}),
       },
       body: JSON.stringify({
         conversionAdjustments: [
