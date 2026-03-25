@@ -11,6 +11,10 @@ import * as Sentry from "@sentry/node";
 import cors from "cors";
 import { fileURLToPath } from "url";
 import { getFile } from "./mediaStore.js";
+import { listTrackers, updateAllTrackerDestinations } from "./apis/CallRail.js";
+import { toE164 } from "./DataUtilities.js";
+import Contact from "./contact.js";
+import * as APICoordinator from "./APICoordinator.js";
 import {
   handleBridge,
   handleBridgeAfterDial,
@@ -533,6 +537,120 @@ app.get("/", (req, res) => {
 
 app.get("/openapi.yaml", (req, res) => {
   res.sendFile(path.join(__dirname, "../assets/openapi.yaml"));
+});
+
+/**
+ * Dashboard auth middleware — HTTP Basic Auth using DASHBOARD_KEY as both username and password.
+ */
+function dashboardAuth(req, res, next) {
+  const key = process.env.DASHBOARD_KEY;
+  if (!key) {
+    return res.status(503).send("Dashboard not configured");
+  }
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Basic ")) {
+    res.set("WWW-Authenticate", 'Basic realm="Plumb-All Dashboard"');
+    return res.status(401).send("Authentication required");
+  }
+
+  const decoded = Buffer.from(authHeader.slice(6), "base64").toString();
+  const [user, pass] = decoded.split(":");
+
+  if (user !== key || pass !== key) {
+    res.set("WWW-Authenticate", 'Basic realm="Plumb-All Dashboard"');
+    return res.status(401).send("Invalid credentials");
+  }
+
+  next();
+}
+
+/**
+ * Dashboard page
+ */
+app.get("/dashboard", dashboardAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, "../assets/dashboard.html"));
+});
+
+/**
+ * Dashboard: Get current forwarding number
+ */
+app.get("/dashboard/forwarding", dashboardAuth, async (req, res) => {
+  try {
+    let trackers = await listTrackers();
+    let phone = trackers.length > 0 ? trackers[0].destination_number : null;
+    res.json({ phone });
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Web: Dashboard forwarding fetch error:", e);
+    res.status(500).json({ error: "Failed to fetch forwarding number" });
+  }
+});
+
+/**
+ * Dashboard: Update all forwarding numbers
+ */
+app.post("/dashboard/forwarding", dashboardAuth, async (req, res) => {
+  try {
+    req.body = JSON.parse(req.body);
+  } catch (e) {
+    return res.status(400).json({ error: "Invalid JSON" });
+  }
+
+  let phone;
+  try {
+    phone = toE164(req.body.phone);
+  } catch (e) {
+    return res.status(400).json({ error: "Invalid phone number" });
+  }
+
+  try {
+    let count = await updateAllTrackerDestinations(phone);
+    res.json({ ok: true, count, phone });
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Web: Dashboard forwarding update error:", e);
+    res.status(500).json({ error: "Failed to update forwarding numbers" });
+  }
+});
+
+/**
+ * Dashboard: Submit a contact form (same as answering service)
+ */
+app.post("/dashboard/contact", dashboardAuth, async (req, res) => {
+  try {
+    req.body = JSON.parse(req.body);
+  } catch (e) {
+    return res.status(400).json({ error: "Invalid JSON" });
+  }
+
+  let data = req.body;
+
+  let name = `${data.firstName || ""} ${data.lastName || ""}`.trim();
+  let addressParts = [data.street, data.city, data.state, data.zip].filter(
+    Boolean,
+  );
+  let address = addressParts.join(", ") || undefined;
+
+  let contact = new Contact(
+    "Call",
+    name || undefined,
+    data.phone || undefined,
+    undefined,
+    undefined,
+    address,
+    data.message || undefined,
+    null,
+  );
+
+  try {
+    await APICoordinator.contactMade(contact, JSON.stringify(data));
+    res.json({ ok: true });
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Web: Dashboard contact submit error:", e);
+    res.status(500).json({ error: "Failed to submit contact" });
+  }
 });
 
 app.listen(port, "0.0.0.0", () =>

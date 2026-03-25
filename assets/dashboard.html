@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plumb-All Call Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; padding: 20px; }
+    .container { max-width: 600px; margin: 0 auto; }
+    h1 { text-align: center; margin-bottom: 24px; color: #1a5276; }
+    .card { background: #fff; border-radius: 8px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .card h2 { margin-bottom: 16px; color: #1a5276; font-size: 1.2em; }
+    .script { background: #eaf2f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin-bottom: 16px; font-style: italic; color: #555; line-height: 1.5; }
+    label { display: block; font-weight: 600; margin-bottom: 4px; margin-top: 12px; font-size: 0.9em; }
+    input[type="text"], input[type="tel"], textarea {
+      width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 1em;
+    }
+    textarea { height: 100px; resize: vertical; }
+    .row { display: flex; gap: 12px; }
+    .row > div { flex: 1; }
+    button {
+      display: block; width: 100%; padding: 12px; margin-top: 16px;
+      background: #2980b9; color: #fff; border: none; border-radius: 4px;
+      font-size: 1em; font-weight: 600; cursor: pointer;
+    }
+    button:hover { background: #2471a3; }
+    button:disabled { background: #95a5a6; cursor: not-allowed; }
+    .feedback { margin-top: 12px; padding: 10px; border-radius: 4px; display: none; font-size: 0.9em; }
+    .feedback.success { display: block; background: #d5f5e3; color: #1e8449; }
+    .feedback.error { display: block; background: #fadbd8; color: #c0392b; }
+    .current-number { font-size: 1.3em; font-weight: 700; color: #2980b9; text-align: center; margin-bottom: 12px; min-height: 1.5em; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Plumb-All Call Dashboard</h1>
+
+    <!-- Call Forwarding Section -->
+    <div class="card">
+      <h2>Call Forwarding</h2>
+      <p style="margin-bottom: 8px;">All tracking numbers currently forward to:</p>
+      <div class="current-number" id="currentNumber">Loading...</div>
+      <label for="forwardingPhone">New forwarding number</label>
+      <input type="tel" id="forwardingPhone" placeholder="(770) 123-4567" autocomplete="off">
+      <button id="forwardingBtn" onclick="updateForwarding()">Update All Forwarding Numbers</button>
+      <div class="feedback" id="forwardingFeedback"></div>
+    </div>
+
+    <!-- Contact Form Section -->
+    <div class="card">
+      <h2>Log a Call</h2>
+      <div class="script">
+        "Thank you for calling Plumb-All. This is ___________. How can I help?"
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="firstName">First Name</label>
+          <input type="text" id="firstName" autocomplete="off">
+        </div>
+        <div>
+          <label for="lastName">Last Name</label>
+          <input type="text" id="lastName" autocomplete="off">
+        </div>
+      </div>
+
+      <label for="callbackPhone">Callback Phone Number</label>
+      <input type="tel" id="callbackPhone" placeholder="(770) 123-4567" autocomplete="off">
+
+      <label for="street">Street Address</label>
+      <input type="text" id="street" autocomplete="off">
+
+      <div class="row">
+        <div style="flex: 2;">
+          <label for="city">City</label>
+          <input type="text" id="city" autocomplete="off">
+        </div>
+        <div>
+          <label for="state">State</label>
+          <input type="text" id="state" value="GA" autocomplete="off">
+        </div>
+        <div>
+          <label for="zip">Zip</label>
+          <input type="text" id="zip" autocomplete="off">
+        </div>
+      </div>
+
+      <label for="message">Message Details</label>
+      <textarea id="message" placeholder="What does the customer need help with?" autocomplete="off"></textarea>
+
+      <button id="contactBtn" onclick="submitContact()">Submit Contact</button>
+      <div class="feedback" id="contactFeedback"></div>
+    </div>
+  </div>
+
+  <script>
+    async function loadForwarding() {
+      try {
+        const resp = await fetch('/dashboard/forwarding');
+        if (!resp.ok) {
+          document.getElementById('currentNumber').textContent = 'Error loading';
+          return;
+        }
+        const data = await resp.json();
+        document.getElementById('currentNumber').textContent = data.phone || 'Not set';
+        document.getElementById('forwardingPhone').value = data.phone || '';
+      } catch (e) {
+        document.getElementById('currentNumber').textContent = 'Error loading';
+      }
+    }
+
+    async function updateForwarding() {
+      const btn = document.getElementById('forwardingBtn');
+      const fb = document.getElementById('forwardingFeedback');
+      const phone = document.getElementById('forwardingPhone').value.trim();
+
+      if (!phone) { showFeedback(fb, 'Please enter a phone number.', false); return; }
+
+      btn.disabled = true;
+      btn.textContent = 'Updating...';
+      fb.className = 'feedback';
+      fb.style.display = 'none';
+
+      try {
+        const resp = await fetch('/dashboard/forwarding', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone }),
+        });
+        const data = await resp.json();
+        if (resp.ok && data.ok) {
+          showFeedback(fb, `Updated ${data.count} tracker(s) to ${data.phone}`, true);
+          document.getElementById('currentNumber').textContent = data.phone;
+        } else {
+          showFeedback(fb, data.error || 'Update failed', false);
+        }
+      } catch (e) {
+        showFeedback(fb, 'Network error', false);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Update All Forwarding Numbers';
+      }
+    }
+
+    async function submitContact() {
+      const btn = document.getElementById('contactBtn');
+      const fb = document.getElementById('contactFeedback');
+
+      const body = {
+        firstName: document.getElementById('firstName').value.trim(),
+        lastName: document.getElementById('lastName').value.trim(),
+        phone: document.getElementById('callbackPhone').value.trim(),
+        street: document.getElementById('street').value.trim(),
+        city: document.getElementById('city').value.trim(),
+        state: document.getElementById('state').value.trim(),
+        zip: document.getElementById('zip').value.trim(),
+        message: document.getElementById('message').value.trim(),
+      };
+
+      if (!body.firstName && !body.lastName) { showFeedback(fb, 'Please enter at least a name.', false); return; }
+
+      btn.disabled = true;
+      btn.textContent = 'Submitting...';
+      fb.className = 'feedback';
+      fb.style.display = 'none';
+
+      try {
+        const resp = await fetch('/dashboard/contact', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await resp.json();
+        if (resp.ok && data.ok) {
+          showFeedback(fb, 'Contact submitted successfully!', true);
+          // Clear form
+          ['firstName', 'lastName', 'callbackPhone', 'street', 'city', 'zip', 'message'].forEach(id => {
+            document.getElementById(id).value = '';
+          });
+        } else {
+          showFeedback(fb, data.error || 'Submission failed', false);
+        }
+      } catch (e) {
+        showFeedback(fb, 'Network error', false);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Submit Contact';
+      }
+    }
+
+    function showFeedback(el, msg, success) {
+      el.textContent = msg;
+      el.className = 'feedback ' + (success ? 'success' : 'error');
+    }
+
+    loadForwarding();
+  </script>
+</body>
+</html>

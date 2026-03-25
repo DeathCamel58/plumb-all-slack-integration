@@ -367,3 +367,72 @@ export async function getCallSource(phone) {
     return null;
   }
 }
+
+/**
+ * Lists all active CallRail trackers for the account.
+ * @returns {Promise<object[]>} Array of tracker objects
+ */
+export async function listTrackers() {
+  let response = await fetch(`${BASE_URL}/trackers.json?status=active`, {
+    headers: {
+      Authorization: `Token token="${CALLRAIL_API_KEY}"`,
+    },
+  });
+
+  if (!response.ok) {
+    let body = await response.text().catch(() => "");
+    throw new Error(
+      `CallRail tracker list failed: ${response.status} ${response.statusText}: ${body}`,
+    );
+  }
+
+  let data = await response.json();
+  return data.trackers || [];
+}
+
+/**
+ * Updates the destination number for all active CallRail trackers.
+ * @param {string} newNumber The new destination phone number (E.164 format)
+ * @returns {Promise<number>} The number of trackers updated
+ */
+export async function updateAllTrackerDestinations(newNumber) {
+  let trackers = await listTrackers();
+  let updated = 0;
+
+  for (let tracker of trackers) {
+    try {
+      let response = await fetch(`${BASE_URL}/trackers/${tracker.id}.json`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Token token="${CALLRAIL_API_KEY}"`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          call_flow: {
+            destination_number: newNumber,
+          },
+        }),
+      });
+
+      if (response.ok) {
+        console.log(
+          `CallRail: Updated tracker ${tracker.name} (${tracker.id}) destination to ${newNumber}`,
+        );
+        updated++;
+      } else {
+        let body = await response.text().catch(() => "");
+        console.error(
+          `CallRail: Failed to update tracker ${tracker.id}: ${response.status} ${body}`,
+        );
+      }
+    } catch (e) {
+      Sentry.captureException(e);
+      console.error(`CallRail: Error updating tracker ${tracker.id}:`, e);
+    }
+  }
+
+  console.log(
+    `CallRail: Updated ${updated}/${trackers.length} tracker destination(s) to ${newNumber}`,
+  );
+  return updated;
+}
