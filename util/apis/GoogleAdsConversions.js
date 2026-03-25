@@ -154,6 +154,56 @@ export async function uploadConversionAdjustment({
 }
 
 /**
+ * Lists all conversion actions in the account. Used for diagnostics.
+ * @returns {Promise<object[]>} Array of conversion actions with id, name, type, and resource_name
+ */
+export async function listConversionActions() {
+  const accessToken = await getAccessToken();
+  const customerId = process.env.GOOGLE_ADS_CUSTOMER_ID;
+
+  const url = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${customerId}/googleAds:searchStream`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      "developer-token": process.env.GOOGLE_ADS_DEVELOPER_TOKEN,
+      ...(process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID
+        ? { "login-customer-id": process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID }
+        : {}),
+    },
+    body: JSON.stringify({
+      query:
+        "SELECT conversion_action.id, conversion_action.name, conversion_action.type, conversion_action.resource_name, conversion_action.status FROM conversion_action",
+    }),
+  });
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      `GoogleAds: Failed to list conversion actions (${response.status}): ${JSON.stringify(result)}`,
+    );
+  }
+
+  // searchStream returns an array of batches
+  const actions = [];
+  for (const batch of result) {
+    for (const row of batch.results || []) {
+      actions.push({
+        id: row.conversionAction.id,
+        name: row.conversionAction.name,
+        type: row.conversionAction.type,
+        status: row.conversionAction.status,
+        resourceName: row.conversionAction.resourceName,
+      });
+    }
+  }
+  return actions;
+}
+
+/**
  * Formats an ISO 8601 datetime string into Google Ads format.
  * Google Ads requires: "yyyy-MM-dd HH:mm:ss+/-HH:mm"
  * @param {string} isoDateTime - ISO 8601 datetime (e.g., "2026-03-22T14:30:00.000-04:00")

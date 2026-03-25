@@ -17,7 +17,10 @@ import {
   listCallsWithValueAndGclid,
   verifyWebhook as verifyCallRailWebhook,
 } from "./apis/CallRail.js";
-import { uploadConversionAdjustment } from "./apis/GoogleAdsConversions.js";
+import {
+  uploadConversionAdjustment,
+  listConversionActions,
+} from "./apis/GoogleAdsConversions.js";
 import { toE164, normalizePhoneNumber } from "./DataUtilities.js";
 import Contact from "./contact.js";
 import * as APICoordinator from "./APICoordinator.js";
@@ -762,6 +765,20 @@ app.post("/dashboard/backfill-conversions", dashboardAuth, async (req, res) => {
     Sentry.captureException(e);
     console.error("Web: Backfill error:", e);
     res.status(500).json({ error: "Backfill failed" });
+  }
+});
+
+/**
+ * Dashboard: List Google Ads conversion actions (diagnostic)
+ */
+app.get("/dashboard/conversion-actions", dashboardAuth, async (req, res) => {
+  try {
+    let actions = await listConversionActions();
+    res.json({ ok: true, actions });
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Web: Failed to list conversion actions:", e);
+    res.status(500).json({ error: e.message });
   }
 });
 
