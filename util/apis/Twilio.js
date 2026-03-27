@@ -275,6 +275,20 @@ export async function updateTwilioContactTs(call, threadTs) {
 }
 
 /**
+ * Checks if a Slack thread timestamp is older than a given number of days.
+ * Slack timestamps are Unix epoch seconds with microsecond decimal (e.g., "1774443953.781049").
+ * @param {string} slackTs - Slack message timestamp
+ * @param {number} days - Number of days to consider expired
+ * @returns {boolean}
+ */
+function isSlackThreadExpired(slackTs, days) {
+  const threadDate = new Date(parseFloat(slackTs) * 1000);
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  return threadDate < cutoff;
+}
+
+/**
  * Upserts a TwilioContact for the customer and updates last-contact metadata.
  * @param {string} customerNumber - Customer phone number (any format).
  * @param {string} twilioNumber - Twilio number used for the interaction (any format).
@@ -291,12 +305,35 @@ export async function updateTwilioContact(
 
   const now = new Date();
 
-  const ops = [
-    prisma.twilioContact.upsert({
+  // Only set slackThreadId when creating, when it's currently null, or
+  // when the existing thread is older than 30 days. This prevents SMS
+  // replies and missed-call messages from overwriting the original thread
+  // ID, while allowing a fresh thread for customers who call back months later.
+  const THREAD_EXPIRY_DAYS = 30;
+
+  if (slackThreadId) {
+    // Check if the existing thread is expired before we update lastContactAt
+    const existing = await prisma.twilioContact.findUnique({
+      where: { id: cleanedCustomerNumber },
+      select: { slackThreadId: true },
+    });
+
+    const threadExpired =
+      existing?.slackThreadId &&
+      isSlackThreadExpired(existing.slackThreadId, THREAD_EXPIRY_DAYS);
+
+    if (threadExpired) {
+      console.log(
+        `Twilio: Thread for ${cleanedCustomerNumber} is older than ${THREAD_EXPIRY_DAYS} days, starting fresh thread`,
+      );
+    }
+
+    await prisma.twilioContact.upsert({
       where: { id: cleanedCustomerNumber },
       update: {
         lastContactAt: now,
-        ...(slackThreadId ? { slackThreadId } : {}),
+        // Overwrite slackThreadId if the existing thread is expired
+        ...(threadExpired ? { slackThreadId } : {}),
       },
       create: {
         id: cleanedCustomerNumber,
@@ -306,10 +343,31 @@ export async function updateTwilioContact(
         lastContactAt: now,
         twilioNumberId: cleanedTwilioNumber,
       },
-    }),
-  ];
+    });
 
-  await prisma.$transaction(ops);
+    // If the existing record has no slackThreadId, set it
+    if (!existing?.slackThreadId) {
+      await prisma.twilioContact.updateMany({
+        where: { id: cleanedCustomerNumber, slackThreadId: null },
+        data: { slackThreadId },
+      });
+    }
+  } else {
+    await prisma.twilioContact.upsert({
+      where: { id: cleanedCustomerNumber },
+      update: {
+        lastContactAt: now,
+      },
+      create: {
+        id: cleanedCustomerNumber,
+        clientNumber: cleanedCustomerNumber,
+        slackThreadId: null,
+        createdAt: now,
+        lastContactAt: now,
+        twilioNumberId: cleanedTwilioNumber,
+      },
+    });
+  }
 }
 
 /**

@@ -21,6 +21,7 @@ const prismaMock = {
   },
   twilioContact: {
     update: jest.fn(),
+    updateMany: jest.fn(),
     upsert: jest.fn(),
     findUnique: jest.fn(),
     findFirst: jest.fn(),
@@ -200,6 +201,7 @@ beforeEach(() => {
   prismaMock.twilioNumber.findUnique.mockReset();
   prismaMock.twilioNumber.updateMany.mockReset();
   prismaMock.twilioContact.update.mockReset();
+  prismaMock.twilioContact.updateMany.mockReset();
   prismaMock.twilioContact.upsert.mockReset();
   prismaMock.twilioContact.findUnique.mockReset();
   prismaMock.twilioContact.findFirst.mockReset();
@@ -221,6 +223,7 @@ beforeEach(() => {
   });
   prismaMock.twilioContact.upsert.mockResolvedValue({});
   prismaMock.twilioContact.update.mockResolvedValue({});
+  prismaMock.twilioContact.updateMany.mockResolvedValue({ count: 0 });
 });
 
 describe("Twilio", () => {
@@ -291,6 +294,8 @@ describe("Twilio", () => {
   test("updateTwilioContact upserts using E.164-normalized numbers", async () => {
     await Twilio.updateTwilioContact("555-444-3333", "(555) 000-1111", "1.2");
 
+    // Upsert should set slackThreadId on create but NOT on update
+    // (to prevent overwriting the original thread with a reply ts)
     expect(prismaMock.twilioContact.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: "+15554443333" },
@@ -300,11 +305,17 @@ describe("Twilio", () => {
           twilioNumberId: "+15550001111",
           slackThreadId: "1.2",
         }),
-        update: expect.objectContaining({
-          slackThreadId: "1.2",
-        }),
       }),
     );
+    // update should NOT contain slackThreadId
+    const upsertCall = prismaMock.twilioContact.upsert.mock.calls[0][0];
+    expect(upsertCall.update).not.toHaveProperty("slackThreadId");
+
+    // Separate updateMany should set slackThreadId only where it's null
+    expect(prismaMock.twilioContact.updateMany).toHaveBeenCalledWith({
+      where: { id: "+15554443333", slackThreadId: null },
+      data: { slackThreadId: "1.2" },
+    });
   });
 
   test("handleInboundScreen returns screening TwiML", () => {
