@@ -1239,7 +1239,7 @@ export async function handleRecordingDone(req, res) {
   } else {
     resolutionPath = "outbound-parent-lookup";
     const childCall = await client.calls.list({
-      parent: call.sid,
+      parentCallSid: call.sid,
       limit: 1,
     });
 
