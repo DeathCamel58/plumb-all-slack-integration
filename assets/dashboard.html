@@ -70,7 +70,7 @@
       <input type="tel" id="callbackPhone" placeholder="(770) 123-4567" autocomplete="off">
 
       <label for="street">Street Address</label>
-      <input type="text" id="street" autocomplete="off">
+      <input type="text" id="street" autocomplete="off" placeholder="Start typing an address...">
 
       <div class="row">
         <div style="flex: 2;">
@@ -288,6 +288,72 @@
     }
 
     loadForwarding();
+
+    // Google Places Autocomplete for the street address field
+    async function initAutocomplete() {
+      try {
+        const resp = await fetch('/dashboard/maps-key');
+        if (!resp.ok) return;
+        const { key } = await resp.json();
+        if (!key) return;
+
+        // Load the Google Maps Places library
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places&callback=onMapsReady`;
+        script.async = true;
+        document.head.appendChild(script);
+      } catch (e) {
+        // Autocomplete is a nice-to-have; don't break the page if it fails
+      }
+    }
+
+    window.onMapsReady = function() {
+      const streetInput = document.getElementById('street');
+      const autocomplete = new google.maps.places.Autocomplete(streetInput, {
+        types: ['address'],
+        componentRestrictions: { country: 'us' },
+        fields: ['address_components'],
+      });
+
+      autocomplete.addListener('place_changed', function() {
+        const place = autocomplete.getPlace();
+        if (!place.address_components) return;
+
+        let street_number = '';
+        let route = '';
+        let city = '';
+        let state = '';
+        let zip = '';
+
+        for (const component of place.address_components) {
+          const type = component.types[0];
+          switch (type) {
+            case 'street_number':
+              street_number = component.long_name;
+              break;
+            case 'route':
+              route = component.long_name;
+              break;
+            case 'locality':
+              city = component.long_name;
+              break;
+            case 'administrative_area_level_1':
+              state = component.short_name;
+              break;
+            case 'postal_code':
+              zip = component.long_name;
+              break;
+          }
+        }
+
+        streetInput.value = [street_number, route].filter(Boolean).join(' ');
+        document.getElementById('city').value = city;
+        document.getElementById('state').value = state;
+        document.getElementById('zip').value = zip;
+      });
+    };
+
+    initAutocomplete();
   </script>
 </body>
 </html>

@@ -630,6 +630,13 @@ app.get("/dashboard", dashboardAuth, (req, res) => {
 });
 
 /**
+ * Dashboard: Google Maps API key for Places Autocomplete
+ */
+app.get("/dashboard/maps-key", dashboardAuth, (req, res) => {
+  res.json({ key: process.env.GOOGLE_API_KEY || null });
+});
+
+/**
  * Dashboard: Get current forwarding number
  */
 app.get("/dashboard/forwarding", dashboardAuth, async (req, res) => {
