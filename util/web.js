@@ -387,7 +387,10 @@ app.post("/verisae/ingles", (req, res) => {
   }
   let data = req.body;
 
-  if (data.payload.sender.includes("plumb-all.com")) {
+  if (
+    data.payload.sender.includes("plumb-all.com") &&
+    !data.payload.subject.includes("Cancel Work Order")
+  ) {
     console.info("Web: Verisae (Ingles) email received.");
     res.sendStatus(200);
 
