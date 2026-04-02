@@ -12,7 +12,9 @@ import events from "../events.js";
  */
 function extractCompanyName(subject) {
   const match = subject?.match(/^(.+?)\s+assigned you Work Order/);
-  return match ? match[1].trim() : "Rentvine";
+  if (!match) return "Rentvine";
+  // Strip common email forwarding prefixes (FW:, RE:, Fwd:, etc.)
+  return match[1].replace(/^(?:FW|RE|Fwd)\s*:\s*/gi, "").trim() || "Rentvine";
 }
 
 /**
@@ -21,7 +23,9 @@ function extractCompanyName(subject) {
  * @returns {string}
  */
 function extractWorkOrderNumber(subject) {
-  const match = subject?.match(/Work Order #(\d+)/);
+  // Strip control characters (the subject may contain \r from email headers)
+  const clean = subject?.replace(/[\r\n]/g, "") ?? "";
+  const match = clean.match(/Work Order #(\d+)/);
   return match ? match[1] : "";
 }
 
@@ -92,6 +96,8 @@ async function workOrderHandle(data) {
       address = locationDiv
         .replace(/<br\s*\/?>/gi, ", ")
         .replace(/<[^>]*>/g, "")
+        .replace(/[\r\n]+/g, " ")
+        .replace(/\s+/g, " ")
         .trim();
     }
 
@@ -103,6 +109,7 @@ async function workOrderHandle(data) {
         .replace(/<br\s*\/?>/gi, "\n")
         .replace(/<[^>]*>/g, "")
         .replace(/&nbsp;/gi, " ")
+        .replace(/[\r\x00-\x09\x0B\x0C\x0E-\x1F]/g, "")
         .trim();
     }
 
