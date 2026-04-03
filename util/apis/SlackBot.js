@@ -891,6 +891,11 @@ async function fetchMessage(id, ts) {
  * @returns {Promise<void>}
  */
 async function unfurlMessage(event) {
+  // Skip DMs and group DMs — the bot can't post into other people's conversations
+  if (event.channel_type === "im" || event.channel_type === "mpim") {
+    return;
+  }
+
   console.info(`Slack: Message created!\n\t${event.user}\n\t${event.text}`);
 
   // The found Quotes, Jobs, and Invoices get stored here
