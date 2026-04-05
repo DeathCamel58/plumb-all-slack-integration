@@ -987,28 +987,64 @@ async function downloadTwilioMediaUrls(mediaUrls) {
     `${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`,
   ).toString("base64");
 
-  const downloads = mediaUrls.map(async (mediaUrl) => {
-    const resp = await fetch(mediaUrl, {
-      headers: {
-        Authorization: `Basic ${auth}`,
-      },
-    });
+  const results = [];
+  for (const mediaUrl of mediaUrls) {
+    const maxAttempts = 3;
+    let downloaded = false;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const resp = await fetch(mediaUrl, {
+          headers: {
+            Authorization: `Basic ${auth}`,
+          },
+        });
 
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => "");
-      throw new Error(`Twilio media download failed (${resp.status}): ${text}`);
+        if (resp.ok) {
+          const arrayBuffer = await resp.arrayBuffer();
+          results.push({
+            url: mediaUrl,
+            contentType:
+              resp.headers.get("content-type") || "application/octet-stream",
+            data: Buffer.from(arrayBuffer),
+          });
+          downloaded = true;
+          break;
+        }
+
+        const text = await resp.text().catch(() => "");
+        if (attempt < maxAttempts) {
+          console.warn(
+            `Twilio: Media download failed (${resp.status}), retrying in ${attempt * 2}s (attempt ${attempt}/${maxAttempts})`,
+          );
+          await new Promise((r) => setTimeout(r, attempt * 2000));
+        } else {
+          console.warn(
+            `Twilio: Media download failed (${resp.status}) after ${maxAttempts} attempts for ${mediaUrl}: ${text}`,
+          );
+          Sentry.captureMessage("Twilio: Media download failed", {
+            level: "warning",
+            extra: { mediaUrl, status: resp.status, attempts: maxAttempts },
+          });
+        }
+      } catch (e) {
+        if (attempt < maxAttempts) {
+          console.warn(
+            `Twilio: Media download error, retrying in ${attempt * 2}s (attempt ${attempt}/${maxAttempts}):`,
+            e.message,
+          );
+          await new Promise((r) => setTimeout(r, attempt * 2000));
+        } else {
+          console.warn(
+            `Twilio: Media download error after ${maxAttempts} attempts for ${mediaUrl}:`,
+            e.message,
+          );
+          Sentry.captureException(e);
+        }
+      }
     }
+  }
 
-    const arrayBuffer = await resp.arrayBuffer();
-    return {
-      url: mediaUrl,
-      contentType:
-        resp.headers.get("content-type") || "application/octet-stream",
-      data: Buffer.from(arrayBuffer),
-    };
-  });
-
-  return Promise.all(downloads);
+  return results;
 }
 
 /**
