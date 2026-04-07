@@ -441,6 +441,7 @@ export async function sendClientToPostHog(contact) {
   let existingPhones = [];
   let isJobberPerson = false;
   let existingAddress = null;
+  let existingCallrailSource = null;
 
   // If this is a new person, add them to PostHog
   if (posthogPerson === undefined) {
@@ -467,6 +468,8 @@ export async function sendClientToPostHog(contact) {
 
       // Track the existing address so we can skip geo resolution if unchanged
       existingAddress = fullPostHogPerson.properties?.address ?? null;
+      existingCallrailSource =
+        fullPostHogPerson.properties?.callrailSource ?? null;
 
       // If this person already has Jobber data, don't overwrite core fields
       // (name, phone, email, address) — Jobber is the source of truth
@@ -518,11 +521,14 @@ export async function sendClientToPostHog(contact) {
   // Always update contact source and CallRail source regardless
   if (contact.type) clientData.latestContactSource = contact.type;
 
-  // Look up CallRail source using the actual calling number
-  let callrailPhone = contact.alternatePhone || contact.phone;
-  if (callrailPhone) {
-    let source = await CallRail.getCallSource(callrailPhone);
-    if (source) clientData.callrailSource = source;
+  // Look up CallRail source using the actual calling number, but only if
+  // the person doesn't already have one (avoids redundant API calls).
+  if (!existingCallrailSource) {
+    let callrailPhone = contact.alternatePhone || contact.phone;
+    if (callrailPhone) {
+      let source = await CallRail.getCallSource(callrailPhone);
+      if (source) clientData.callrailSource = source;
+    }
   }
 
   // Merge any new phone numbers into the existing phones array
