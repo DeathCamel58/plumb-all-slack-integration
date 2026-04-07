@@ -10,18 +10,26 @@ import { uploadConversionAdjustment } from "./GoogleAdsConversions.js";
  */
 async function handleCallModified(req) {
   const call = req.body;
+  const callId = call.id || call.call_id || call.callrail_id || "unknown";
 
   try {
     const callValue = call.value ? parseFloat(call.value) : 0;
     const gclid = call.gclid || null;
 
     console.log(
-      `CallRail Webhook: call-modified id=${call.id} value=${callValue} gclid=${gclid || "none"} source=${call.source_name || "unknown"}`,
+      `CallRail Webhook: call-modified id=${callId} value=${callValue} gclid=${gclid || "none"} source=${call.source_name || "unknown"} start_time=${call.start_time || "none"}`,
     );
+
+    if (process.env.DEBUG === "TRUE") {
+      console.log(
+        "CallRail Webhook: call-modified payload keys:",
+        Object.keys(call),
+      );
+    }
 
     if (callValue > 0 && gclid) {
       console.log(
-        `CallRail Webhook: Call ${call.id} has value $${callValue} and GCLID — sending adjustment to Google Ads`,
+        `CallRail Webhook: Call ${callId} has value $${callValue} and GCLID — sending adjustment to Google Ads`,
       );
 
       await uploadConversionAdjustment({
@@ -31,7 +39,7 @@ async function handleCallModified(req) {
       });
     } else if (callValue > 0 && !gclid) {
       console.log(
-        `CallRail Webhook: Call ${call.id} has value $${callValue} but no GCLID — skipping Google Ads adjustment`,
+        `CallRail Webhook: Call ${callId} has value $${callValue} but no GCLID — skipping Google Ads adjustment`,
       );
     }
   } catch (e) {
@@ -48,18 +56,19 @@ events.on("callrail-call-modified", handleCallModified);
  */
 async function handleOutboundCallModified(req) {
   const call = req.body;
+  const callId = call.id || call.call_id || call.callrail_id || "unknown";
 
   try {
     const callValue = call.value ? parseFloat(call.value) : 0;
     const gclid = call.gclid || null;
 
     console.log(
-      `CallRail Webhook: outbound-call-modified id=${call.id} value=${callValue} gclid=${gclid || "none"}`,
+      `CallRail Webhook: outbound-call-modified id=${callId} value=${callValue} gclid=${gclid || "none"}`,
     );
 
     if (callValue > 0 && gclid) {
       console.log(
-        `CallRail Webhook: Outbound call ${call.id} has value $${callValue} and GCLID — sending adjustment to Google Ads`,
+        `CallRail Webhook: Outbound call ${callId} has value $${callValue} and GCLID — sending adjustment to Google Ads`,
       );
 
       await uploadConversionAdjustment({

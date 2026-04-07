@@ -123,23 +123,32 @@ export async function uploadConversionAdjustment({
     }
 
     if (result.partialFailureError) {
-      console.error(
-        "GoogleAds: Partial failure in conversion adjustment:",
-        JSON.stringify(result.partialFailureError),
-      );
-      Sentry.captureMessage(
-        "GoogleAds: Conversion adjustment partial failure",
-        {
-          level: "error",
-          extra: {
-            gclid,
-            conversionDateTime: formattedDateTime,
-            adjustedValue,
-            error: result.partialFailureError,
+      const errorJson = JSON.stringify(result.partialFailureError);
+      const isConversionNotFound = errorJson.includes("CONVERSION_NOT_FOUND");
+
+      if (isConversionNotFound) {
+        console.warn(
+          `GoogleAds: Conversion not found for gclid=${gclid} — CallRail may not have sent this conversion to Google Ads`,
+        );
+      } else {
+        console.error(
+          "GoogleAds: Partial failure in conversion adjustment:",
+          errorJson,
+        );
+        Sentry.captureMessage(
+          "GoogleAds: Conversion adjustment partial failure",
+          {
+            level: "error",
+            extra: {
+              gclid,
+              conversionDateTime: formattedDateTime,
+              adjustedValue,
+              error: result.partialFailureError,
+            },
           },
-        },
-      );
-      return false;
+        );
+      }
+      return isConversionNotFound ? "CONVERSION_NOT_FOUND" : false;
     }
 
     console.log(
