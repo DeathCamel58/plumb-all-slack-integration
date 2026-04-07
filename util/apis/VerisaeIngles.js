@@ -52,9 +52,15 @@ async function AlertHandle(data) {
 
   const message = `Work Order: ${woNumber}\nWork Order Type: ${woType}\nProblem Type: ${problemType}\nCall Description: ${callDescription}`;
 
+  const subject = data.payload?.subject ?? "";
+  const isRecall = /recalled/i.test(subject);
+  const contactName = isRecall
+    ? `Ingles ${storeNumber} Recall`
+    : `Ingles ${storeNumber}`;
+
   let contact = new Contact(
     "Ingles Call",
-    `Ingles ${storeNumber}`,
+    contactName,
     undefined,
     undefined,
     undefined,
