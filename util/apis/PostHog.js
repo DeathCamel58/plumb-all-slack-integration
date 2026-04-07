@@ -521,13 +521,15 @@ export async function sendClientToPostHog(contact) {
   // Always update contact source and CallRail source regardless
   if (contact.type) clientData.latestContactSource = contact.type;
 
-  // Look up CallRail source using the actual calling number, but only if
-  // the person doesn't already have one (avoids redundant API calls).
+  // Look up CallRail details using the actual calling number, but only if
+  // the person doesn't already have a CallRail source (avoids redundant API calls).
+  let callrailGclid = null;
   if (!existingCallrailSource) {
     let callrailPhone = contact.alternatePhone || contact.phone;
     if (callrailPhone) {
-      let source = await CallRail.getCallSource(callrailPhone);
-      if (source) clientData.callrailSource = source;
+      let details = await CallRail.getCallDetails(callrailPhone);
+      if (details.source) clientData.callrailSource = details.source;
+      callrailGclid = details.gclid;
     }
   }
 
@@ -546,6 +548,36 @@ export async function sendClientToPostHog(contact) {
   };
 
   await useAPI("capture/", "post", identifyData);
+
+  // If CallRail provided a GCLID, try to merge this contact with the
+  // anonymous website visitor who clicked the Google Ad (same GCLID).
+  if (callrailGclid) {
+    try {
+      let gclidPerson = await individualSearch(
+        JSON.stringify([{ key: "$initial_gclid", value: callrailGclid }]),
+        null,
+      );
+      if (gclidPerson?.results?.length > 0) {
+        let visitorId = gclidPerson.results[0].distinct_ids?.[0];
+        if (visitorId && visitorId !== id) {
+          console.log(
+            `PostHog: Merging website visitor ${visitorId} with contact ${id} via GCLID ${callrailGclid}`,
+          );
+          await useAPI("capture/", "post", {
+            api_key: process.env.POSTHOG_TOKEN,
+            event: "$create_alias",
+            properties: {
+              distinct_id: id,
+              alias: visitorId,
+            },
+          });
+        }
+      }
+    } catch (e) {
+      // GCLID merge is best-effort; don't block on failure
+      console.warn("PostHog: GCLID merge failed:", e.message);
+    }
+  }
 
   return id;
 }

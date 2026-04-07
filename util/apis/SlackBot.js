@@ -1807,7 +1807,8 @@ async function interactivity(req) {
               // Look up the CallRail source if not already in the parsed data
               let source = callRailData.source || null;
               if (!source && callRailData.phone) {
-                source = await CallRail.getCallSource(callRailData.phone);
+                let details = await CallRail.getCallDetails(callRailData.phone);
+                source = details.source;
               }
 
               // Build a Contact the same way as Twilio/Website contacts

@@ -47,7 +47,7 @@ export function verifyWebhook(req) {
  */
 async function searchCallByPhone(phoneE164) {
   let response = await fetch(
-    `${BASE_URL}/calls.json?search=${encodeURIComponent(phoneE164)}&fields=source`,
+    `${BASE_URL}/calls.json?search=${encodeURIComponent(phoneE164)}&fields=source,gclid`,
     {
       headers: {
         Authorization: `Token token="${CALLRAIL_API_KEY}"`,
@@ -365,13 +365,13 @@ async function handleFirstInvoicePayment(payment, invoice) {
 events.on("callrail-FIRST_INVOICE_PAYMENT", handleFirstInvoicePayment);
 
 /**
- * Get the marketing source of the most recent CallRail call for a phone number
+ * Get the marketing source and GCLID of the most recent CallRail call for a phone number
  * @param {string} phone Raw phone number (will be converted to E.164)
- * @returns {Promise<string|null>} The call's source (e.g. "Google Ads") or null
+ * @returns {Promise<{source: string|null, gclid: string|null}>}
  */
-export async function getCallSource(phone) {
+export async function getCallDetails(phone) {
   let e164 = toE164(phone);
-  if (!e164) return null;
+  if (!e164) return { source: null, gclid: null };
 
   try {
     // Check calls first
@@ -380,22 +380,24 @@ export async function getCallSource(phone) {
       let call = calls.sort(
         (a, b) => new Date(b.start_time) - new Date(a.start_time),
       )[0];
-      if (call.source) return call.source;
+      if (call.source || call.gclid) {
+        return { source: call.source || null, gclid: call.gclid || null };
+      }
     }
 
-    // Fall back to SMS threads
+    // Fall back to SMS threads (no GCLID available on SMS)
     let threads = await searchSMSByPhone(e164);
     if (threads.length > 0) {
       let sms = threads.sort(
         (a, b) => new Date(b.last_message_at) - new Date(a.last_message_at),
       )[0];
-      if (sms.source) return sms.source;
+      if (sms.source) return { source: sms.source, gclid: null };
     }
 
-    return null;
+    return { source: null, gclid: null };
   } catch (e) {
-    console.warn("CallRail: Source lookup failed:", e.message);
-    return null;
+    console.warn("CallRail: Details lookup failed:", e.message);
+    return { source: null, gclid: null };
   }
 }
 
