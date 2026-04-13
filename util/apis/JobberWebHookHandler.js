@@ -610,16 +610,12 @@ async function requestCreateHandle(req) {
     let request = await Jobber.getRequestData(
       body.data["webHookEvent"]["itemId"],
     );
-    // Determine which address to use. Use billing address as a fallback
-    let address = `${request.client.billingAddress.street}, ${request.client.billingAddress.city} ${request.client.billingAddress.province}, ${request.client.billingAddress.postalCode}`;
-    if (request.property !== null && request.property !== undefined) {
-      if (
-        request.property.address !== null &&
-        request.property.address !== undefined
-      ) {
-        address = `${request.property.address.street}, ${request.property.address.city} ${request.property.address.province}, ${request.property.address.postalCode}`;
-      }
-    }
+    // Determine which address to use. Prefer property address, fall back to billing address.
+    let addressSource =
+      request.property?.address ?? request.client.billingAddress ?? null;
+    let address = addressSource
+      ? `${addressSource.street}, ${addressSource.city} ${addressSource.province}, ${addressSource.postalCode}`
+      : null;
     // Send the request to Slack
     let contact = new Contact(
       "Jobber Request",
