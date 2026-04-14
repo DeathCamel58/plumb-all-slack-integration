@@ -1637,7 +1637,7 @@ async function interactivity(req) {
                       text: "Message to send",
                       emoji: true,
                     },
-                    optional: false,
+                    optional: true,
                   },
                   {
                     type: "input",
