@@ -523,12 +523,17 @@ export async function sendClientToPostHog(contact) {
 
   // Look up CallRail details using the actual calling number, but only if
   // the person doesn't already have a CallRail source (avoids redundant API calls).
+  // A stored value of "none" means we already checked and found nothing.
   let callrailGclid = null;
   if (!existingCallrailSource) {
     let callrailPhone = contact.alternatePhone || contact.phone;
     if (callrailPhone) {
       let details = await CallRail.getCallDetails(callrailPhone);
-      if (details.source) clientData.callrailSource = details.source;
+      if (details.source) {
+        clientData.callrailSource = details.source;
+      } else {
+        clientData.callrailSource = "none";
+      }
       callrailGclid = details.gclid;
     }
   }
