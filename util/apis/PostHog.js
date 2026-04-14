@@ -1142,7 +1142,13 @@ export async function logRequestUpdate(jobberRequest, clientID) {
     }
   }
 
-  let address = `${jobberRequest.client.billingAddress.street}, ${jobberRequest.client.billingAddress.city} ${jobberRequest.client.billingAddress.province}, ${jobberRequest.client.billingAddress.postalCode}`;
+  let address = null;
+  if (
+    jobberRequest.client.billingAddress !== null &&
+    jobberRequest.client.billingAddress !== undefined
+  ) {
+    address = `${jobberRequest.client.billingAddress.street}, ${jobberRequest.client.billingAddress.city} ${jobberRequest.client.billingAddress.province}, ${jobberRequest.client.billingAddress.postalCode}`;
+  }
   if (jobberRequest.property !== null && jobberRequest.property !== undefined) {
     if (
       jobberRequest.property.address !== null &&
