@@ -48,7 +48,7 @@ describe("CallRailWebHookHandler", () => {
 
       await callModifiedHandler(
         makeReq({
-          id: "call-1",
+          customer_phone_number: "+14045551234",
           value: "745.00",
           gclid: "abc123",
           start_time: "2026-03-22T14:30:00.000-04:00",
@@ -64,10 +64,24 @@ describe("CallRailWebHookHandler", () => {
       });
     });
 
+    test("Value + GCLID from Google Ads Assets → skips adjustment", async () => {
+      await callModifiedHandler(
+        makeReq({
+          customer_phone_number: "+14045559999",
+          value: "4485.00",
+          gclid: "CjwKCAjwAssetGCLID",
+          start_time: "2026-04-12T16:32:24.975-04:00",
+          source_name: "Google Ads Assets",
+        }),
+      );
+
+      expect(uploadConversionAdjustmentMock).not.toHaveBeenCalled();
+    });
+
     test("Value but no GCLID → does not upload", async () => {
       await callModifiedHandler(
         makeReq({
-          id: "call-2",
+          customer_phone_number: "+14045552222",
           value: "500.00",
           gclid: "",
           start_time: "2026-03-22T14:30:00.000-04:00",
@@ -81,7 +95,7 @@ describe("CallRailWebHookHandler", () => {
     test("GCLID but no value → does not upload", async () => {
       await callModifiedHandler(
         makeReq({
-          id: "call-3",
+          customer_phone_number: "+14045553333",
           value: "",
           gclid: "abc123",
           start_time: "2026-03-22T14:30:00.000-04:00",
@@ -94,7 +108,7 @@ describe("CallRailWebHookHandler", () => {
     test("No value, no GCLID → does not upload", async () => {
       await callModifiedHandler(
         makeReq({
-          id: "call-4",
+          customer_phone_number: "+14045554444",
           value: null,
           gclid: null,
           start_time: "2026-03-22T14:30:00.000-04:00",
@@ -111,7 +125,7 @@ describe("CallRailWebHookHandler", () => {
 
       await callModifiedHandler(
         makeReq({
-          id: "call-5",
+          customer_phone_number: "+14045555555",
           value: "100.00",
           gclid: "xyz789",
           start_time: "2026-03-22T14:30:00.000-04:00",
@@ -128,10 +142,11 @@ describe("CallRailWebHookHandler", () => {
 
       await outboundCallModifiedHandler(
         makeReq({
-          id: "out-1",
+          customer_phone_number: "+14045556666",
           value: "1200.00",
           gclid: "out-gclid-1",
           start_time: "2026-03-23T10:00:00.000-04:00",
+          source_name: "Google Ads",
         }),
       );
 
@@ -143,10 +158,24 @@ describe("CallRailWebHookHandler", () => {
       });
     });
 
+    test("Value + GCLID from Google Ads Assets → skips adjustment", async () => {
+      await outboundCallModifiedHandler(
+        makeReq({
+          customer_phone_number: "+14045557777",
+          value: "800.00",
+          gclid: "out-asset-gclid",
+          start_time: "2026-03-23T10:00:00.000-04:00",
+          source_name: "Google Ads Assets",
+        }),
+      );
+
+      expect(uploadConversionAdjustmentMock).not.toHaveBeenCalled();
+    });
+
     test("No GCLID → does not upload", async () => {
       await outboundCallModifiedHandler(
         makeReq({
-          id: "out-2",
+          customer_phone_number: "+14045558888",
           value: "500.00",
           gclid: "",
           start_time: "2026-03-23T10:00:00.000-04:00",
