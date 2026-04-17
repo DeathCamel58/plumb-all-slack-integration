@@ -916,6 +916,43 @@ async function unfurlMessage(event) {
     },
   ];
 
+  // Check for Jobber URLs (e.g. https://secure.getjobber.com/invoices/152385939)
+  // Parse these before stripping URLs from the text
+  let jobberUrls = event.text.matchAll(
+    /https:\/\/secure\.getjobber\.com\/(invoices|jobs|quotes)\/(\d+)/gi,
+  );
+  for (let match of jobberUrls) {
+    let type = match[1].toLowerCase();
+    let numericId = match[2];
+    let graphqlId = Buffer.from(numericId).toString("base64");
+
+    try {
+      switch (type) {
+        case "invoices": {
+          let invoice = await Jobber.getInvoiceData(graphqlId);
+          if (invoice) needToUnfurl.invoices.push(invoice);
+          break;
+        }
+        case "jobs": {
+          let job = await Jobber.getJobData(graphqlId);
+          if (job) needToUnfurl.jobs.push(job);
+          break;
+        }
+        case "quotes": {
+          let quote = await Jobber.getQuoteData(graphqlId);
+          if (quote) needToUnfurl.quotes.push(quote);
+          break;
+        }
+      }
+    } catch (e) {
+      console.error(
+        `Slack: Failed to look up Jobber URL ${match[0]}:`,
+        e.message,
+      );
+      Sentry.captureException(e);
+    }
+  }
+
   // Check for references in multiple formats and add them to `needToUnfurl`
   // Remove user references and URLs first, as they can cause false positive matches
   let tmp = event.text.replace(/<@.{11}>/gi, "");
@@ -1442,12 +1479,9 @@ export async function event(req) {
       }
       break;
     case "link_shared":
-      // Although Slack's API is set up to notify us about links being shared that point to Jobber, Jobber's API
-      // doesn't support searching for items via the URI of the item. This will (hopefully) be added by Jobber.
-      // Ref: https://github.com/DeathCamel58/plumb-all-slack-integration/issues/3#issuecomment-1433056300
-      console.warn(
-        `Slack: Link was shared in message. Can't unfurl due to Jobber API lacking search functionality.`,
-      );
+      // Jobber links shared in messages — handle via unfurlMessage which now
+      // parses Jobber URLs and looks up items by ID.
+      await unfurlMessage(event);
       break;
     case "app_home_opened":
       await publishHome(event.user);
