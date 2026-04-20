@@ -896,6 +896,8 @@ async function unfurlMessage(event) {
     return;
   }
 
+  if (!event.text) return;
+
   console.info(`Slack: Message created!\n\t${event.user}\n\t${event.text}`);
 
   // The found Quotes, Jobs, and Invoices get stored here
@@ -1479,9 +1481,9 @@ export async function event(req) {
       }
       break;
     case "link_shared":
-      // Jobber links shared in messages — handle via unfurlMessage which now
-      // parses Jobber URLs and looks up items by ID.
-      await unfurlMessage(event);
+      // Jobber links in messages are already handled by unfurlMessage via the
+      // "message" event. The link_shared event has a different payload structure
+      // (no text/channel/ts), so we skip it here.
       break;
     case "app_home_opened":
       await publishHome(event.user);
