@@ -100,6 +100,8 @@ TWILIO_FALLBACK_NUMBER=your-fallback-number
 CALLRAIL_API_KEY=your-callrail-api-key
 CALLRAIL_ACCOUNT_ID=your-callrail-account-id
 CALLRAIL_SIGNING_KEY=your-callrail-signing-key
+# Set to TRUE to disable all CallRail API calls (webhooks still process)
+# CALLRAIL_API_DISABLED=TRUE
 
 # Mailchimp
 MAILCHIMP_API_KEY=your-mailchimp-api-key-us19

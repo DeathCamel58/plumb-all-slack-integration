@@ -11,6 +11,10 @@ const CALLRAIL_ACCOUNT_ID = process.env.CALLRAIL_ACCOUNT_ID;
 const CALLRAIL_SIGNING_KEY = process.env.CALLRAIL_SIGNING_KEY;
 const BASE_URL = `https://api.callrail.com/v3/a/${CALLRAIL_ACCOUNT_ID}`;
 
+function isApiDisabled() {
+  return process.env.CALLRAIL_API_DISABLED === "TRUE";
+}
+
 /**
  * Verifies a CallRail webhook signature using HMAC-SHA1.
  * @param {import("express").Request & {rawBody?: string}} req
@@ -46,6 +50,8 @@ export function verifyWebhook(req) {
  * @returns {Promise<object[]>} All matching calls (empty array if none)
  */
 async function searchCallByPhone(phoneE164) {
+  if (isApiDisabled()) return [];
+
   let response = await fetch(
     `${BASE_URL}/calls.json?search=${encodeURIComponent(phoneE164)}&fields=source,gclid`,
     {
@@ -75,6 +81,8 @@ async function searchCallByPhone(phoneE164) {
  * @returns {Promise<object>} The updated call
  */
 async function updateCall(callId, { value, note, customer_name, lead_status }) {
+  if (isApiDisabled()) return null;
+
   const maxRetries = 3;
 
   let payload = {
@@ -126,6 +134,8 @@ async function updateCall(callId, { value, note, customer_name, lead_status }) {
  * @returns {Promise<object[]>} All matching SMS threads (empty array if none)
  */
 async function searchSMSByPhone(phoneE164) {
+  if (isApiDisabled()) return [];
+
   let response = await fetch(
     `${BASE_URL}/sms-threads.json?search=${encodeURIComponent(phoneE164)}&fields=last_message_at`,
     {
@@ -156,6 +166,8 @@ async function searchSMSByPhone(phoneE164) {
  * @returns {Promise<object>} The updated SMS thread
  */
 async function updateSMSThread(threadId, { value, notes, lead_qualification }) {
+  if (isApiDisabled()) return null;
+
   const maxRetries = 3;
 
   let payload = {
@@ -370,6 +382,8 @@ events.on("callrail-FIRST_INVOICE_PAYMENT", handleFirstInvoicePayment);
  * @returns {Promise<{source: string|null, gclid: string|null}>}
  */
 export async function getCallDetails(phone) {
+  if (isApiDisabled()) return { source: null, gclid: null };
+
   let e164 = toE164(phone);
   if (!e164) return { source: null, gclid: null };
 
@@ -406,6 +420,8 @@ export async function getCallDetails(phone) {
  * @returns {Promise<object[]>} Array of tracker objects
  */
 export async function listTrackers() {
+  if (isApiDisabled()) return [];
+
   let response = await fetch(`${BASE_URL}/trackers.json?status=active`, {
     headers: {
       Authorization: `Token token="${CALLRAIL_API_KEY}"`,
@@ -429,6 +445,8 @@ export async function listTrackers() {
  * @returns {Promise<number>} The number of trackers updated
  */
 export async function updateAllTrackerDestinations(newNumber) {
+  if (isApiDisabled()) return 0;
+
   let trackers = await listTrackers();
   let updated = 0;
 
@@ -476,6 +494,8 @@ export async function updateAllTrackerDestinations(newNumber) {
  * @returns {Promise<Array<{id: string, value: string, gclid: string, start_time: string}>>}
  */
 export async function listCallsWithValueAndGclid() {
+  if (isApiDisabled()) return [];
+
   let allCalls = [];
   let page = 1;
   let totalPages = 1;
