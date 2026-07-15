@@ -321,7 +321,7 @@ export async function makeRequest(query) {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${JOBBER_ACCESS_TOKEN}`,
-          "X-JOBBER-GRAPHQL-VERSION": "2025-01-20",
+          "X-JOBBER-GRAPHQL-VERSION": "2025-04-16",
         },
         body: `{"query":${JSON.stringify(query)}}`,
       });
