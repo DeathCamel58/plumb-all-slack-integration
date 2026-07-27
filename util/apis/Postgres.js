@@ -9,6 +9,45 @@ import {
   getInvoiceData,
   getClientData,
 } from "./Jobber.js";
+
+/**
+ * Returns the field names a Prisma unique constraint error (P2002) conflicted on.
+ *
+ * We run Prisma with the pg driver adapter (`engineType = "none"`), which does
+ * not populate the `meta.target` the query engine used to provide — the field
+ * list lives on `meta.driverAdapterError` instead. Postgres also reports
+ * camelCase columns quoted in its error detail (`Key ("jobNumber")=...`), so
+ * Prisma hands back `'"jobNumber"'` rather than `jobNumber`.
+ *
+ * @param {*} error The error thrown by a Prisma call
+ * @returns {string[]} Conflicting field (or index) names, unquoted
+ */
+function uniqueConstraintFields(error) {
+  if (error?.code !== "P2002") {
+    return [];
+  }
+  const meta = error.meta ?? {};
+  const constraint = meta.driverAdapterError?.cause?.constraint;
+  const raw = meta.target ?? constraint?.fields ?? constraint?.index ?? [];
+  return (Array.isArray(raw) ? raw : [raw]).map((field) =>
+    String(field).replaceAll('"', ""),
+  );
+}
+
+/**
+ * Checks whether an error is a unique constraint violation on any of the given
+ * fields. Index names are accepted too, since Postgres reports the index rather
+ * than the columns for some violations.
+ *
+ * @param {*} error The error thrown by a Prisma call
+ * @param {...string} fields Field or index names to match against
+ * @returns {boolean}
+ */
+function isUniqueConstraintOn(error, ...fields) {
+  const conflicting = uniqueConstraintFields(error);
+  return fields.some((field) => conflicting.includes(field));
+}
+
 async function userUpsert(data) {
   const row = {
     createdAt: new Date(data.createdAt),
@@ -290,13 +329,31 @@ async function jobCreateUpdate(data) {
       create: { ...row },
     });
   } catch (e) {
-    if (e.code === "P2002" && e.meta?.target?.includes("jobNumber")) {
+    // `jobs_pk` is the index name behind @unique(map:) on jobNumber. The pg
+    // adapter always reports columns rather than the index for a 23505, so it
+    // is only matched in case we ever move back to the query engine, which
+    // reports constraint names instead.
+    if (isUniqueConstraintOn(e, "jobNumber", "jobs_pk")) {
+      // Another row already owns this job number. That is either a concurrent
+      // insert of this same job, or a job Jobber recreated under a new id —
+      // either way the existing row is the one to keep, so update it in place
+      // and let the id follow (FKs cascade the update).
       console.log(
         `Postgres: Job id ${data.id} conflicted on jobNumber ${data.jobNumber}, falling back to update by jobNumber`,
       );
       await prisma.job.update({
         where: { jobNumber: data.jobNumber },
         data: { ...updateData, id: data.id },
+      });
+    } else if (isUniqueConstraintOn(e, "id")) {
+      // Prisma's upsert isn't atomic, so a concurrent webhook for this same job
+      // can insert the row between our update and our create.
+      console.log(
+        `Postgres: Job ${data.id} was created concurrently, updating instead`,
+      );
+      await prisma.job.update({
+        where: { id: data.id },
+        data: { ...updateData },
       });
     } else {
       throw e;
@@ -391,11 +448,27 @@ async function quoteCreateUpdate(data) {
   // The update operation should not include the id field as it's already in the where clause
   const { id, ...updateData } = row;
 
-  await prisma.quote.upsert({
-    where: { id: data.id },
-    update: { ...updateData },
-    create: { ...row },
-  });
+  try {
+    await prisma.quote.upsert({
+      where: { id: data.id },
+      update: { ...updateData },
+      create: { ...row },
+    });
+  } catch (e) {
+    // Nested writes (the `connect`s above) force Prisma to emulate the upsert
+    // as an update-then-create, which isn't atomic: QUOTE_CREATE and
+    // QUOTE_UPDATE arriving together both miss the update and race the create.
+    if (!isUniqueConstraintOn(e, "id")) {
+      throw e;
+    }
+    console.log(
+      `Postgres: Quote ${data.id} was created concurrently, updating instead`,
+    );
+    await prisma.quote.update({
+      where: { id: data.id },
+      data: { ...updateData },
+    });
+  }
 
   // Create the necessary relations
   for (const job of data.jobs.nodes) {
