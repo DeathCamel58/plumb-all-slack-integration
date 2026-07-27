@@ -1047,6 +1047,13 @@ query ExpenseQuery {
 
   let expenseResponse = await makeRequest(query);
 
+  // Jobber can return a null expense (e.g. the expense was deleted between the
+  // webhook firing and this query). Bail out instead of dereferencing null.
+  if (!expenseResponse || !expenseResponse.expense) {
+    console.warn(`Jobber: getExpenseData found no expense for id ${itemID}`);
+    return null;
+  }
+
   // Get the employee data and fill those fields
   if (
     expenseResponse.expense.enteredBy &&

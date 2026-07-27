@@ -647,6 +647,11 @@ async function expenseCreateHandle(req) {
       body.data["webHookEvent"]["itemId"],
     );
 
+    // Nothing to log if the expense no longer exists
+    if (!expense) {
+      return;
+    }
+
     // Insert/Update employee
     await PostHog.logEmployee(expense.enteredBy);
 
@@ -671,6 +676,11 @@ async function expenseUpdateHandle(req) {
     let expense = await Jobber.getExpenseData(
       body.data["webHookEvent"]["itemId"],
     );
+
+    // Nothing to log if the expense no longer exists
+    if (!expense) {
+      return;
+    }
 
     // Insert/Update employee
     await PostHog.logEmployee(expense.enteredBy);
