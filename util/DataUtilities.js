@@ -47,7 +47,14 @@ export const interleave = (arr, value) => {
  */
 export function toE164(input) {
   if (!input) return null;
-  const trimmed = String(input).trim();
+  let trimmed = String(input).trim();
+
+  // Drop a trailing extension (e.g. "x242", "ext. 12", "extension 5", "#7").
+  // Twilio's `to` cannot include an extension, and leaving the extension
+  // digits in would inflate the digit count and fail parsing entirely.
+  trimmed = trimmed
+    .replace(/\s*(?:x|ext\.?|extension|#)\s*\d+\s*$/i, "")
+    .trim();
 
   // Already E.164-ish
   if (/^\+\d{10,15}$/.test(trimmed)) return trimmed;

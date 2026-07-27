@@ -59,6 +59,15 @@ describe("Data Utilities", () => {
     it("Invalid short number returns null", () => {
       assert.equal(DataUtilities.toE164("12345"), null);
     });
+    it("Number with 'x' extension strips the extension", () => {
+      assert.equal(DataUtilities.toE164("(941) 260-3400 x242"), "+19412603400");
+    });
+    it("Number with 'ext' extension strips the extension", () => {
+      assert.equal(DataUtilities.toE164("234-567-8901 ext. 12"), "+12345678901");
+    });
+    it("Number with no-space extension strips the extension", () => {
+      assert.equal(DataUtilities.toE164("2345678901x99"), "+12345678901");
+    });
   });
 
   // Test Interleave

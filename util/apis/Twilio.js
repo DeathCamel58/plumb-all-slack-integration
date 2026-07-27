@@ -303,6 +303,15 @@ export async function updateTwilioContact(
   const cleanedCustomerNumber = toE164(customerNumber);
   const cleanedTwilioNumber = toE164(twilioNumber);
 
+  // Without a valid customer number there's no primary key to upsert on;
+  // skip rather than passing null to Prisma.
+  if (!cleanedCustomerNumber) {
+    console.warn(
+      `Twilio: updateTwilioContact skipped, unparseable customer number "${customerNumber}"`,
+    );
+    return;
+  }
+
   const now = new Date();
 
   // Only set slackThreadId when creating, when it's currently null, or
@@ -915,11 +924,18 @@ export async function textCustomer(
   slackTs = null,
   mediaUrl = null,
 ) {
+  const customerE164 = toE164(customerPhoneNumber);
+  if (!customerE164) {
+    throw new Error(
+      `Twilio: Cannot text customer, unparseable phone number "${customerPhoneNumber}"`,
+    );
+  }
+
   const assignedTwilioNumber =
     await getOrAssignEmployeeNumber(employeePhoneNumber);
 
   const messageParams = {
-    to: toE164(customerPhoneNumber),
+    to: customerE164,
     from: assignedTwilioNumber.phoneNumber,
     body: smsMessage,
   };

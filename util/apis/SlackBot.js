@@ -2023,11 +2023,23 @@ async function interactivity(req) {
             Sentry.captureException(e);
             console.error("Slack: outbound call failed", e);
 
-            await app.client.chat.postEphemeral({
-              channel: event.channel?.id,
-              user: event.user.id,
-              text: "Sorry — the outbound call failed to start. Please try again, or contact an admin.",
-            });
+            // Modal (view_submission) events carry no channel context, so an
+            // ephemeral post would fail with invalid_arguments. Notify in the
+            // working thread instead, and never let a notification failure
+            // itself become an unhandled rejection.
+            try {
+              await app.client.chat.postMessage({
+                channel: process.env.SLACK_CHANNEL,
+                thread_ts: threadTs || undefined,
+                text: "Sorry — the outbound message failed to send. Please try again, or contact an admin.",
+              });
+            } catch (notifyError) {
+              Sentry.captureException(notifyError);
+              console.error(
+                "Slack: failed to notify user of outbound failure",
+                notifyError,
+              );
+            }
           }
 
           break;
