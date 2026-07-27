@@ -559,7 +559,14 @@ export async function sendClientToPostHog(contact) {
   if (callrailGclid) {
     try {
       let gclidPerson = await individualSearch(
-        JSON.stringify([{ key: "$initial_gclid", value: callrailGclid }]),
+        [
+          {
+            key: "$initial_gclid",
+            value: callrailGclid,
+            operator: "exact",
+            type: "person",
+          },
+        ],
         null,
       );
       if (gclidPerson?.results?.length > 0) {
