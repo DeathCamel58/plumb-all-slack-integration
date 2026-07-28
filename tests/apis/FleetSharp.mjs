@@ -24,11 +24,10 @@ function makeReq(body) {
 beforeEach(() => {
   eventsEmitMock.mockReset();
   process.env.SLACK_CHANNEL_GENERAL = "C-general";
-  process.env.MATTERMOST_CHANNEL_GENERAL = "town-square";
 });
 
 describe("FleetSharp", () => {
-  test("HIGH_SPEED alert emits Slack and Mattermost messages", async () => {
+  test("HIGH_SPEED alert emits a Slack message", async () => {
     const req = makeReq({
       alertCode: "HIGH_SPEED",
       firstName: "John",
@@ -44,15 +43,9 @@ describe("FleetSharp", () => {
       "FleetSharp Alert",
       "C-general",
     );
-    expect(eventsEmitMock).toHaveBeenCalledWith(
-      "mattermost-send-message",
-      expect.stringContaining("John Doe"),
-      "FleetSharp Alert",
-      "town-square",
-    );
   });
 
-  test("Non-HIGH_SPEED alert does not emit Slack/Mattermost messages", async () => {
+  test("Non-HIGH_SPEED alert does not emit a Slack message", async () => {
     const req = makeReq({
       alertCode: "HARSH_BRAKING",
       firstName: "Jane",
@@ -63,7 +56,7 @@ describe("FleetSharp", () => {
     await alertHandler(req);
 
     const messageCalls = eventsEmitMock.mock.calls.filter(
-      ([event]) => event === "slackbot-send-message" || event === "mattermost-send-message",
+      ([event]) => event === "slackbot-send-message",
     );
     expect(messageCalls.length).toBe(0);
   });

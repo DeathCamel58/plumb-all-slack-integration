@@ -166,11 +166,6 @@ export async function requestAuthorization() {
       message,
       "Call Bot Jobber Authorization",
     );
-    events.emit(
-      "mattermost-send-message",
-      message,
-      "Call Bot Jobber Authorization",
-    );
     console.info("Jobber: Sent Jobber authorization request to Slack!");
 
     waitingForAuthorization = true;

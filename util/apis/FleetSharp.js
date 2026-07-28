@@ -65,12 +65,6 @@ async function AlertHandle(req) {
       "FleetSharp Alert",
       process.env.SLACK_CHANNEL_GENERAL,
     );
-    events.emit(
-      "mattermost-send-message",
-      message,
-      "FleetSharp Alert",
-      process.env.MATTERMOST_CHANNEL_GENERAL,
-    );
   }
 }
 events.on("fleetsharp-alert", AlertHandle);

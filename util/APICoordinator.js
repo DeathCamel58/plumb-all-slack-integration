@@ -8,11 +8,6 @@ import events from "./events.js";
  */
 export async function contactMade(contact, originalMessage) {
   events.emit("slackbot-send-contact", contact, `${contact.type} Contact`);
-  events.emit(
-    "mattermost-send-message",
-    contact.messageToSend(true),
-    `${contact.type} Contact`,
-  );
   events.emit("posthog-log-contact", contact, originalMessage);
   events.emit("trello-add-contact", contact);
 }
@@ -29,6 +24,5 @@ export async function feedbackMade(name, phone, message) {
   const messageToSend = `=== New Feedback ===\nName: ${name}\nPhone: ${phone}\nMessage: ${message}`;
 
   events.emit("slackbot-send-message", messageToSend, "Client Feedback");
-  events.emit("mattermost-send-message", messageToSend, "Client Feedback");
 }
 events.on("feedback-made", feedbackMade);

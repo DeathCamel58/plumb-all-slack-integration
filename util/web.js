@@ -297,27 +297,6 @@ app.post("/slack/COMMAND", (req, res) => {
 });
 
 /**
- * Handle Mattermost request for open jobs
- */
-app.get("/mattermost/jobberOpenJobs", (req, res) => {
-  console.info("Web: Got a request for open jobs from Mattermost!");
-
-  // Verify that the webhook came from Slack
-  if (req.query.token === process.env.MATTERMOST_WEBHOOK_OPEN_JOBS_TOKEN) {
-    // Webhook was valid.
-    events.emit("mattermost-open-jobs", req);
-    const returnedData = {
-      response_type: "ephemeral",
-      text: ":gear: Generating Open Jobs List :gear:",
-    };
-    res.json(returnedData);
-  } else {
-    // Webhook signature invalid. Send 401.
-    res.sendStatus(401);
-  }
-});
-
-/**
  * Google Ads Form Lead
  */
 app.post("/google-ads/form", (req, res) => {
