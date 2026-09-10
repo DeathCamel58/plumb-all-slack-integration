@@ -1,14 +1,13 @@
 # plumb-all-slack-integration
 
-Internal integration hub for [Plumb-All](https://plumb-all.com). Connects Jobber, Twilio, CallRail, Slack, Mattermost, Google Ads, PostHog, and other services through a central Express server and event system.
+Internal integration hub for [Plumb-All](https://plumb-all.com). Connects Jobber, Twilio, CallRail, Slack, Google Ads, PostHog, and other services through a central Express server and event system.
 
 ## Integrations
 
-- **[Jobber](https://getjobber.com)** -- Webhooks for clients, requests, quotes, jobs, invoices, payments, expenses, visits, and timesheets. Events are forwarded to PostHog, Slack, Mattermost, and Trello.
+- **[Jobber](https://getjobber.com)** -- Webhooks for clients, requests, quotes, jobs, invoices, payments, expenses, visits, and timesheets. Events are forwarded to PostHog, Slack, and Trello.
 - **[Twilio](https://twilio.com)** -- Inbound/outbound call routing, recording, voicemail, phone number management, and SMS.
 - **[CallRail](https://callrail.com)** -- Call tracking, lead qualification, first-invoice conversion attribution. Webhooks trigger Google Ads conversion adjustments when calls have value and a GCLID.
 - **[Slack](https://slack.com)** -- Contact cards in `#calls`, interactive actions (outbound calls, send-to-contact, reactions update Trello), slash commands.
-- **[Mattermost](https://mattermost.com)** -- WebSocket messaging, automatic Jobber reference linking (Quote/Job/Invoice #).
 - **[Google Ads](https://ads.google.com)** -- Conversion value adjustments via the REST API, lead form webhooks.
 - **[PostHog](https://posthog.com)** -- Contact and event analytics. Tracks clients, requests, quotes, jobs, invoices, expenses, and visits. Merges identities across Twilio, Jobber, and CallRail.
 - **[Mailchimp](https://mailchimp.com)** -- Marketing events on invoice create/update.
@@ -49,13 +48,6 @@ SLACK_TOKEN=xoxb-your-slack-bot-token
 SLACK_SIGNING_SECRET=your-slack-signing-secret
 SLACK_CHANNEL_GENERAL=general
 SLACK_ANALYZE_EPHEMERAL=TRUE
-
-# Mattermost
-MATTERMOST_CHANNEL=channel-name
-MATTERMOST_URL=https://mattermost.example.com
-MATTERMOST_TOKEN=your-mattermost-token
-MATTERMOST_WEBHOOK_OPEN_JOBS_TOKEN=your-webhook-token
-MATTERMOST_CHANNEL_GENERAL=town-square
 
 # Jobber
 JOBBER_CLIENT_ID=your-jobber-client-id

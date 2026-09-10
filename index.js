@@ -17,7 +17,6 @@ const modules = [
   "./util/apis/instrument.js",
   "./util/apis/JobberWebHookHandler.js",
   "./util/apis/Mailchimp.js",
-  "./util/apis/Mattermost.js",
   "./util/apis/Postgres.js",
   "./util/apis/Rentvine.js",
   "./util/apis/SasoWebHookHandler.js",

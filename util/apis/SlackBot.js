@@ -1860,7 +1860,7 @@ async function interactivity(req) {
               );
 
               // Emit contact-made so it goes through the normal flow
-              // (Slack contact card, Mattermost, PostHog, Trello)
+              // (Slack contact card, PostHog, Trello)
               events.emit(
                 "contact-made",
                 contact,
