@@ -1,7 +1,7 @@
 import Contact from "../contact.js";
 import * as APICoordinator from "../APICoordinator.js";
-import events from "../events.js";
 import * as Sentry from "@sentry/node";
+import events from "../events.js";
 
 async function handleMessage(data, type) {
   const messageParts = [];
@@ -102,34 +102,42 @@ async function handleMessage(data, type) {
 
 /**
  * Processes an 86 Repairs webhook
- * @param data The incoming web data
+ * @param data The incoming ProxiedMail webhook data
  * @returns {Promise<void>}
  * @constructor
  */
-async function AlertHandle(data) {
+async function workOrderHandle(data) {
   if (process.env.DEBUG === "TRUE") {
     console.log("86 Repairs: Data was");
     console.log(data);
   }
 
-  if (data.payload["body-plain"].includes("Customer Service Specialist")) {
-    // Reply to service call
-    await handleMessage(data, "Follow Up On Service");
-  } else if (
-    data.payload["body-plain"].includes("The service visit is scheduled for:")
-  ) {
-    // Service visit confirmation
-    console.log("86 Repairs: Ignoring service schedule confirmation email");
-  } else if (
-    data.payload["body-plain"].includes("has been approved by the customer")
-  ) {
-    // Quote approval
-    // We're ignoring quote approvals per management request
-    // await handleMessage(data, "Quote Approved");
-  } else {
-    // New service
-    await handleMessage(data, "New Service");
+  console.log("86 Repairs: Received work order email");
+
+  try {
+    if (data.payload["body-plain"].includes("Customer Service Specialist")) {
+      // Reply to service call
+      await handleMessage(data, "Follow Up On Service");
+    } else if (
+      data.payload["body-plain"].includes("The service visit is scheduled for:")
+    ) {
+      // Service visit confirmation
+      console.log("86 Repairs: Ignoring service schedule confirmation email");
+    } else if (
+      data.payload["body-plain"].includes("has been approved by the customer")
+    ) {
+      // Quote approval
+      // We're ignoring quote approvals per management request
+      // await handleMessage(data, "Quote Approved");
+    } else {
+      // New service
+      await handleMessage(data, "New Service");
+    }
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("86 Repairs: Error processing email:", e);
+    console.error("86 Repairs: Raw email data:", JSON.stringify(data));
   }
 }
 
-events.on("86repairs-call", AlertHandle);
+events.on("86repairs-call", workOrderHandle);

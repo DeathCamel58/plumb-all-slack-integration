@@ -132,7 +132,7 @@ async function workOrderHandle(data) {
     await APICoordinator.contactMade(contact, JSON.stringify(data));
   } catch (e) {
     Sentry.captureException(e);
-    console.error("Rentvine: Error processing work order email:", e);
+    console.error("Rentvine: Error processing email:", e);
     console.error("Rentvine: Raw email data:", JSON.stringify(data));
   }
 }
