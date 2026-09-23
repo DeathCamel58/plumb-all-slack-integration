@@ -163,6 +163,131 @@ export async function uploadConversionAdjustment({
 }
 
 /**
+ * Uploads a new click conversion to Google Ads via the REST API.
+ * The conversion is always created with a $0 value; the real value is restated
+ * later by uploadConversionAdjustment() once the customer pays.
+ *
+ * conversionDateTime MUST be the same source value (CallRail start_time) that the
+ * restatement later sends, since Google Ads matches the two by gclid + datetime.
+ *
+ * @param {object} params
+ * @param {string} params.gclid - The Google Click ID from the original ad click
+ * @param {string} params.conversionDateTime - ISO 8601 datetime of the conversion (CallRail start_time)
+ * @returns {Promise<boolean>} true if successful
+ */
+export async function uploadClickConversion({ gclid, conversionDateTime }) {
+  if (
+    !process.env.GOOGLE_ADS_CUSTOMER_ID ||
+    !process.env.GOOGLE_ADS_CONVERSION_ACTION_ID
+  ) {
+    console.warn(
+      "GoogleAds: Missing GOOGLE_ADS_CUSTOMER_ID or GOOGLE_ADS_CONVERSION_ACTION_ID, skipping click conversion",
+    );
+    return false;
+  }
+
+  if (!gclid) {
+    console.log("GoogleAds: No GCLID provided, skipping click conversion");
+    return false;
+  }
+
+  if (!conversionDateTime || isNaN(new Date(conversionDateTime).getTime())) {
+    console.warn(
+      `GoogleAds: Invalid conversionDateTime "${conversionDateTime}" for gclid=${gclid}, skipping click conversion`,
+    );
+    return false;
+  }
+
+  try {
+    const accessToken = await getAccessToken();
+    const customerId = process.env.GOOGLE_ADS_CUSTOMER_ID;
+    const formattedDateTime = formatDateTimeForGoogleAds(conversionDateTime);
+
+    console.log(
+      `GoogleAds: Uploading click conversion — gclid=${gclid} value=$0 datetime=${formattedDateTime}`,
+    );
+
+    const url = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${customerId}:uploadClickConversions`;
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "developer-token": process.env.GOOGLE_ADS_DEVELOPER_TOKEN,
+        ...(process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID
+          ? { "login-customer-id": process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID }
+          : {}),
+      },
+      body: JSON.stringify({
+        conversions: [
+          {
+            gclid: gclid,
+            conversionAction: process.env.GOOGLE_ADS_CONVERSION_ACTION_ID,
+            conversionDateTime: formattedDateTime,
+            conversionValue: 0,
+            currencyCode: "USD",
+          },
+        ],
+        partialFailure: true,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error(
+        `GoogleAds: API returned ${response.status}:`,
+        JSON.stringify(result),
+      );
+      Sentry.captureMessage("GoogleAds: Click conversion API error", {
+        level: "error",
+        extra: {
+          gclid,
+          conversionDateTime: formattedDateTime,
+          result,
+        },
+      });
+      return false;
+    }
+
+    if (result.partialFailureError) {
+      const errorJson = JSON.stringify(result.partialFailureError);
+
+      // A retried webhook re-sends the same gclid + datetime; Google dedupes it.
+      if (errorJson.includes("CLICK_CONVERSION_ALREADY_EXISTS")) {
+        console.warn(
+          `GoogleAds: Click conversion already exists for gclid=${gclid} datetime=${formattedDateTime}`,
+        );
+      } else {
+        console.error(
+          "GoogleAds: Partial failure in click conversion:",
+          errorJson,
+        );
+        Sentry.captureMessage("GoogleAds: Click conversion partial failure", {
+          level: "error",
+          extra: {
+            gclid,
+            conversionDateTime: formattedDateTime,
+            error: result.partialFailureError,
+          },
+        });
+      }
+      return false;
+    }
+
+    console.log(
+      `GoogleAds: Successfully uploaded click conversion for gclid=${gclid} datetime=${formattedDateTime}`,
+    );
+    return true;
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("GoogleAds: Error uploading click conversion:", e);
+    return false;
+  }
+}
+
+/**
  * Lists all conversion actions in the account. Used for diagnostics.
  * @returns {Promise<object[]>} Array of conversion actions with id, name, type, and resource_name
  */

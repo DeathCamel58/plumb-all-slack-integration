@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 const eventsEmitMock = jest.fn();
 const eventsOnMock = jest.fn();
 const uploadConversionAdjustmentMock = jest.fn();
+const uploadClickConversionMock = jest.fn();
 const sentryMock = { captureException: jest.fn() };
 
 jest.unstable_mockModule("../../util/events.js", () => ({
@@ -16,6 +17,7 @@ jest.unstable_mockModule("@sentry/node", () => sentryMock);
 
 jest.unstable_mockModule("../../util/apis/GoogleAdsConversions.js", () => ({
   uploadConversionAdjustment: uploadConversionAdjustmentMock,
+  uploadClickConversion: uploadClickConversionMock,
 }));
 
 await import("../../util/apis/CallRailWebHookHandler.js");
@@ -31,6 +33,7 @@ const callModifiedHandler = getHandler("callrail-call-modified");
 const outboundCallModifiedHandler = getHandler(
   "callrail-outbound-call-modified",
 );
+const postCallHandler = getHandler("callrail-post-call");
 
 function makeReq(body) {
   return { body };
@@ -39,6 +42,8 @@ function makeReq(body) {
 describe("CallRailWebHookHandler", () => {
   beforeEach(() => {
     uploadConversionAdjustmentMock.mockReset();
+    uploadClickConversionMock.mockReset();
+    delete process.env.GOOGLE_ADS_MIN_CALL_DURATION;
     sentryMock.captureException.mockReset();
   });
 
@@ -183,6 +188,85 @@ describe("CallRailWebHookHandler", () => {
       );
 
       expect(uploadConversionAdjustmentMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("post-call", () => {
+    const baseCall = {
+      customer_phone_number: "+14045551234",
+      direction: "inbound",
+      duration: 75,
+      gclid: "abc123",
+      start_time: "2026-03-22T14:30:00.000-04:00",
+      source_name: "Google Ads",
+    };
+
+    test("75s call with GCLID → uploads click conversion with start_time", async () => {
+      uploadClickConversionMock.mockResolvedValue(true);
+
+      await postCallHandler(makeReq({ ...baseCall }));
+
+      expect(uploadClickConversionMock).toHaveBeenCalledTimes(1);
+      expect(uploadClickConversionMock).toHaveBeenCalledWith({
+        gclid: "abc123",
+        conversionDateTime: "2026-03-22T14:30:00.000-04:00",
+      });
+    });
+
+    test("Exactly 60s → uploads", async () => {
+      await postCallHandler(makeReq({ ...baseCall, duration: 60 }));
+      expect(uploadClickConversionMock).toHaveBeenCalledTimes(1);
+    });
+
+    test("59s call → does not upload", async () => {
+      await postCallHandler(makeReq({ ...baseCall, duration: 59 }));
+      expect(uploadClickConversionMock).not.toHaveBeenCalled();
+    });
+
+    test("Missing duration → does not upload", async () => {
+      await postCallHandler(makeReq({ ...baseCall, duration: undefined }));
+      expect(uploadClickConversionMock).not.toHaveBeenCalled();
+    });
+
+    test("60s+ call with no GCLID → does not upload", async () => {
+      await postCallHandler(makeReq({ ...baseCall, gclid: "" }));
+      expect(uploadClickConversionMock).not.toHaveBeenCalled();
+    });
+
+    test("60s+ call from Google Ads Assets → does not upload", async () => {
+      await postCallHandler(
+        makeReq({ ...baseCall, source_name: "Google Ads Assets" }),
+      );
+      expect(uploadClickConversionMock).not.toHaveBeenCalled();
+    });
+
+    test("Outbound direction → does not upload", async () => {
+      await postCallHandler(makeReq({ ...baseCall, direction: "outbound" }));
+      expect(uploadClickConversionMock).not.toHaveBeenCalled();
+    });
+
+    test("GOOGLE_ADS_MIN_CALL_DURATION overrides the threshold", async () => {
+      process.env.GOOGLE_ADS_MIN_CALL_DURATION = "90";
+      await postCallHandler(makeReq({ ...baseCall, duration: 75 }));
+      expect(uploadClickConversionMock).not.toHaveBeenCalled();
+
+      await postCallHandler(makeReq({ ...baseCall, duration: 90 }));
+      expect(uploadClickConversionMock).toHaveBeenCalledTimes(1);
+    });
+
+    test("Upload error → Sentry captures, does not throw", async () => {
+      uploadClickConversionMock.mockRejectedValue(new Error("boom"));
+
+      await expect(
+        postCallHandler(makeReq({ ...baseCall })),
+      ).resolves.toBeUndefined();
+      expect(sentryMock.captureException).toHaveBeenCalledTimes(1);
+    });
+
+    test("Outbound post-call remains a stub", async () => {
+      const outboundPostCallHandler = getHandler("callrail-outbound-post-call");
+      await outboundPostCallHandler(makeReq({ ...baseCall }));
+      expect(uploadClickConversionMock).not.toHaveBeenCalled();
     });
   });
 
