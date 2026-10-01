@@ -316,7 +316,7 @@ export async function makeRequest(query) {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${JOBBER_ACCESS_TOKEN}`,
-          "X-JOBBER-GRAPHQL-VERSION": "2025-04-16",
+          "X-JOBBER-GRAPHQL-VERSION": "2026-09-25",
         },
         body: `{"query":${JSON.stringify(query)}}`,
       });
@@ -995,17 +995,31 @@ query RequestQuery {
         user {
           id
         }
-        visit {
-          id
+        targetItem {
+          ... on Visit {
+            id
+          }
         }
-        visitDurationTotal
+        targetDurationTotal
     }
 }
         `;
 
   let timesheetResponse = await makeRequest(query);
 
-  return timesheetResponse["timeSheetEntry"];
+  let timesheet = timesheetResponse["timeSheetEntry"];
+  if (timesheet) {
+    // API 2026-09-25 replaced visit/visitDurationTotal with targetItem/targetDurationTotal.
+    // targetItem can also be a Job or Assessment; only a Visit maps to the old fields.
+    const isVisit = timesheet.targetItem?.id !== undefined;
+    timesheet.visit = isVisit ? { id: timesheet.targetItem.id } : null;
+    timesheet.visitDurationTotal = isVisit
+      ? timesheet.targetDurationTotal
+      : null;
+    delete timesheet.targetItem;
+    delete timesheet.targetDurationTotal;
+  }
+  return timesheet;
 }
 
 /**
