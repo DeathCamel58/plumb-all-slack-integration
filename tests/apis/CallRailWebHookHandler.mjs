@@ -193,6 +193,7 @@ describe("CallRailWebHookHandler", () => {
 
   describe("post-call", () => {
     const baseCall = {
+      id: "CAL01a0cf5c8d9b70b88d5077becd270a9d",
       customer_phone_number: "+14045551234",
       direction: "inbound",
       duration: 75,
@@ -201,7 +202,7 @@ describe("CallRailWebHookHandler", () => {
       source_name: "Google Ads",
     };
 
-    test("75s call with GCLID → uploads click conversion with start_time", async () => {
+    test("75s call with GCLID → uploads click conversion with start_time and call id", async () => {
       uploadClickConversionMock.mockResolvedValue(true);
 
       await postCallHandler(makeReq({ ...baseCall }));
@@ -210,6 +211,7 @@ describe("CallRailWebHookHandler", () => {
       expect(uploadClickConversionMock).toHaveBeenCalledWith({
         gclid: "abc123",
         conversionDateTime: "2026-03-22T14:30:00.000-04:00",
+        transactionId: "CAL01a0cf5c8d9b70b88d5077becd270a9d",
       });
     });
 
