@@ -50,63 +50,102 @@ describe("GoogleAdsConversions", () => {
   });
 
   describe("uploadClickConversion", () => {
-    test("POSTs a $0 conversion to :uploadClickConversions", async () => {
-      mockApi(jsonResponse({ results: [{}] }));
+    const CALL_ID = "CAL01a0cf5c8d9b70b88d5077becd270a9d";
+
+    beforeEach(() => {
+      delete process.env.GOOGLE_DATA_MANAGER_VALIDATE_ONLY;
+      process.env.GOOGLE_ADS_REFRESH_TOKEN = "ads-refresh";
+    });
+
+    test("POSTs a $0 conversion to Data Manager events:ingest", async () => {
+      mockApi(jsonResponse({ requestId: "req-1", fieldWarnings: [] }));
 
       const result = await uploadClickConversion({
         gclid: "abc123",
-        conversionDateTime: "2026-03-22T14:30:00.000-04:00",
+        conversionDateTime: "2026-09-23T13:42:24.157-04:00",
+        transactionId: CALL_ID,
       });
 
       expect(result).toBe(true);
       expect(fetchMock).toHaveBeenCalledTimes(2);
 
       const { url, options, body } = apiCall();
-      expect(url).toBe(
-        "https://googleads.googleapis.com/v23/customers/1112223333:uploadClickConversions",
-      );
+      expect(url).toBe("https://datamanager.googleapis.com/v1/events:ingest");
       expect(options.method).toBe("POST");
-      expect(options.headers["developer-token"]).toBe("dev-token");
-      expect(options.headers["login-customer-id"]).toBe("4445556666");
+      expect(options.headers.Authorization).toBe("Bearer token-1");
+      expect(options.headers).not.toHaveProperty("developer-token");
+      expect(options.headers).not.toHaveProperty("login-customer-id");
       expect(body).toEqual({
-        conversions: [
+        destinations: [
           {
-            gclid: "abc123",
-            conversionAction: CONVERSION_ACTION,
-            conversionDateTime: "2026-03-22 14:30:00-04:00",
-            conversionValue: 0,
-            currencyCode: "USD",
+            operatingAccount: {
+              accountType: "GOOGLE_ADS",
+              accountId: "1112223333",
+            },
+            loginAccount: {
+              accountType: "GOOGLE_ADS",
+              accountId: "4445556666",
+            },
+            productDestinationId: "987654321",
           },
         ],
-        partialFailure: true,
+        events: [
+          {
+            adIdentifiers: { gclid: "abc123" },
+            eventTimestamp: "2026-09-23T13:42:24-04:00",
+            transactionId: CALL_ID,
+            eventSource: "PHONE",
+            conversionValue: 0,
+            currency: "USD",
+          },
+        ],
       });
     });
 
-    test("Omits login-customer-id when not configured", async () => {
+    test("Omits loginAccount when not configured", async () => {
       delete process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID;
-      mockApi(jsonResponse({ results: [{}] }));
+      mockApi(jsonResponse({ requestId: "req-1" }));
 
       await uploadClickConversion({
         gclid: "abc123",
         conversionDateTime: "2026-03-22T14:30:00.000-04:00",
+        transactionId: CALL_ID,
       });
 
-      expect(apiCall().options.headers).not.toHaveProperty("login-customer-id");
+      expect(apiCall().body.destinations[0]).not.toHaveProperty(
+        "loginAccount",
+      );
+    });
+
+    test("Uses GOOGLE_ADS_REFRESH_TOKEN", async () => {
+      mockApi(jsonResponse({ requestId: "req-1" }));
+
+      await uploadClickConversion({
+        gclid: "abc123",
+        conversionDateTime: "2026-03-22T14:30:00.000-04:00",
+        transactionId: CALL_ID,
+      });
+
+      const tokenBody = fetchMock.mock.calls[0][1].body;
+      expect(tokenBody.get("refresh_token")).toBe("ads-refresh");
     });
 
     test.each([
-      "2026-03-22T14:30:00.000-04:00", // EDT
-      "2026-01-15T09:05:07.123-05:00", // EST
-      "2026-11-01T05:30:00Z", // DST fall-back day
+      ["2026-09-23T13:42:24.157-04:00", "2026-09-23T13:42:24-04:00"], // EDT, ms dropped
+      ["2026-11-12T09:05:07.999-05:00", "2026-11-12T09:05:07-05:00"], // EST
+      ["2026-03-22T18:30:00.000Z", "2026-03-22T14:30:00-04:00"], // UTC input
+      ["2026-11-01T05:30:00Z", "2026-11-01T01:30:00-04:00"], // DST fall-back day
     ])(
-      "Datetime matches what the restatement sends for start_time=%s",
-      async (startTime) => {
-        mockApi(jsonResponse({ results: [{}] }));
+      "eventTimestamp for start_time=%s is %s and matches the restatement's second",
+      async (startTime, expected) => {
+        mockApi(jsonResponse({ requestId: "req-1" }));
         await uploadClickConversion({
           gclid: "abc123",
           conversionDateTime: startTime,
+          transactionId: CALL_ID,
         });
-        const created = apiCall().body.conversions[0].conversionDateTime;
+        const created = apiCall().body.events[0].eventTimestamp;
+        expect(created).toBe(expected);
 
         fetchMock.mockReset();
         mockApi(jsonResponse({ results: [{}] }));
@@ -119,9 +158,57 @@ describe("GoogleAdsConversions", () => {
           apiCall().body.conversionAdjustments[0].gclidDateTimePair
             .conversionDateTime;
 
-        expect(created).toBe(restated);
+        expect(created).toBe(restated.replace(" ", "T"));
+        expect(new Date(created).getTime()).toBe(
+          new Date(restated.replace(" ", "T")).getTime(),
+        );
+        expect(new Date(created).getTime()).toBe(
+          Math.floor(new Date(startTime).getTime() / 1000) * 1000,
+        );
       },
     );
+
+    test("GOOGLE_DATA_MANAGER_VALIDATE_ONLY=TRUE → validateOnly: true", async () => {
+      process.env.GOOGLE_DATA_MANAGER_VALIDATE_ONLY = "TRUE";
+      mockApi(jsonResponse({ requestId: "req-1" }));
+
+      const result = await uploadClickConversion({
+        gclid: "abc123",
+        conversionDateTime: "2026-03-22T14:30:00.000-04:00",
+        transactionId: CALL_ID,
+      });
+
+      expect(result).toBe(true);
+      expect(apiCall().body.validateOnly).toBe(true);
+    });
+
+    test("validateOnly is omitted by default", async () => {
+      mockApi(jsonResponse({ requestId: "req-1" }));
+
+      await uploadClickConversion({
+        gclid: "abc123",
+        conversionDateTime: "2026-03-22T14:30:00.000-04:00",
+        transactionId: CALL_ID,
+      });
+
+      expect(apiCall().body).not.toHaveProperty("validateOnly");
+    });
+
+    test("Logs the requestId on success", async () => {
+      const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+      mockApi(jsonResponse({ requestId: "req-xyz", fieldWarnings: [] }));
+
+      await uploadClickConversion({
+        gclid: "abc123",
+        conversionDateTime: "2026-03-22T14:30:00.000-04:00",
+        transactionId: CALL_ID,
+      });
+
+      expect(
+        logSpy.mock.calls.some(([msg]) => String(msg).includes("req-xyz")),
+      ).toBe(true);
+      logSpy.mockRestore();
+    });
 
     test("Missing env vars → returns false without calling the API", async () => {
       delete process.env.GOOGLE_ADS_CONVERSION_ACTION_ID;
@@ -129,6 +216,7 @@ describe("GoogleAdsConversions", () => {
       const result = await uploadClickConversion({
         gclid: "abc123",
         conversionDateTime: "2026-03-22T14:30:00.000-04:00",
+        transactionId: CALL_ID,
       });
 
       expect(result).toBe(false);
@@ -139,6 +227,7 @@ describe("GoogleAdsConversions", () => {
       const result = await uploadClickConversion({
         gclid: null,
         conversionDateTime: "2026-03-22T14:30:00.000-04:00",
+        transactionId: CALL_ID,
       });
 
       expect(result).toBe(false);
@@ -149,6 +238,7 @@ describe("GoogleAdsConversions", () => {
       const result = await uploadClickConversion({
         gclid: "abc123",
         conversionDateTime: undefined,
+        transactionId: CALL_ID,
       });
 
       expect(result).toBe(false);
@@ -156,71 +246,62 @@ describe("GoogleAdsConversions", () => {
     });
 
     test("HTTP error → returns false and reports to Sentry", async () => {
-      mockApi(jsonResponse({ error: { message: "bad" } }, false, 400));
+      mockApi(
+        jsonResponse(
+          {
+            error: {
+              code: 400,
+              message: "Invalid argument",
+              status: "INVALID_ARGUMENT",
+            },
+          },
+          false,
+          400,
+        ),
+      );
 
       const result = await uploadClickConversion({
         gclid: "abc123",
         conversionDateTime: "2026-03-22T14:30:00.000-04:00",
+        transactionId: CALL_ID,
       });
 
       expect(result).toBe(false);
       expect(sentryMock.captureMessage).toHaveBeenCalledTimes(1);
     });
 
-    test("Partial failure → returns false and reports to Sentry", async () => {
-      mockApi(
-        jsonResponse({
-          partialFailureError: {
-            code: 3,
-            message: "The click is too old",
-            details: [
-              {
-                errors: [
-                  { errorCode: { conversionUploadError: "EXPIRED_EVENT" } },
-                ],
-              },
-            ],
-          },
-          results: [{}],
-        }),
-      );
-
-      const result = await uploadClickConversion({
-        gclid: "abc123",
-        conversionDateTime: "2026-03-22T14:30:00.000-04:00",
+    test("Non-JSON error body → returns false and reports to Sentry", async () => {
+      mockApi({
+        ok: false,
+        status: 503,
+        json: async () => {
+          throw new SyntaxError("Unexpected token <");
+        },
       });
 
-      expect(result).toBe(false);
+      await expect(
+        uploadClickConversion({
+          gclid: "abc123",
+          conversionDateTime: "2026-03-22T14:30:00.000-04:00",
+          transactionId: CALL_ID,
+        }),
+      ).resolves.toBe(false);
       expect(sentryMock.captureMessage).toHaveBeenCalledTimes(1);
     });
 
-    test("Duplicate conversion → returns false without Sentry noise", async () => {
-      mockApi(
-        jsonResponse({
-          partialFailureError: {
-            code: 3,
-            details: [
-              {
-                errors: [
-                  {
-                    errorCode: {
-                      conversionUploadError: "CLICK_CONVERSION_ALREADY_EXISTS",
-                    },
-                  },
-                ],
-              },
-            ],
-          },
-        }),
+    test("OAuth failure → returns false, Sentry captures, does not throw", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({ error: "invalid_scope" }, false, 400),
       );
 
-      const result = await uploadClickConversion({
-        gclid: "abc123",
-        conversionDateTime: "2026-03-22T14:30:00.000-04:00",
-      });
-
-      expect(result).toBe(false);
-      expect(sentryMock.captureMessage).not.toHaveBeenCalled();
+      await expect(
+        uploadClickConversion({
+          gclid: "abc123",
+          conversionDateTime: "2026-03-22T14:30:00.000-04:00",
+          transactionId: CALL_ID,
+        }),
+      ).resolves.toBe(false);
+      expect(sentryMock.captureException).toHaveBeenCalledTimes(1);
     });
 
     test("Network error → returns false and does not throw", async () => {
@@ -230,6 +311,7 @@ describe("GoogleAdsConversions", () => {
         uploadClickConversion({
           gclid: "abc123",
           conversionDateTime: "2026-03-22T14:30:00.000-04:00",
+          transactionId: CALL_ID,
         }),
       ).resolves.toBe(false);
       expect(sentryMock.captureException).toHaveBeenCalledTimes(1);

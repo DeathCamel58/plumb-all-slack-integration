@@ -59,11 +59,15 @@ JOBBER_REFRESH_TOKEN=your-jobber-refresh-token
 GOOGLE_ADS_KEY=your-google-ads-key
 GOOGLE_ADS_CLIENT_ID=your-oauth-client-id.apps.googleusercontent.com
 GOOGLE_ADS_CLIENT_SECRET=your-oauth-client-secret
+# Needs both the adwords and datamanager scopes
 GOOGLE_ADS_REFRESH_TOKEN=your-oauth-refresh-token
 GOOGLE_ADS_DEVELOPER_TOKEN=your-developer-token
 GOOGLE_ADS_LOGIN_CUSTOMER_ID=1234567890
 GOOGLE_ADS_CUSTOMER_ID=1234567890
 GOOGLE_ADS_CONVERSION_ACTION_ID=customers/1234567890/conversionActions/1234567890
+# Data Manager API (click conversion creation)
+# TRUE = send validateOnly (dry run, nothing is recorded)
+GOOGLE_DATA_MANAGER_VALIDATE_ONLY=FALSE
 
 # Google Maps
 GOOGLE_API_KEY=your-google-maps-api-key

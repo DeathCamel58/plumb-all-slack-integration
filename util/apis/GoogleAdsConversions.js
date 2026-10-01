@@ -3,8 +3,12 @@ import * as Sentry from "@sentry/node";
 
 const GOOGLE_ADS_API_VERSION = "v23";
 
+const DATA_MANAGER_INGEST_URL =
+  "https://datamanager.googleapis.com/v1/events:ingest";
+
 /**
  * Gets a fresh OAuth2 access token using the refresh token.
+ * The refresh token must carry both the adwords and datamanager scopes.
  * @returns {Promise<string>} Access token
  */
 async function getAccessToken() {
@@ -163,7 +167,9 @@ export async function uploadConversionAdjustment({
 }
 
 /**
- * Uploads a new click conversion to Google Ads via the REST API.
+ * Uploads a new click conversion to Google Ads via the Data Manager API
+ * (events:ingest). Google Ads API UploadClickConversions is closed to new
+ * integrations (CUSTOMER_NOT_ALLOWLISTED_FOR_THIS_FEATURE).
  * The conversion is always created with a $0 value; the real value is restated
  * later by uploadConversionAdjustment() once the customer pays.
  *
@@ -173,9 +179,14 @@ export async function uploadConversionAdjustment({
  * @param {object} params
  * @param {string} params.gclid - The Google Click ID from the original ad click
  * @param {string} params.conversionDateTime - ISO 8601 datetime of the conversion (CallRail start_time)
+ * @param {string} [params.transactionId] - Dedupe key (CallRail call id), makes retries idempotent
  * @returns {Promise<boolean>} true if successful
  */
-export async function uploadClickConversion({ gclid, conversionDateTime }) {
+export async function uploadClickConversion({
+  gclid,
+  conversionDateTime,
+  transactionId,
+}) {
   if (
     !process.env.GOOGLE_ADS_CUSTOMER_ID ||
     !process.env.GOOGLE_ADS_CONVERSION_ACTION_ID
@@ -200,84 +211,82 @@ export async function uploadClickConversion({ gclid, conversionDateTime }) {
 
   try {
     const accessToken = await getAccessToken();
-    const customerId = process.env.GOOGLE_ADS_CUSTOMER_ID;
     const formattedDateTime = formatDateTimeForGoogleAds(conversionDateTime);
+    // Derived from the restatement's format so both name the same whole second.
+    const eventTimestamp = formattedDateTime.replace(" ", "T");
+    const validateOnly =
+      process.env.GOOGLE_DATA_MANAGER_VALIDATE_ONLY?.toUpperCase() === "TRUE";
 
     console.log(
-      `GoogleAds: Uploading click conversion — gclid=${gclid} value=$0 datetime=${formattedDateTime}`,
+      `GoogleAds: Uploading click conversion via Data Manager — gclid=${gclid} value=$0 datetime=${eventTimestamp} transactionId=${transactionId || "none"}${validateOnly ? " (validateOnly)" : ""}`,
     );
 
-    const url = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${customerId}:uploadClickConversions`;
+    const destination = {
+      operatingAccount: {
+        accountType: "GOOGLE_ADS",
+        accountId: process.env.GOOGLE_ADS_CUSTOMER_ID,
+      },
+      // Data Manager wants the numeric conversion action ID, not the resource name
+      productDestinationId:
+        process.env.GOOGLE_ADS_CONVERSION_ACTION_ID.split("/").pop(),
+    };
+    if (process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID) {
+      destination.loginAccount = {
+        accountType: "GOOGLE_ADS",
+        accountId: process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID,
+      };
+    }
 
-    const response = await fetch(url, {
+    const response = await fetch(DATA_MANAGER_INGEST_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
-        "developer-token": process.env.GOOGLE_ADS_DEVELOPER_TOKEN,
-        ...(process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID
-          ? { "login-customer-id": process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID }
-          : {}),
       },
       body: JSON.stringify({
-        conversions: [
+        destinations: [destination],
+        events: [
           {
-            gclid: gclid,
-            conversionAction: process.env.GOOGLE_ADS_CONVERSION_ACTION_ID,
-            conversionDateTime: formattedDateTime,
+            adIdentifiers: { gclid },
+            eventTimestamp,
+            ...(transactionId ? { transactionId } : {}),
+            eventSource: "PHONE",
             conversionValue: 0,
-            currencyCode: "USD",
+            currency: "USD",
           },
         ],
-        partialFailure: true,
+        ...(validateOnly ? { validateOnly: true } : {}),
       }),
     });
 
-    const result = await response.json();
+    const result = await response.json().catch(() => ({}));
 
     if (!response.ok) {
       console.error(
-        `GoogleAds: API returned ${response.status}:`,
+        `GoogleAds: Data Manager API returned ${response.status}:`,
         JSON.stringify(result),
       );
       Sentry.captureMessage("GoogleAds: Click conversion API error", {
         level: "error",
         extra: {
           gclid,
-          conversionDateTime: formattedDateTime,
+          conversionDateTime: eventTimestamp,
+          transactionId,
           result,
         },
       });
       return false;
     }
 
-    if (result.partialFailureError) {
-      const errorJson = JSON.stringify(result.partialFailureError);
-
-      // A retried webhook re-sends the same gclid + datetime; Google dedupes it.
-      if (errorJson.includes("CLICK_CONVERSION_ALREADY_EXISTS")) {
-        console.warn(
-          `GoogleAds: Click conversion already exists for gclid=${gclid} datetime=${formattedDateTime}`,
-        );
-      } else {
-        console.error(
-          "GoogleAds: Partial failure in click conversion:",
-          errorJson,
-        );
-        Sentry.captureMessage("GoogleAds: Click conversion partial failure", {
-          level: "error",
-          extra: {
-            gclid,
-            conversionDateTime: formattedDateTime,
-            error: result.partialFailureError,
-          },
-        });
-      }
-      return false;
+    if (result.fieldWarnings?.length) {
+      console.warn(
+        `GoogleAds: Data Manager field warnings for gclid=${gclid}:`,
+        JSON.stringify(result.fieldWarnings),
+      );
     }
 
     console.log(
-      `GoogleAds: Successfully uploaded click conversion for gclid=${gclid} datetime=${formattedDateTime}`,
+      `GoogleAds: Successfully uploaded click conversion for gclid=${gclid} datetime=${eventTimestamp} transactionId=${transactionId || "none"} requestId=${result.requestId}${validateOnly ? " (validateOnly — not applied)" : ""}`,
     );
     return true;
   } catch (e) {
