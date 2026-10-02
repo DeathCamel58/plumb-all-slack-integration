@@ -264,3 +264,19 @@ model TwilioContact {
   lastContactAt  DateTime
   twilioNumberId String?
 }
+
+// One Google Ads click conversion per GCLID: the first qualifying CallRail call
+// for a click claims the row, and every value restatement for that click is
+// routed to this conversion, whichever call the invoice value landed on.
+model GoogleAdsClickConversion {
+  gclid              String    @id
+  transactionId      String? // CallRail call id (CAL…) of the first qualifying call
+  conversionDateTime String // exact eventTimestamp sent to Google; restatements must match it to the second
+  callStartTime      DateTime // raw CallRail start_time of that call
+  uploadedAt         DateTime? // null until Data Manager returns 200
+  requestId          String? // Data Manager requestId
+  restatedValue      Decimal?  @db.Decimal(12, 2) // total last restated to Google Ads for this click
+  restatedCalls      Json? // { [CallRail call id]: value } summed into restatedValue
+  restatedAt         DateTime?
+  createdAt          DateTime  @default(now())
+}

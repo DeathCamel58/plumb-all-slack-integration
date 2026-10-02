@@ -1,9 +1,12 @@
 import * as Sentry from "@sentry/node";
 import events from "../events.js";
+import { uploadClickConversion } from "./GoogleAdsConversions.js";
 import {
-  uploadClickConversion,
-  uploadConversionAdjustment,
-} from "./GoogleAdsConversions.js";
+  claimClickConversion,
+  markClickConversionUploaded,
+  releaseClickConversion,
+  restateClickConversion,
+} from "./GoogleAdsClickTracking.js";
 
 /**
  * Calls shorter than this are not sent to Google Ads as conversions. Derived from
@@ -26,8 +29,8 @@ function getMinCallDurationSeconds() {
 
 /**
  * Handles a CallRail call-modified webhook.
- * When a call has both a value and a GCLID, uploads a conversion
- * value adjustment to Google Ads.
+ * When a call has both a value and a GCLID, restates the value onto the
+ * Google Ads conversion for that click (the click's first qualifying call).
  * @param {import("express").Request} req
  */
 async function handleCallModified(req) {
@@ -60,10 +63,11 @@ async function handleCallModified(req) {
           `CallRail Webhook: Call ${callId} has value $${callValue} and GCLID — sending adjustment to Google Ads`,
         );
 
-        await uploadConversionAdjustment({
+        await restateClickConversion({
           gclid,
-          conversionDateTime: call.start_time,
-          adjustedValue: callValue,
+          startTime: call.start_time,
+          value: callValue,
+          callId: call.resource_id,
         });
       }
     } else if (callValue > 0 && !gclid) {
@@ -106,10 +110,11 @@ async function handleOutboundCallModified(req) {
           `CallRail Webhook: Outbound call ${callId} has value $${callValue} and GCLID — sending adjustment to Google Ads`,
         );
 
-        await uploadConversionAdjustment({
+        await restateClickConversion({
           gclid,
-          conversionDateTime: call.start_time,
-          adjustedValue: callValue,
+          startTime: call.start_time,
+          value: callValue,
+          callId: call.resource_id,
         });
       }
     }
@@ -142,8 +147,10 @@ events.on("callrail-call-routing-complete", handleCallRoutingComplete);
 /**
  * Handles a CallRail post-call webhook (inbound calls only).
  * Creates a $0 Google Ads click conversion for ad-attributed calls that lasted
- * at least the minimum duration. The value is restated later by
- * handleCallModified() once the customer pays, matched by gclid + start_time.
+ * at least the minimum duration — one per GCLID: repeat calls on a click that
+ * already has a conversion are skipped. The value is restated later by
+ * handleCallModified() once the customer pays, against the first call's
+ * conversion datetime.
  * @param {import("express").Request} req
  */
 async function handlePostCall(req) {
@@ -183,11 +190,48 @@ async function handlePostCall(req) {
       `CallRail Webhook: post-call conversion SEND caller=${callId} duration=${duration}s gclid=${gclid} start_time=${call.start_time}`,
     );
 
-    await uploadClickConversion({
-      gclid,
-      conversionDateTime: call.start_time,
-      transactionId: call.resource_id,
-    });
+    const transactionId = call.resource_id;
+    let claim = { status: "unavailable" };
+    if (call.start_time && !isNaN(new Date(call.start_time).getTime())) {
+      claim = await claimClickConversion({
+        gclid,
+        transactionId,
+        startTime: call.start_time,
+      });
+    }
+
+    if (claim.status === "duplicate") {
+      console.log(
+        `CallRail Webhook: post-call conversion SKIP caller=${callId} reason=repeat call on gclid already converted (first call transactionId=${claim.existing?.transactionId || "unknown"})`,
+      );
+      return;
+    }
+
+    let result;
+    try {
+      result = await uploadClickConversion({
+        gclid,
+        conversionDateTime: call.start_time,
+        transactionId,
+      });
+    } catch (e) {
+      // Never leave an un-uploaded claim behind; it would block the click forever.
+      if (claim.status === "claimed") {
+        await releaseClickConversion(gclid, transactionId);
+      }
+      throw e;
+    }
+
+    if (claim.status === "claimed") {
+      if (result.success && !result.validateOnly) {
+        await markClickConversionUploaded(gclid, result.requestId);
+      } else {
+        console.log(
+          `CallRail Webhook: post-call conversion ${result.validateOnly ? "was a validateOnly dry run" : "upload failed"} — releasing claim on gclid=${gclid} so a later call can convert it`,
+        );
+        await releaseClickConversion(gclid, transactionId);
+      }
+    }
   } catch (e) {
     Sentry.captureException(e);
     console.error("CallRail Webhook: Error handling post-call:", e);

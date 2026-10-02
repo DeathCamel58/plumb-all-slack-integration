@@ -17,10 +17,8 @@ import {
   listCallsWithValueAndGclid,
   verifyWebhook as verifyCallRailWebhook,
 } from "./apis/CallRail.js";
-import {
-  uploadConversionAdjustment,
-  listConversionActions,
-} from "./apis/GoogleAdsConversions.js";
+import { listConversionActions } from "./apis/GoogleAdsConversions.js";
+import { restateClickConversion } from "./apis/GoogleAdsClickTracking.js";
 import { toE164, normalizePhoneNumber } from "./DataUtilities.js";
 import Contact from "./contact.js";
 import * as APICoordinator from "./APICoordinator.js";
@@ -730,10 +728,11 @@ app.post("/dashboard/backfill-conversions", dashboardAuth, async (req, res) => {
       }
 
       try {
-        let success = await uploadConversionAdjustment({
+        let success = await restateClickConversion({
           gclid: call.gclid,
-          conversionDateTime: call.start_time,
-          adjustedValue: parseFloat(call.value),
+          startTime: call.start_time,
+          value: parseFloat(call.value),
+          callId: call.id,
         });
         if (success) {
           uploaded++;

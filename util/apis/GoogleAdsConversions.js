@@ -180,7 +180,8 @@ export async function uploadConversionAdjustment({
  * @param {string} params.gclid - The Google Click ID from the original ad click
  * @param {string} params.conversionDateTime - ISO 8601 datetime of the conversion (CallRail start_time)
  * @param {string} [params.transactionId] - Dedupe key (CallRail call id), makes retries idempotent
- * @returns {Promise<boolean>} true if successful
+ * @returns {Promise<{success: boolean, requestId: string|null, validateOnly: boolean}>}
+ *   validateOnly is true when GOOGLE_DATA_MANAGER_VALIDATE_ONLY made this a dry run (nothing was created)
  */
 export async function uploadClickConversion({
   gclid,
@@ -194,26 +195,24 @@ export async function uploadClickConversion({
     console.warn(
       "GoogleAds: Missing GOOGLE_ADS_CUSTOMER_ID or GOOGLE_ADS_CONVERSION_ACTION_ID, skipping click conversion",
     );
-    return false;
+    return { success: false, requestId: null, validateOnly: false };
   }
 
   if (!gclid) {
     console.log("GoogleAds: No GCLID provided, skipping click conversion");
-    return false;
+    return { success: false, requestId: null, validateOnly: false };
   }
 
   if (!conversionDateTime || isNaN(new Date(conversionDateTime).getTime())) {
     console.warn(
       `GoogleAds: Invalid conversionDateTime "${conversionDateTime}" for gclid=${gclid}, skipping click conversion`,
     );
-    return false;
+    return { success: false, requestId: null, validateOnly: false };
   }
 
   try {
     const accessToken = await getAccessToken();
-    const formattedDateTime = formatDateTimeForGoogleAds(conversionDateTime);
-    // Derived from the restatement's format so both name the same whole second.
-    const eventTimestamp = formattedDateTime.replace(" ", "T");
+    const eventTimestamp = toEventTimestamp(conversionDateTime);
     const validateOnly =
       process.env.GOOGLE_DATA_MANAGER_VALIDATE_ONLY?.toUpperCase() === "TRUE";
 
@@ -275,7 +274,7 @@ export async function uploadClickConversion({
           result,
         },
       });
-      return false;
+      return { success: false, requestId: null, validateOnly };
     }
 
     if (result.fieldWarnings?.length) {
@@ -288,11 +287,11 @@ export async function uploadClickConversion({
     console.log(
       `GoogleAds: Successfully uploaded click conversion for gclid=${gclid} datetime=${eventTimestamp} transactionId=${transactionId || "none"} requestId=${result.requestId}${validateOnly ? " (validateOnly — not applied)" : ""}`,
     );
-    return true;
+    return { success: true, requestId: result.requestId ?? null, validateOnly };
   } catch (e) {
     Sentry.captureException(e);
     console.error("GoogleAds: Error uploading click conversion:", e);
-    return false;
+    return { success: false, requestId: null, validateOnly: false };
   }
 }
 
@@ -344,6 +343,17 @@ export async function listConversionActions() {
     }
   }
   return actions;
+}
+
+/**
+ * Returns the Data Manager eventTimestamp for a conversion datetime: the same
+ * whole second, in the same America/New_York offset, that the restatement
+ * sends via formatDateTimeForGoogleAds(). e.g. "2026-09-23T13:42:24-04:00".
+ * @param {string} isoDateTime - ISO 8601 datetime (e.g., CallRail start_time)
+ * @returns {string}
+ */
+export function toEventTimestamp(isoDateTime) {
+  return formatDateTimeForGoogleAds(isoDateTime).replace(" ", "T");
 }
 
 /**

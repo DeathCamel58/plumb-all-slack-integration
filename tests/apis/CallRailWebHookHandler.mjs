@@ -2,8 +2,11 @@ import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 
 const eventsEmitMock = jest.fn();
 const eventsOnMock = jest.fn();
-const uploadConversionAdjustmentMock = jest.fn();
+const restateClickConversionMock = jest.fn();
 const uploadClickConversionMock = jest.fn();
+const claimClickConversionMock = jest.fn();
+const markClickConversionUploadedMock = jest.fn();
+const releaseClickConversionMock = jest.fn();
 const sentryMock = { captureException: jest.fn() };
 
 jest.unstable_mockModule("../../util/events.js", () => ({
@@ -16,8 +19,14 @@ jest.unstable_mockModule("../../util/events.js", () => ({
 jest.unstable_mockModule("@sentry/node", () => sentryMock);
 
 jest.unstable_mockModule("../../util/apis/GoogleAdsConversions.js", () => ({
-  uploadConversionAdjustment: uploadConversionAdjustmentMock,
   uploadClickConversion: uploadClickConversionMock,
+}));
+
+jest.unstable_mockModule("../../util/apis/GoogleAdsClickTracking.js", () => ({
+  claimClickConversion: claimClickConversionMock,
+  markClickConversionUploaded: markClickConversionUploadedMock,
+  releaseClickConversion: releaseClickConversionMock,
+  restateClickConversion: restateClickConversionMock,
 }));
 
 await import("../../util/apis/CallRailWebHookHandler.js");
@@ -41,19 +50,32 @@ function makeReq(body) {
 
 describe("CallRailWebHookHandler", () => {
   beforeEach(() => {
-    uploadConversionAdjustmentMock.mockReset();
+    restateClickConversionMock.mockReset();
     uploadClickConversionMock.mockReset();
+    uploadClickConversionMock.mockResolvedValue({
+      success: true,
+      requestId: "req-1",
+      validateOnly: false,
+    });
+    claimClickConversionMock.mockReset();
+    claimClickConversionMock.mockResolvedValue({
+      status: "claimed",
+      conversionDateTime: "2026-03-22T14:30:00-04:00",
+    });
+    markClickConversionUploadedMock.mockReset();
+    releaseClickConversionMock.mockReset();
     delete process.env.GOOGLE_ADS_MIN_CALL_DURATION;
     sentryMock.captureException.mockReset();
   });
 
   describe("call-modified", () => {
     test("Value + GCLID → uploads conversion adjustment", async () => {
-      uploadConversionAdjustmentMock.mockResolvedValue(true);
+      restateClickConversionMock.mockResolvedValue(true);
 
       await callModifiedHandler(
         makeReq({
           customer_phone_number: "+14045551234",
+          resource_id: "CAL0000000000000000000000000000003",
           value: "745.00",
           gclid: "abc123",
           start_time: "2026-03-22T14:30:00.000-04:00",
@@ -61,11 +83,12 @@ describe("CallRailWebHookHandler", () => {
         }),
       );
 
-      expect(uploadConversionAdjustmentMock).toHaveBeenCalledTimes(1);
-      expect(uploadConversionAdjustmentMock).toHaveBeenCalledWith({
+      expect(restateClickConversionMock).toHaveBeenCalledTimes(1);
+      expect(restateClickConversionMock).toHaveBeenCalledWith({
         gclid: "abc123",
-        conversionDateTime: "2026-03-22T14:30:00.000-04:00",
-        adjustedValue: 745,
+        startTime: "2026-03-22T14:30:00.000-04:00",
+        value: 745,
+        callId: "CAL0000000000000000000000000000003",
       });
     });
 
@@ -80,7 +103,7 @@ describe("CallRailWebHookHandler", () => {
         }),
       );
 
-      expect(uploadConversionAdjustmentMock).not.toHaveBeenCalled();
+      expect(restateClickConversionMock).not.toHaveBeenCalled();
     });
 
     test("Value but no GCLID → does not upload", async () => {
@@ -94,7 +117,7 @@ describe("CallRailWebHookHandler", () => {
         }),
       );
 
-      expect(uploadConversionAdjustmentMock).not.toHaveBeenCalled();
+      expect(restateClickConversionMock).not.toHaveBeenCalled();
     });
 
     test("GCLID but no value → does not upload", async () => {
@@ -107,7 +130,7 @@ describe("CallRailWebHookHandler", () => {
         }),
       );
 
-      expect(uploadConversionAdjustmentMock).not.toHaveBeenCalled();
+      expect(restateClickConversionMock).not.toHaveBeenCalled();
     });
 
     test("No value, no GCLID → does not upload", async () => {
@@ -120,11 +143,11 @@ describe("CallRailWebHookHandler", () => {
         }),
       );
 
-      expect(uploadConversionAdjustmentMock).not.toHaveBeenCalled();
+      expect(restateClickConversionMock).not.toHaveBeenCalled();
     });
 
     test("Upload error → Sentry captures, does not throw", async () => {
-      uploadConversionAdjustmentMock.mockRejectedValue(
+      restateClickConversionMock.mockRejectedValue(
         new Error("Google Ads API error"),
       );
 
@@ -143,7 +166,7 @@ describe("CallRailWebHookHandler", () => {
 
   describe("outbound-call-modified", () => {
     test("Value + GCLID → uploads conversion adjustment", async () => {
-      uploadConversionAdjustmentMock.mockResolvedValue(true);
+      restateClickConversionMock.mockResolvedValue(true);
 
       await outboundCallModifiedHandler(
         makeReq({
@@ -155,11 +178,12 @@ describe("CallRailWebHookHandler", () => {
         }),
       );
 
-      expect(uploadConversionAdjustmentMock).toHaveBeenCalledTimes(1);
-      expect(uploadConversionAdjustmentMock).toHaveBeenCalledWith({
+      expect(restateClickConversionMock).toHaveBeenCalledTimes(1);
+      expect(restateClickConversionMock).toHaveBeenCalledWith({
         gclid: "out-gclid-1",
-        conversionDateTime: "2026-03-23T10:00:00.000-04:00",
-        adjustedValue: 1200,
+        startTime: "2026-03-23T10:00:00.000-04:00",
+        value: 1200,
+        callId: undefined,
       });
     });
 
@@ -174,7 +198,7 @@ describe("CallRailWebHookHandler", () => {
         }),
       );
 
-      expect(uploadConversionAdjustmentMock).not.toHaveBeenCalled();
+      expect(restateClickConversionMock).not.toHaveBeenCalled();
     });
 
     test("No GCLID → does not upload", async () => {
@@ -187,7 +211,7 @@ describe("CallRailWebHookHandler", () => {
         }),
       );
 
-      expect(uploadConversionAdjustmentMock).not.toHaveBeenCalled();
+      expect(restateClickConversionMock).not.toHaveBeenCalled();
     });
   });
 
@@ -204,8 +228,6 @@ describe("CallRailWebHookHandler", () => {
     };
 
     test("75s call with GCLID → uploads click conversion with start_time and call id", async () => {
-      uploadClickConversionMock.mockResolvedValue(true);
-
       await postCallHandler(makeReq({ ...baseCall }));
 
       expect(uploadClickConversionMock).toHaveBeenCalledTimes(1);
@@ -270,6 +292,102 @@ describe("CallRailWebHookHandler", () => {
       const outboundPostCallHandler = getHandler("callrail-outbound-post-call");
       await outboundPostCallHandler(makeReq({ ...baseCall }));
       expect(uploadClickConversionMock).not.toHaveBeenCalled();
+    });
+
+    describe("one conversion per GCLID", () => {
+      test("First call on a new GCLID → claims, uploads once, records requestId", async () => {
+        await postCallHandler(makeReq({ ...baseCall }));
+
+        expect(claimClickConversionMock).toHaveBeenCalledWith({
+          gclid: "abc123",
+          transactionId: "CAL01a0cf5c8d9b70b88d5077becd270a9d",
+          startTime: "2026-03-22T14:30:00.000-04:00",
+        });
+        expect(uploadClickConversionMock).toHaveBeenCalledTimes(1);
+        expect(markClickConversionUploadedMock).toHaveBeenCalledWith(
+          "abc123",
+          "req-1",
+        );
+        expect(releaseClickConversionMock).not.toHaveBeenCalled();
+      });
+
+      test("Repeat call on an already-converted GCLID → no upload, logs SKIP", async () => {
+        const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+        claimClickConversionMock.mockResolvedValue({
+          status: "duplicate",
+          existing: { transactionId: "CALfirst" },
+        });
+
+        await postCallHandler(
+          makeReq({ ...baseCall, resource_id: "CALsecond" }),
+        );
+
+        expect(uploadClickConversionMock).not.toHaveBeenCalled();
+        expect(
+          logSpy.mock.calls.some(([msg]) =>
+            String(msg).includes(
+              "reason=repeat call on gclid already converted (first call transactionId=CALfirst)",
+            ),
+          ),
+        ).toBe(true);
+        logSpy.mockRestore();
+      });
+
+      test("Upload failure → releases the claim", async () => {
+        uploadClickConversionMock.mockResolvedValue({
+          success: false,
+          requestId: null,
+          validateOnly: false,
+        });
+
+        await postCallHandler(makeReq({ ...baseCall }));
+
+        expect(markClickConversionUploadedMock).not.toHaveBeenCalled();
+        expect(releaseClickConversionMock).toHaveBeenCalledWith(
+          "abc123",
+          "CAL01a0cf5c8d9b70b88d5077becd270a9d",
+        );
+      });
+
+      test("Upload throws → releases the claim, Sentry captures, does not throw", async () => {
+        uploadClickConversionMock.mockRejectedValue(new Error("boom"));
+
+        await expect(
+          postCallHandler(makeReq({ ...baseCall })),
+        ).resolves.toBeUndefined();
+        expect(releaseClickConversionMock).toHaveBeenCalledTimes(1);
+        expect(sentryMock.captureException).toHaveBeenCalledTimes(1);
+      });
+
+      test("validateOnly dry run → releases the claim so a real upload can happen later", async () => {
+        uploadClickConversionMock.mockResolvedValue({
+          success: true,
+          requestId: "v-1",
+          validateOnly: true,
+        });
+
+        await postCallHandler(makeReq({ ...baseCall }));
+
+        expect(markClickConversionUploadedMock).not.toHaveBeenCalled();
+        expect(releaseClickConversionMock).toHaveBeenCalledTimes(1);
+      });
+
+      test("Store unavailable (e.g. missing table) → uploads anyway without tracking", async () => {
+        claimClickConversionMock.mockResolvedValue({ status: "unavailable" });
+
+        await postCallHandler(makeReq({ ...baseCall }));
+
+        expect(uploadClickConversionMock).toHaveBeenCalledTimes(1);
+        expect(markClickConversionUploadedMock).not.toHaveBeenCalled();
+        expect(releaseClickConversionMock).not.toHaveBeenCalled();
+      });
+
+      test("Invalid start_time → no claim, upload still attempted (and rejects it)", async () => {
+        await postCallHandler(makeReq({ ...baseCall, start_time: "garbage" }));
+
+        expect(claimClickConversionMock).not.toHaveBeenCalled();
+        expect(uploadClickConversionMock).toHaveBeenCalledTimes(1);
+      });
     });
   });
 

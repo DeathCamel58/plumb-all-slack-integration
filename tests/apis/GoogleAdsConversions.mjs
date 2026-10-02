@@ -66,7 +66,11 @@ describe("GoogleAdsConversions", () => {
         transactionId: CALL_ID,
       });
 
-      expect(result).toBe(true);
+      expect(result).toEqual({
+        success: true,
+        requestId: "req-1",
+        validateOnly: false,
+      });
       expect(fetchMock).toHaveBeenCalledTimes(2);
 
       const { url, options, body } = apiCall();
@@ -112,9 +116,7 @@ describe("GoogleAdsConversions", () => {
         transactionId: CALL_ID,
       });
 
-      expect(apiCall().body.destinations[0]).not.toHaveProperty(
-        "loginAccount",
-      );
+      expect(apiCall().body.destinations[0]).not.toHaveProperty("loginAccount");
     });
 
     test("Uses GOOGLE_ADS_REFRESH_TOKEN", async () => {
@@ -178,7 +180,7 @@ describe("GoogleAdsConversions", () => {
         transactionId: CALL_ID,
       });
 
-      expect(result).toBe(true);
+      expect(result).toMatchObject({ success: true, validateOnly: true });
       expect(apiCall().body.validateOnly).toBe(true);
     });
 
@@ -219,7 +221,7 @@ describe("GoogleAdsConversions", () => {
         transactionId: CALL_ID,
       });
 
-      expect(result).toBe(false);
+      expect(result.success).toBe(false);
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
@@ -230,7 +232,7 @@ describe("GoogleAdsConversions", () => {
         transactionId: CALL_ID,
       });
 
-      expect(result).toBe(false);
+      expect(result.success).toBe(false);
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
@@ -241,7 +243,7 @@ describe("GoogleAdsConversions", () => {
         transactionId: CALL_ID,
       });
 
-      expect(result).toBe(false);
+      expect(result.success).toBe(false);
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
@@ -266,7 +268,7 @@ describe("GoogleAdsConversions", () => {
         transactionId: CALL_ID,
       });
 
-      expect(result).toBe(false);
+      expect(result.success).toBe(false);
       expect(sentryMock.captureMessage).toHaveBeenCalledTimes(1);
     });
 
@@ -285,7 +287,7 @@ describe("GoogleAdsConversions", () => {
           conversionDateTime: "2026-03-22T14:30:00.000-04:00",
           transactionId: CALL_ID,
         }),
-      ).resolves.toBe(false);
+      ).resolves.toMatchObject({ success: false });
       expect(sentryMock.captureMessage).toHaveBeenCalledTimes(1);
     });
 
@@ -300,7 +302,7 @@ describe("GoogleAdsConversions", () => {
           conversionDateTime: "2026-03-22T14:30:00.000-04:00",
           transactionId: CALL_ID,
         }),
-      ).resolves.toBe(false);
+      ).resolves.toMatchObject({ success: false });
       expect(sentryMock.captureException).toHaveBeenCalledTimes(1);
     });
 
@@ -313,7 +315,7 @@ describe("GoogleAdsConversions", () => {
           conversionDateTime: "2026-03-22T14:30:00.000-04:00",
           transactionId: CALL_ID,
         }),
-      ).resolves.toBe(false);
+      ).resolves.toMatchObject({ success: false });
       expect(sentryMock.captureException).toHaveBeenCalledTimes(1);
     });
   });
