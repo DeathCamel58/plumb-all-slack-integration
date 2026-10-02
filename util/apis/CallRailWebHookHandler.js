@@ -186,7 +186,7 @@ async function handlePostCall(req) {
     await uploadClickConversion({
       gclid,
       conversionDateTime: call.start_time,
-      transactionId: call.id,
+      transactionId: call.resource_id,
     });
   } catch (e) {
     Sentry.captureException(e);

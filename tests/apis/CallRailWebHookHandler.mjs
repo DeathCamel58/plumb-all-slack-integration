@@ -192,8 +192,9 @@ describe("CallRailWebHookHandler", () => {
   });
 
   describe("post-call", () => {
+    // CallRail webhook payloads carry the call id as `resource_id`; there is no `id` field.
     const baseCall = {
-      id: "CAL01a0cf5c8d9b70b88d5077becd270a9d",
+      resource_id: "CAL01a0cf5c8d9b70b88d5077becd270a9d",
       customer_phone_number: "+14045551234",
       direction: "inbound",
       duration: 75,
