@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "TimeSheetEntry" ALTER COLUMN "endAt" DROP NOT NULL,
+ALTER COLUMN "note" DROP NOT NULL;

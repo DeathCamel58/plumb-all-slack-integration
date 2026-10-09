@@ -53,6 +53,8 @@ const handlerFor = (event) =>
 
 const jobCreateUpdate = handlerFor("db-JOB_CREATE_UPDATE");
 const quoteCreateUpdate = handlerFor("db-QUOTE_CREATE_UPDATE");
+const timesheetCreateUpdate = handlerFor("db-TIMESHEET_CREATE_UPDATE");
+const timesheetDestroy = handlerFor("db-TIMESHEET_DESTROY");
 
 /**
  * Builds a P2002 in the shape @prisma/adapter-pg produces. The driver adapter
@@ -229,5 +231,75 @@ describe("quoteCreateUpdate", () => {
       code: "P2002",
     });
     expect(prismaMock.quote.update).not.toHaveBeenCalled();
+  });
+});
+
+// A "General" entry with no note or job, as in PLUMB-ALL-SLACK-INTEGRATION-54.
+const mockTimesheet = {
+  approved: false,
+  approvedBy: null,
+  client: null,
+  createdAt: "2026-10-08T12:00:00Z",
+  endAt: "2026-10-08T13:00:00Z",
+  finalDuration: 3600,
+  id: "timesheet-1",
+  job: null,
+  label: "General",
+  labourRate: 25,
+  note: null,
+  paidBy: null,
+  startAt: "2026-10-08T12:00:00Z",
+  ticking: false,
+  updatedAt: "2026-10-08T13:00:00Z",
+  user: { id: "user-1" },
+  visit: null,
+  visitDurationTotal: null,
+};
+
+describe("timesheetCreateUpdate", () => {
+  test("stores a null note as null", async () => {
+    await timesheetCreateUpdate(mockTimesheet);
+
+    const { create, update } =
+      prismaMock.timeSheetEntry.upsert.mock.calls[0][0];
+    expect(create.note).toBeNull();
+    expect(update.note).toBeNull();
+    expect(create.endAt).toEqual(new Date("2026-10-08T13:00:00Z"));
+  });
+
+  test("stores a running timer's missing endAt as null, not the epoch", async () => {
+    await timesheetCreateUpdate({
+      ...mockTimesheet,
+      endAt: null,
+      ticking: true,
+    });
+
+    const { create } = prismaMock.timeSheetEntry.upsert.mock.calls[0][0];
+    expect(create.endAt).toBeNull();
+    expect(create.startAt).toEqual(new Date("2026-10-08T12:00:00Z"));
+  });
+
+  test("catches a failed upsert instead of rejecting", async () => {
+    const consoleError = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    prismaMock.timeSheetEntry.upsert.mockRejectedValue(new Error("boom"));
+
+    await expect(timesheetCreateUpdate(mockTimesheet)).resolves.toBeUndefined();
+    expect(consoleError).toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+});
+
+describe("timesheetDestroy", () => {
+  test("catches a failed delete instead of rejecting", async () => {
+    const consoleError = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    prismaMock.timeSheetEntry.deleteMany.mockRejectedValue(new Error("boom"));
+
+    await expect(timesheetDestroy("timesheet-1")).resolves.toBeUndefined();
+    expect(consoleError).toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 });

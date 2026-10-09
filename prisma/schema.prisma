@@ -226,14 +226,14 @@ model TimeSheetEntry {
   client             String?
   clients            Client?   @relation("TimeSheetEntryToClient", fields: [client], references: [id])
   createdAt          DateTime?
-  endAt              DateTime
+  endAt              DateTime?
   finalDuration      Int
   id                 String    @id
   job                String?
   jobs               Job?      @relation(fields: [job], references: [id])
   label              String?
   laborRate          Float?
-  note               String
+  note               String?
   paidBy             String?
   paidByUser         User?     @relation("PaidByUserToUser", fields: [paidBy], references: [id])
   startAt            DateTime?

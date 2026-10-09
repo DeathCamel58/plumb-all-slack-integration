@@ -594,7 +594,27 @@ async function expenseDestroy(id) {
 }
 events.on("db-EXPENSE_DESTROY", expenseDestroy);
 
+/**
+ * Parses an optional Jobber timestamp. `new Date(null)` is the epoch, so a
+ * missing value (e.g. endAt on a running timer) must stay null instead.
+ * @param {string|null|undefined} value
+ * @returns {Date|null}
+ */
+function optionalDate(value) {
+  return value ? new Date(value) : null;
+}
+
 async function timesheetCreateUpdate(data) {
+  try {
+    await upsertTimesheet(data);
+  } catch (e) {
+    Sentry.captureException(e, { extra: { timesheetId: data?.id } });
+    console.error(`Postgres: Error upserting timesheet ${data?.id}:`, e);
+  }
+}
+events.on("db-TIMESHEET_CREATE_UPDATE", timesheetCreateUpdate);
+
+async function upsertTimesheet(data) {
   if (data.approvedBy) {
     await ensureUserExists(data.approvedBy.id);
   }
@@ -619,8 +639,8 @@ async function timesheetCreateUpdate(data) {
     approvedByUser: data.approvedBy
       ? { connect: { id: data.approvedBy.id } }
       : undefined,
-    createdAt: new Date(data.createdAt),
-    endAt: new Date(data.endAt),
+    createdAt: optionalDate(data.createdAt),
+    endAt: optionalDate(data.endAt),
     finalDuration: data.finalDuration,
     id: data.id,
     jobs: data.job ? { connect: { id: data.job.id } } : undefined,
@@ -628,7 +648,7 @@ async function timesheetCreateUpdate(data) {
     laborRate: data.labourRate,
     note: data.note,
     paidByUser: data.paidBy ? { connect: { id: data.paidBy.id } } : undefined,
-    startAt: new Date(data.startAt),
+    startAt: optionalDate(data.startAt),
     ticking: data.ticking,
     updatedAt: data.updatedAt,
     users: data.user ? { connect: { id: data.user.id } } : undefined,
@@ -646,12 +666,16 @@ async function timesheetCreateUpdate(data) {
   });
   console.log("Postgres: Upserted timesheet");
 }
-events.on("db-TIMESHEET_CREATE_UPDATE", timesheetCreateUpdate);
 
 async function timesheetDestroy(id) {
-  await prisma.timeSheetEntry.deleteMany({
-    where: { id: id },
-  });
-  console.log("Postgres: Destroyed timesheet");
+  try {
+    await prisma.timeSheetEntry.deleteMany({
+      where: { id: id },
+    });
+    console.log("Postgres: Destroyed timesheet");
+  } catch (e) {
+    Sentry.captureException(e, { extra: { timesheetId: id } });
+    console.error(`Postgres: Error destroying timesheet ${id}:`, e);
+  }
 }
 events.on("db-TIMESHEET_DESTROY", timesheetDestroy);
