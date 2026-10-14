@@ -280,3 +280,16 @@ model GoogleAdsClickConversion {
   restatedAt         DateTime?
   createdAt          DateTime  @default(now())
 }
+
+model GoogleAdsAssetCallValue {
+  callId             String    @id // CallRail resource_id (CAL…)
+  gclid              String
+  conversionDateTime String // exact eventTimestamp sent; restatements must match it
+  value              Decimal   @db.Decimal(12, 2) // last value sent to Google
+  uploadedAt         DateTime? // null until Data Manager returns 200
+  requestId          String?
+  restatedAt         DateTime?
+  createdAt          DateTime  @default(now())
+
+  @@index([gclid])
+}

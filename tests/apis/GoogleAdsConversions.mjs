@@ -106,6 +106,37 @@ describe("GoogleAdsConversions", () => {
       });
     });
 
+    test("conversionValue and conversionActionId overrides are used when passed", async () => {
+      const assetAction = "customers/1112223333/conversionActions/555000111";
+      mockApi(jsonResponse({ requestId: "req-1" }));
+
+      await uploadClickConversion({
+        gclid: "abc123",
+        conversionDateTime: "2026-09-23T13:42:24.157-04:00",
+        transactionId: CALL_ID,
+        conversionValue: 970.5,
+        conversionActionId: assetAction,
+      });
+
+      const { body } = apiCall();
+      expect(body.destinations[0].productDestinationId).toBe("555000111");
+      expect(body.events[0].conversionValue).toBe(970.5);
+    });
+
+    test("conversionActionId override works without GOOGLE_ADS_CONVERSION_ACTION_ID", async () => {
+      delete process.env.GOOGLE_ADS_CONVERSION_ACTION_ID;
+      mockApi(jsonResponse({ requestId: "req-1" }));
+
+      const result = await uploadClickConversion({
+        gclid: "abc123",
+        conversionDateTime: "2026-09-23T13:42:24.157-04:00",
+        transactionId: CALL_ID,
+        conversionActionId: "customers/1112223333/conversionActions/555000111",
+      });
+
+      expect(result.success).toBe(true);
+    });
+
     test("Omits loginAccount when not configured", async () => {
       delete process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID;
       mockApi(jsonResponse({ requestId: "req-1" }));
@@ -317,6 +348,44 @@ describe("GoogleAdsConversions", () => {
         }),
       ).resolves.toMatchObject({ success: false });
       expect(sentryMock.captureException).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("uploadConversionAdjustment", () => {
+    beforeEach(() => {
+      process.env.GOOGLE_ADS_REFRESH_TOKEN = "ads-refresh";
+    });
+
+    test("Defaults to GOOGLE_ADS_CONVERSION_ACTION_ID", async () => {
+      mockApi(jsonResponse({ results: [{}] }));
+
+      const result = await uploadConversionAdjustment({
+        gclid: "abc123",
+        conversionDateTime: "2026-09-23T13:42:24.157-04:00",
+        adjustedValue: 500,
+      });
+
+      expect(result).toBe(true);
+      const adjustment = apiCall().body.conversionAdjustments[0];
+      expect(adjustment.conversionAction).toBe(CONVERSION_ACTION);
+      expect(adjustment.restatementValue).toEqual({ adjustedValue: 500 });
+    });
+
+    test("Uses the conversionActionId override when passed", async () => {
+      const assetAction = "customers/1112223333/conversionActions/555000111";
+      mockApi(jsonResponse({ results: [{}] }));
+
+      await uploadConversionAdjustment({
+        gclid: "abc123",
+        conversionDateTime: "2026-09-23T13:42:24.157-04:00",
+        adjustedValue: 0,
+        conversionActionId: assetAction,
+      });
+
+      const adjustment = apiCall().body.conversionAdjustments[0];
+      expect(adjustment.conversionAction).toBe(assetAction);
+      expect(adjustment.adjustmentType).toBe("RESTATEMENT");
+      expect(adjustment.restatementValue).toEqual({ adjustedValue: 0 });
     });
   });
 });

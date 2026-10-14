@@ -65,6 +65,9 @@ GOOGLE_ADS_DEVELOPER_TOKEN=your-developer-token
 GOOGLE_ADS_LOGIN_CUSTOMER_ID=1234567890
 GOOGLE_ADS_CUSTOMER_ID=1234567890
 GOOGLE_ADS_CONVERSION_ACTION_ID=customers/1234567890/conversionActions/1234567890
+# Secondary click-conversion action that carries invoice values for calls from
+# the call button on an ad (CallRail source "Google Ads Assets"). Unset = skipped
+GOOGLE_ADS_ASSET_VALUE_CONVERSION_ACTION_ID=customers/1234567890/conversionActions/1234567890
 # Data Manager API (click conversion creation)
 # TRUE = send validateOnly (dry run, nothing is recorded)
 GOOGLE_DATA_MANAGER_VALIDATE_ONLY=FALSE

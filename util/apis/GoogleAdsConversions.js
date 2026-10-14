@@ -42,17 +42,16 @@ async function getAccessToken() {
  * @param {string} params.gclid - The Google Click ID from the original ad click
  * @param {string} params.conversionDateTime - ISO 8601 datetime of the original conversion
  * @param {number} params.adjustedValue - The new dollar value to set
+ * @param {string} [params.conversionActionId] - Conversion action resource name (defaults to GOOGLE_ADS_CONVERSION_ACTION_ID)
  * @returns {Promise<boolean>} true if successful
  */
 export async function uploadConversionAdjustment({
   gclid,
   conversionDateTime,
   adjustedValue,
+  conversionActionId = process.env.GOOGLE_ADS_CONVERSION_ACTION_ID,
 }) {
-  if (
-    !process.env.GOOGLE_ADS_CUSTOMER_ID ||
-    !process.env.GOOGLE_ADS_CONVERSION_ACTION_ID
-  ) {
+  if (!process.env.GOOGLE_ADS_CUSTOMER_ID || !conversionActionId) {
     console.warn(
       "GoogleAds: Missing GOOGLE_ADS_CUSTOMER_ID or GOOGLE_ADS_CONVERSION_ACTION_ID, skipping adjustment",
     );
@@ -91,7 +90,7 @@ export async function uploadConversionAdjustment({
       body: JSON.stringify({
         conversionAdjustments: [
           {
-            conversionAction: process.env.GOOGLE_ADS_CONVERSION_ACTION_ID,
+            conversionAction: conversionActionId,
             adjustmentType: "RESTATEMENT",
             gclidDateTimePair: {
               gclid: gclid,
@@ -170,7 +169,7 @@ export async function uploadConversionAdjustment({
  * Uploads a new click conversion to Google Ads via the Data Manager API
  * (events:ingest). Google Ads API UploadClickConversions is closed to new
  * integrations (CUSTOMER_NOT_ALLOWLISTED_FOR_THIS_FEATURE).
- * The conversion is always created with a $0 value; the real value is restated
+ * Phone Call conversions are created with a $0 value; the real value is restated
  * later by uploadConversionAdjustment() once the customer pays.
  *
  * conversionDateTime MUST be the same source value (CallRail start_time) that the
@@ -180,6 +179,8 @@ export async function uploadConversionAdjustment({
  * @param {string} params.gclid - The Google Click ID from the original ad click
  * @param {string} params.conversionDateTime - ISO 8601 datetime of the conversion (CallRail start_time)
  * @param {string} [params.transactionId] - Dedupe key (CallRail call id), makes retries idempotent
+ * @param {number} [params.conversionValue] - Dollar value of the conversion (default 0)
+ * @param {string} [params.conversionActionId] - Conversion action resource name (defaults to GOOGLE_ADS_CONVERSION_ACTION_ID)
  * @returns {Promise<{success: boolean, requestId: string|null, validateOnly: boolean}>}
  *   validateOnly is true when GOOGLE_DATA_MANAGER_VALIDATE_ONLY made this a dry run (nothing was created)
  */
@@ -187,11 +188,10 @@ export async function uploadClickConversion({
   gclid,
   conversionDateTime,
   transactionId,
+  conversionValue = 0,
+  conversionActionId = process.env.GOOGLE_ADS_CONVERSION_ACTION_ID,
 }) {
-  if (
-    !process.env.GOOGLE_ADS_CUSTOMER_ID ||
-    !process.env.GOOGLE_ADS_CONVERSION_ACTION_ID
-  ) {
+  if (!process.env.GOOGLE_ADS_CUSTOMER_ID || !conversionActionId) {
     console.warn(
       "GoogleAds: Missing GOOGLE_ADS_CUSTOMER_ID or GOOGLE_ADS_CONVERSION_ACTION_ID, skipping click conversion",
     );
@@ -217,7 +217,7 @@ export async function uploadClickConversion({
       process.env.GOOGLE_DATA_MANAGER_VALIDATE_ONLY?.toUpperCase() === "TRUE";
 
     console.log(
-      `GoogleAds: Uploading click conversion via Data Manager — gclid=${gclid} value=$0 datetime=${eventTimestamp} transactionId=${transactionId || "none"}${validateOnly ? " (validateOnly)" : ""}`,
+      `GoogleAds: Uploading click conversion via Data Manager — gclid=${gclid} value=$${conversionValue} datetime=${eventTimestamp} transactionId=${transactionId || "none"}${validateOnly ? " (validateOnly)" : ""}`,
     );
 
     const destination = {
@@ -226,8 +226,7 @@ export async function uploadClickConversion({
         accountId: process.env.GOOGLE_ADS_CUSTOMER_ID,
       },
       // Data Manager wants the numeric conversion action ID, not the resource name
-      productDestinationId:
-        process.env.GOOGLE_ADS_CONVERSION_ACTION_ID.split("/").pop(),
+      productDestinationId: conversionActionId.split("/").pop(),
     };
     if (process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID) {
       destination.loginAccount = {
@@ -250,7 +249,7 @@ export async function uploadClickConversion({
             eventTimestamp,
             ...(transactionId ? { transactionId } : {}),
             eventSource: "PHONE",
-            conversionValue: 0,
+            conversionValue,
             currency: "USD",
           },
         ],

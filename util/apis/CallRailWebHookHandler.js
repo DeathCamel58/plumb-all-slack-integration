@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/node";
 import events from "../events.js";
 import { uploadClickConversion } from "./GoogleAdsConversions.js";
+import { sendAssetCallValue } from "./GoogleAdsAssetCallValues.js";
 import {
   claimClickConversion,
   markClickConversionUploaded,
@@ -31,6 +32,8 @@ function getMinCallDurationSeconds() {
  * Handles a CallRail call-modified webhook.
  * When a call has both a value and a GCLID, restates the value onto the
  * Google Ads conversion for that click (the click's first qualifying call).
+ * Calls from a call asset already count natively, so their value goes to the
+ * separate call-asset value action instead.
  * @param {import("express").Request} req
  */
 async function handleCallModified(req) {
@@ -56,8 +59,15 @@ async function handleCallModified(req) {
     if (callValue > 0 && gclid) {
       if (sourceName === "Google Ads Assets") {
         console.log(
-          `CallRail Webhook: Call ${callId} is from a Google Ads Call Asset — GCLID not tied to a website conversion, skipping adjustment`,
+          `CallRail Webhook: Call ${callId} is from a Google Ads Call Asset — sending value $${callValue} to the call-asset value action`,
         );
+
+        await sendAssetCallValue({
+          gclid,
+          callId: call.resource_id,
+          startTime: call.start_time,
+          value: callValue,
+        });
       } else {
         console.log(
           `CallRail Webhook: Call ${callId} has value $${callValue} and GCLID — sending adjustment to Google Ads`,
@@ -103,8 +113,15 @@ async function handleOutboundCallModified(req) {
     if (callValue > 0 && gclid) {
       if (sourceName === "Google Ads Assets") {
         console.log(
-          `CallRail Webhook: Outbound call ${callId} is from a Google Ads Call Asset — GCLID not tied to a website conversion, skipping adjustment`,
+          `CallRail Webhook: Outbound call ${callId} is from a Google Ads Call Asset — sending value $${callValue} to the call-asset value action`,
         );
+
+        await sendAssetCallValue({
+          gclid,
+          callId: call.resource_id,
+          startTime: call.start_time,
+          value: callValue,
+        });
       } else {
         console.log(
           `CallRail Webhook: Outbound call ${callId} has value $${callValue} and GCLID — sending adjustment to Google Ads`,

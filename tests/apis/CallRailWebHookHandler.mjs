@@ -7,6 +7,7 @@ const uploadClickConversionMock = jest.fn();
 const claimClickConversionMock = jest.fn();
 const markClickConversionUploadedMock = jest.fn();
 const releaseClickConversionMock = jest.fn();
+const sendAssetCallValueMock = jest.fn();
 const sentryMock = { captureException: jest.fn() };
 
 jest.unstable_mockModule("../../util/events.js", () => ({
@@ -27,6 +28,10 @@ jest.unstable_mockModule("../../util/apis/GoogleAdsClickTracking.js", () => ({
   markClickConversionUploaded: markClickConversionUploadedMock,
   releaseClickConversion: releaseClickConversionMock,
   restateClickConversion: restateClickConversionMock,
+}));
+
+jest.unstable_mockModule("../../util/apis/GoogleAdsAssetCallValues.js", () => ({
+  sendAssetCallValue: sendAssetCallValueMock,
 }));
 
 await import("../../util/apis/CallRailWebHookHandler.js");
@@ -64,6 +69,7 @@ describe("CallRailWebHookHandler", () => {
     });
     markClickConversionUploadedMock.mockReset();
     releaseClickConversionMock.mockReset();
+    sendAssetCallValueMock.mockReset();
     delete process.env.GOOGLE_ADS_MIN_CALL_DURATION;
     sentryMock.captureException.mockReset();
   });
@@ -90,12 +96,14 @@ describe("CallRailWebHookHandler", () => {
         value: 745,
         callId: "CAL0000000000000000000000000000003",
       });
+      expect(sendAssetCallValueMock).not.toHaveBeenCalled();
     });
 
-    test("Value + GCLID from Google Ads Assets → skips adjustment", async () => {
+    test("Value + GCLID from Google Ads Assets → sends to the call-asset value action, not restated", async () => {
       await callModifiedHandler(
         makeReq({
           customer_phone_number: "+14045559999",
+          resource_id: "CALasset0000000000000000000000001",
           value: "4485.00",
           gclid: "CjwKCAjwAssetGCLID",
           start_time: "2026-04-12T16:32:24.975-04:00",
@@ -103,6 +111,29 @@ describe("CallRailWebHookHandler", () => {
         }),
       );
 
+      expect(sendAssetCallValueMock).toHaveBeenCalledTimes(1);
+      expect(sendAssetCallValueMock).toHaveBeenCalledWith({
+        gclid: "CjwKCAjwAssetGCLID",
+        callId: "CALasset0000000000000000000000001",
+        startTime: "2026-04-12T16:32:24.975-04:00",
+        value: 4485,
+      });
+      expect(restateClickConversionMock).not.toHaveBeenCalled();
+    });
+
+    test("Google Ads Assets with no value → neither sent nor restated", async () => {
+      await callModifiedHandler(
+        makeReq({
+          customer_phone_number: "+14045559999",
+          resource_id: "CALasset0000000000000000000000001",
+          value: "",
+          gclid: "CjwKCAjwAssetGCLID",
+          start_time: "2026-04-12T16:32:24.975-04:00",
+          source_name: "Google Ads Assets",
+        }),
+      );
+
+      expect(sendAssetCallValueMock).not.toHaveBeenCalled();
       expect(restateClickConversionMock).not.toHaveBeenCalled();
     });
 
@@ -187,10 +218,11 @@ describe("CallRailWebHookHandler", () => {
       });
     });
 
-    test("Value + GCLID from Google Ads Assets → skips adjustment", async () => {
+    test("Value + GCLID from Google Ads Assets → sends to the call-asset value action, not restated", async () => {
       await outboundCallModifiedHandler(
         makeReq({
           customer_phone_number: "+14045557777",
+          resource_id: "CALoutasset000000000000000000001",
           value: "800.00",
           gclid: "out-asset-gclid",
           start_time: "2026-03-23T10:00:00.000-04:00",
@@ -198,6 +230,12 @@ describe("CallRailWebHookHandler", () => {
         }),
       );
 
+      expect(sendAssetCallValueMock).toHaveBeenCalledWith({
+        gclid: "out-asset-gclid",
+        callId: "CALoutasset000000000000000000001",
+        startTime: "2026-03-23T10:00:00.000-04:00",
+        value: 800,
+      });
       expect(restateClickConversionMock).not.toHaveBeenCalled();
     });
 
@@ -263,6 +301,7 @@ describe("CallRailWebHookHandler", () => {
         makeReq({ ...baseCall, source_name: "Google Ads Assets" }),
       );
       expect(uploadClickConversionMock).not.toHaveBeenCalled();
+      expect(sendAssetCallValueMock).not.toHaveBeenCalled();
     });
 
     test("Outbound direction → does not upload", async () => {
