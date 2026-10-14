@@ -1,4 +1,11 @@
-import { beforeEach, describe, expect, jest, test } from "@jest/globals";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  jest,
+  test,
+} from "@jest/globals";
 
 const fetchMock = jest.fn();
 const sentryMock = {
@@ -183,6 +190,101 @@ describe("GoogleAdsClickTracking", () => {
         }),
       ).resolves.toEqual({ status: "unavailable" });
       console.error.mockRestore();
+    });
+
+    describe("Stale un-uploaded claim", () => {
+      const minutesAgo = (m) => new Date(Date.now() - m * 60 * 1000);
+      let warnSpy;
+
+      beforeEach(() => {
+        warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+      });
+
+      afterEach(() => warnSpy.mockRestore());
+
+      test("Older than 10 minutes → conditionally deleted and re-claimed", async () => {
+        model.create
+          .mockRejectedValueOnce(adapterUniqueViolation())
+          .mockResolvedValueOnce({});
+        model.findUnique.mockResolvedValue(
+          uploadedRow({ uploadedAt: null, createdAt: minutesAgo(11) }),
+        );
+        model.deleteMany.mockResolvedValue({ count: 1 });
+
+        const claim = await claimClickConversion({
+          gclid: GCLID,
+          transactionId: "CALsecond",
+          startTime: THIRD_CALL_START,
+        });
+
+        expect(claim.status).toBe("claimed");
+        expect(model.deleteMany).toHaveBeenCalledWith({
+          where: {
+            gclid: GCLID,
+            uploadedAt: null,
+            createdAt: { lt: expect.any(Date) },
+          },
+        });
+        const cutoff = model.deleteMany.mock.calls[0][0].where.createdAt.lt;
+        expect(Date.now() - cutoff.getTime()).toBeGreaterThanOrEqual(
+          10 * 60 * 1000,
+        );
+        expect(model.create).toHaveBeenCalledTimes(2);
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining("Releasing stale un-uploaded claim"),
+        );
+      });
+
+      test("Only 2 minutes old → duplicate, nothing deleted", async () => {
+        model.create.mockRejectedValue(adapterUniqueViolation());
+        model.findUnique.mockResolvedValue(
+          uploadedRow({ uploadedAt: null, createdAt: minutesAgo(2) }),
+        );
+
+        const claim = await claimClickConversion({
+          gclid: GCLID,
+          transactionId: "CALsecond",
+          startTime: THIRD_CALL_START,
+        });
+
+        expect(claim.status).toBe("duplicate");
+        expect(model.deleteMany).not.toHaveBeenCalled();
+        expect(model.create).toHaveBeenCalledTimes(1);
+      });
+
+      test("Uploaded row → duplicate, nothing deleted regardless of age", async () => {
+        model.create.mockRejectedValue(adapterUniqueViolation());
+        model.findUnique.mockResolvedValue(
+          uploadedRow({ createdAt: minutesAgo(60 * 24 * 30) }),
+        );
+
+        const claim = await claimClickConversion({
+          gclid: GCLID,
+          transactionId: "CALsecond",
+          startTime: THIRD_CALL_START,
+        });
+
+        expect(claim.status).toBe("duplicate");
+        expect(model.deleteMany).not.toHaveBeenCalled();
+      });
+
+      test("Retry also hits P2002 → duplicate, create called exactly twice", async () => {
+        model.create.mockRejectedValue(adapterUniqueViolation());
+        model.findUnique.mockResolvedValue(
+          uploadedRow({ uploadedAt: null, createdAt: minutesAgo(11) }),
+        );
+        model.deleteMany.mockResolvedValue({ count: 0 });
+
+        const claim = await claimClickConversion({
+          gclid: GCLID,
+          transactionId: "CALsecond",
+          startTime: THIRD_CALL_START,
+        });
+
+        expect(claim.status).toBe("duplicate");
+        expect(model.create).toHaveBeenCalledTimes(2);
+        expect(model.deleteMany).toHaveBeenCalledTimes(1);
+      });
     });
   });
 

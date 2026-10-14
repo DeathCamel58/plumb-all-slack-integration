@@ -19,6 +19,9 @@ import {
  * call's own start_time, so a missing table never drops a conversion.
  */
 
+/** An un-uploaded claim older than this was abandoned (process died mid-upload). */
+export const STALE_CLAIM_MS = 10 * 60 * 1000;
+
 /**
  * Logs (and reports) a database failure on the click conversion table.
  * @param {string} action What we were trying to do
@@ -43,17 +46,17 @@ function reportStoreError(action, e, extra) {
  * @param {string} params.gclid
  * @param {string} params.transactionId - CallRail call id
  * @param {string} params.startTime - CallRail start_time
+ * @param {boolean} [isRetry] - Set on the one re-claim after releasing a stale claim
  * @returns {Promise<{status: "claimed", conversionDateTime: string}
  *   | {status: "duplicate", existing: object|null}
  *   | {status: "unavailable"}>}
  *   "unavailable" means the store couldn't be used (e.g. missing table); the
  *   caller should upload anyway without dedupe.
  */
-export async function claimClickConversion({
-  gclid,
-  transactionId,
-  startTime,
-}) {
+export async function claimClickConversion(
+  { gclid, transactionId, startTime },
+  isRetry = false,
+) {
   const conversionDateTime = toEventTimestamp(startTime);
   try {
     await prisma.googleAdsClickConversion.create({
@@ -78,6 +81,34 @@ export async function claimClickConversion({
           `GoogleAds: Could not load existing click conversion for gclid=${gclid}:`,
           lookupError,
         );
+      }
+      if (
+        existing &&
+        !existing.uploadedAt &&
+        Date.now() - new Date(existing.createdAt).getTime() > STALE_CLAIM_MS &&
+        !isRetry
+      ) {
+        console.warn(
+          `GoogleAds: Releasing stale un-uploaded claim on gclid=${gclid} (transactionId=${existing.transactionId || "unknown"}, created ${existing.createdAt.toISOString?.() ?? existing.createdAt}) — re-claiming for call ${transactionId}`,
+        );
+        try {
+          // Conditional delete: only removes the row if it is still un-uploaded and
+          // still stale, so a concurrent mark-uploaded or a fresh claim is never wiped out.
+          await prisma.googleAdsClickConversion.deleteMany({
+            where: {
+              gclid,
+              uploadedAt: null,
+              createdAt: { lt: new Date(Date.now() - STALE_CLAIM_MS) },
+            },
+          });
+        } catch (deleteError) {
+          reportStoreError("release stale claim", deleteError, {
+            gclid,
+            transactionId,
+          });
+          return { status: "duplicate", existing };
+        }
+        return claimClickConversion({ gclid, transactionId, startTime }, true);
       }
       return { status: "duplicate", existing };
     }
