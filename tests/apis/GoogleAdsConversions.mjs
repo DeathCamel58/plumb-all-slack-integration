@@ -371,6 +371,22 @@ describe("GoogleAdsConversions", () => {
       expect(adjustment.restatementValue).toEqual({ adjustedValue: 500 });
     });
 
+    test("orderId → matches by orderId instead of gclid + datetime", async () => {
+      mockApi(jsonResponse({ results: [{}] }));
+
+      const result = await uploadConversionAdjustment({
+        gclid: "abc123",
+        conversionDateTime: "2026-09-23T13:42:24.157-04:00",
+        adjustedValue: 1625,
+        orderId: "CAL01a13679c24c7cc494c0faccb08f761b",
+      });
+
+      expect(result).toBe(true);
+      const adjustment = apiCall().body.conversionAdjustments[0];
+      expect(adjustment.orderId).toBe("CAL01a13679c24c7cc494c0faccb08f761b");
+      expect(adjustment).not.toHaveProperty("gclidDateTimePair");
+    });
+
     test("Uses the conversionActionId override when passed", async () => {
       const assetAction = "customers/1112223333/conversionActions/555000111";
       mockApi(jsonResponse({ results: [{}] }));

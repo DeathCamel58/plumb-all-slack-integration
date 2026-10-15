@@ -402,10 +402,9 @@ describe("GoogleAdsClickTracking", () => {
 
       expect(result).toBe(true);
       const adjustment = adjustmentSent();
-      expect(adjustment.gclidDateTimePair).toEqual({
-        gclid: GCLID,
-        conversionDateTime: "2026-09-23 13:42:24-04:00",
-      });
+      // Data Manager conversions only match by orderId (their transactionId)
+      expect(adjustment.orderId).toBe("CALfirst");
+      expect(adjustment).not.toHaveProperty("gclidDateTimePair");
       expect(adjustment.restatementValue.adjustedValue).toBe(745);
       expect(model.update).toHaveBeenCalledWith({
         where: { gclid: GCLID },
@@ -431,7 +430,26 @@ describe("GoogleAdsClickTracking", () => {
         "2026-09-25 09:10:11-04:00",
       );
       expect(adjustmentSent().restatementValue.adjustedValue).toBe(300);
+      expect(adjustmentSent()).not.toHaveProperty("orderId");
       expect(model.update).not.toHaveBeenCalled();
+    });
+
+    test("Row without a transactionId → restates by the stored conversionDateTime", async () => {
+      model.findUnique.mockResolvedValue(uploadedRow({ transactionId: null }));
+      model.update.mockResolvedValue({});
+      mockAdjustmentApi();
+
+      await restateClickConversion({
+        gclid: GCLID,
+        startTime: THIRD_CALL_START,
+        value: 745,
+      });
+
+      expect(adjustmentSent()).not.toHaveProperty("orderId");
+      expect(adjustmentSent().gclidDateTimePair).toEqual({
+        gclid: GCLID,
+        conversionDateTime: "2026-09-23 13:42:24-04:00",
+      });
     });
 
     test("Second value from another call on the same GCLID → restates to the sum, warns", async () => {
@@ -453,9 +471,7 @@ describe("GoogleAdsClickTracking", () => {
       });
 
       expect(adjustmentSent().restatementValue.adjustedValue).toBe(1000.5);
-      expect(adjustmentSent().gclidDateTimePair.conversionDateTime).toBe(
-        "2026-09-23 13:42:24-04:00",
-      );
+      expect(adjustmentSent().orderId).toBe("CALfirst");
       expect(model.update.mock.calls[0][0].data.restatedValue).toBe(1000.5);
       expect(
         warnSpy.mock.calls.some(

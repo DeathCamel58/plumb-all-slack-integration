@@ -236,6 +236,7 @@ export async function restateClickConversion({
     gclid,
     conversionDateTime,
     adjustedValue: total,
+    orderId: row.transactionId ?? undefined,
   });
 
   if (result === true) {

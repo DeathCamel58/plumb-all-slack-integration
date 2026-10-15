@@ -38,10 +38,16 @@ async function getAccessToken() {
  * Uploads a conversion value adjustment to Google Ads via the REST API.
  * This restates the value of an existing conversion that was originally sent with $0.
  *
+ * Conversions created through Data Manager can only be matched by orderId (the
+ * transactionId they were uploaded with); gclid + conversionDateTime returns
+ * CONVERSION_NOT_FOUND for them. So orderId is used whenever it's known, and
+ * gclid + conversionDateTime only for conversions without one.
+ *
  * @param {object} params
  * @param {string} params.gclid - The Google Click ID from the original ad click
  * @param {string} params.conversionDateTime - ISO 8601 datetime of the original conversion
  * @param {number} params.adjustedValue - The new dollar value to set
+ * @param {string} [params.orderId] - transactionId the conversion was uploaded with (CallRail call id)
  * @param {string} [params.conversionActionId] - Conversion action resource name (defaults to GOOGLE_ADS_CONVERSION_ACTION_ID)
  * @returns {Promise<boolean>} true if successful
  */
@@ -49,6 +55,7 @@ export async function uploadConversionAdjustment({
   gclid,
   conversionDateTime,
   adjustedValue,
+  orderId,
   conversionActionId = process.env.GOOGLE_ADS_CONVERSION_ACTION_ID,
 }) {
   if (!process.env.GOOGLE_ADS_CUSTOMER_ID || !conversionActionId) {
@@ -72,7 +79,7 @@ export async function uploadConversionAdjustment({
     );
 
     console.log(
-      `GoogleAds: Uploading conversion adjustment — gclid=${gclid} value=$${adjustedValue} datetime=${formattedDateTime}`,
+      `GoogleAds: Uploading conversion adjustment — gclid=${gclid} value=$${adjustedValue} ${orderId ? `orderId=${orderId}` : `datetime=${formattedDateTime}`}`,
     );
 
     const url = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${customerId}:uploadConversionAdjustments`;
@@ -92,10 +99,14 @@ export async function uploadConversionAdjustment({
           {
             conversionAction: conversionActionId,
             adjustmentType: "RESTATEMENT",
-            gclidDateTimePair: {
-              gclid: gclid,
-              conversionDateTime: formattedDateTime,
-            },
+            ...(orderId
+              ? { orderId }
+              : {
+                  gclidDateTimePair: {
+                    gclid: gclid,
+                    conversionDateTime: formattedDateTime,
+                  },
+                }),
             adjustmentDateTime: adjustmentDateTime,
             restatementValue: {
               adjustedValue: adjustedValue,
@@ -117,6 +128,7 @@ export async function uploadConversionAdjustment({
         level: "error",
         extra: {
           gclid,
+          orderId,
           conversionDateTime: formattedDateTime,
           adjustedValue,
           result,
@@ -131,7 +143,7 @@ export async function uploadConversionAdjustment({
 
       if (isConversionNotFound) {
         console.warn(
-          `GoogleAds: Conversion not found for gclid=${gclid} — CallRail may not have sent this conversion to Google Ads`,
+          `GoogleAds: Conversion not found for gclid=${gclid}${orderId ? ` orderId=${orderId}` : ""} — it may never have been uploaded to Google Ads`,
         );
       } else {
         console.error(
@@ -144,6 +156,7 @@ export async function uploadConversionAdjustment({
             level: "error",
             extra: {
               gclid,
+              orderId,
               conversionDateTime: formattedDateTime,
               adjustedValue,
               error: result.partialFailureError,

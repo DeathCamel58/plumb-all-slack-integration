@@ -158,6 +158,7 @@ describe("GoogleAdsAssetCallValues", () => {
       gclid: GCLID,
       conversionDateTime: "2026-09-20T08:00:00-04:00",
       adjustedValue: 1250,
+      orderId: CALL_ID,
       conversionActionId: ASSET_ACTION,
     });
     expect(uploadClickConversionMock).not.toHaveBeenCalled();
