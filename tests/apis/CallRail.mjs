@@ -5,6 +5,8 @@ const eventsOnMock = jest.fn();
 const prismaInvoiceCountMock = jest.fn();
 const fetchMock = jest.fn();
 const individualSearchMock = jest.fn();
+const findLeadFormLeadMock = jest.fn();
+const sendLeadFormValueMock = jest.fn();
 
 jest.unstable_mockModule("../../util/events.js", () => ({
   default: {
@@ -27,6 +29,11 @@ jest.unstable_mockModule("node-fetch", () => ({
 
 jest.unstable_mockModule("../../util/apis/PostHog.js", () => ({
   individualSearch: individualSearchMock,
+}));
+
+jest.unstable_mockModule("../../util/apis/GoogleAdsLeadFormValues.js", () => ({
+  findLeadFormLead: findLeadFormLeadMock,
+  sendLeadFormValue: sendLeadFormValueMock,
 }));
 
 process.env.CALLRAIL_API_KEY = "test-api-key";
@@ -74,6 +81,9 @@ beforeEach(() => {
   fetchMock.mockReset();
   individualSearchMock.mockReset();
   individualSearchMock.mockResolvedValue({ results: [] });
+  findLeadFormLeadMock.mockReset();
+  findLeadFormLeadMock.mockResolvedValue(null);
+  sendLeadFormValueMock.mockReset();
 });
 
 describe("CallRail", () => {
@@ -360,5 +370,127 @@ describe("CallRail", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0][0]).toContain("/calls.json");
     expect(fetchMock.mock.calls[1][0]).toContain("/calls/call-1.json");
+  });
+
+  describe("first contact gets the value", () => {
+    const lead = (overrides = {}) => ({
+      leadId: "lead-1",
+      createdAt: new Date("2026-10-10T14:00:00Z"),
+      uploadedAt: null,
+      ...overrides,
+    });
+
+    test("Lead form before the first call → lead form credited, CallRail untouched", async () => {
+      prismaInvoiceCountMock.mockResolvedValue(1);
+      findLeadFormLeadMock.mockResolvedValue(lead());
+      fetchMock.mockResolvedValueOnce(
+        mockFetchResponse({
+          calls: [{ id: "call-42", start_time: "2026-10-11T09:00:00-04:00" }],
+        }),
+      );
+
+      await handler(makePayment(), makeInvoice({ total: 970 }));
+
+      expect(sendLeadFormValueMock).toHaveBeenCalledWith(lead(), 970);
+      expect(fetchMock).toHaveBeenCalledTimes(1); // search only, no PUT
+    });
+
+    test("Call before the lead form → CallRail credited, lead form untouched", async () => {
+      prismaInvoiceCountMock.mockResolvedValue(1);
+      findLeadFormLeadMock.mockResolvedValue(lead());
+      fetchMock
+        .mockResolvedValueOnce(
+          mockFetchResponse({
+            calls: [{ id: "call-42", start_time: "2026-10-09T09:00:00-04:00" }],
+          }),
+        )
+        .mockResolvedValueOnce(mockFetchResponse({ id: "call-42" }));
+
+      await handler(makePayment(), makeInvoice({ total: 970 }));
+
+      expect(sendLeadFormValueMock).not.toHaveBeenCalled();
+      expect(fetchMock.mock.calls[1][0]).toContain("/calls/call-42.json");
+    });
+
+    test("The earliest call decides, even if it already has a value", async () => {
+      prismaInvoiceCountMock.mockResolvedValue(1);
+      findLeadFormLeadMock.mockResolvedValue(lead());
+      fetchMock
+        .mockResolvedValueOnce(
+          mockFetchResponse({
+            calls: [
+              {
+                id: "call-1",
+                start_time: "2026-10-01T09:00:00-04:00",
+                value: "0",
+              },
+              { id: "call-2", start_time: "2026-10-12T09:00:00-04:00" },
+            ],
+          }),
+        )
+        .mockResolvedValueOnce(mockFetchResponse({ id: "call-2" }));
+
+      await handler(makePayment(), makeInvoice());
+
+      expect(sendLeadFormValueMock).not.toHaveBeenCalled();
+    });
+
+    test("Lead form with no calls → lead form credited, no SMS search", async () => {
+      prismaInvoiceCountMock.mockResolvedValue(1);
+      findLeadFormLeadMock.mockResolvedValue(lead());
+      fetchMock.mockResolvedValueOnce(mockFetchResponse({ calls: [] }));
+
+      await handler(makePayment(), makeInvoice({ total: 450 }));
+
+      expect(sendLeadFormValueMock).toHaveBeenCalledWith(lead(), 450);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    test("No phone numbers but a lead form match (by email) → lead form credited", async () => {
+      prismaInvoiceCountMock.mockResolvedValue(1);
+      findLeadFormLeadMock.mockResolvedValue(lead());
+
+      await handler(makePayment({ phones: [] }), makeInvoice({ total: 300 }));
+
+      expect(sendLeadFormValueMock).toHaveBeenCalledWith(lead(), 300);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    test("A call already carrying the value blocks an unsent lead form from also getting it", async () => {
+      prismaInvoiceCountMock.mockResolvedValue(1);
+      findLeadFormLeadMock.mockResolvedValue(lead());
+      fetchMock
+        .mockResolvedValueOnce(
+          mockFetchResponse({
+            calls: [
+              {
+                id: "call-42",
+                start_time: "2026-10-11T09:00:00-04:00",
+                value: "970",
+              },
+            ],
+          }),
+        )
+        .mockResolvedValueOnce(mockFetchResponse({ sms_threads: [] }));
+
+      await handler(makePayment(), makeInvoice({ total: 970 }));
+
+      expect(sendLeadFormValueMock).not.toHaveBeenCalled();
+    });
+
+    test("A lead form already credited keeps getting restatements on re-triggers", async () => {
+      prismaInvoiceCountMock.mockResolvedValue(1);
+      const sent = lead({ uploadedAt: new Date(), value: "970.00" });
+      findLeadFormLeadMock.mockResolvedValue(sent);
+      fetchMock.mockResolvedValueOnce(
+        mockFetchResponse({
+          calls: [{ id: "call-42", start_time: "2026-10-11T09:00:00-04:00" }],
+        }),
+      );
+
+      await handler(makePayment(), makeInvoice({ total: 1200 }));
+
+      expect(sendLeadFormValueMock).toHaveBeenCalledWith(sent, 1200);
+    });
   });
 });

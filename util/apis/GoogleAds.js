@@ -2,6 +2,7 @@ import Contact from "../contact.js";
 import * as GoogleMaps from "./GoogleMaps.js";
 import * as APICoordinator from "../APICoordinator.js";
 import events from "../events.js";
+import { recordLeadFormLead } from "./GoogleAdsLeadFormValues.js";
 
 /**
  * Processes a Google Ads Lead form webhook
@@ -24,6 +25,9 @@ async function LeadFormHandle(rawData) {
     userData[data["user_column_data"][i]["column_id"]] =
       data["user_column_data"][i]["string_value"];
   }
+
+  // Keep the click so the lead's first invoice value can reach Google Ads
+  await recordLeadFormLead(data, userData);
 
   // Look up the address in Google Maps, and set location to store the correct address
   let location =

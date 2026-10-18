@@ -293,3 +293,23 @@ model GoogleAdsAssetCallValue {
 
   @@index([gclid])
 }
+
+// One row per Google Ads lead form submission, so the lead's click can carry
+// the customer's first invoice value. Phone and email are stored only as
+// SHA-256 hashes of their normalized form, just enough to match a Jobber client.
+model GoogleAdsLeadFormLead {
+  leadId             String    @id // Google lead_id
+  gclid              String
+  phoneHash          String?
+  emailHash          String?
+  conversionDateTime String // eventTimestamp of the submission; uploads and restatements use it
+  value              Decimal?  @db.Decimal(12, 2) // last value sent to Google
+  claimedAt          DateTime? // set while an upload is in flight
+  uploadedAt         DateTime? // null until Data Manager returns 200
+  requestId          String?
+  restatedAt         DateTime?
+  createdAt          DateTime  @default(now())
+
+  @@index([phoneHash])
+  @@index([emailHash])
+}

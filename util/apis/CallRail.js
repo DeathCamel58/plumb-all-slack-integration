@@ -5,6 +5,10 @@ import prisma from "../prismaClient.js";
 import { toE164 } from "../DataUtilities.js";
 import * as PostHog from "./PostHog.js";
 import * as Sentry from "@sentry/node";
+import {
+  findLeadFormLead,
+  sendLeadFormValue,
+} from "./GoogleAdsLeadFormValues.js";
 
 const CALLRAIL_API_KEY = process.env.CALLRAIL_API_KEY;
 const CALLRAIL_ACCOUNT_ID = process.env.CALLRAIL_ACCOUNT_ID;
@@ -272,7 +276,18 @@ async function handleFirstInvoicePayment(payment, invoice) {
       console.warn("CallRail: PostHog phone lookup failed:", e.message);
     }
 
+    // Credit only the first way the client reached us. A Google Ads lead form
+    // submitted before their earliest call gets the value instead of CallRail.
+    let lead = await findLeadFormLead(payment.client);
+
     if (phoneSet.size === 0) {
+      if (lead) {
+        console.log(
+          `CallRail: Client has no phone numbers but matched lead form lead ${lead.leadId}, crediting the lead form`,
+        );
+        await sendLeadFormValue(lead, invoice.amounts.total);
+        return;
+      }
       Sentry.captureMessage("CallRail: Client has no phone numbers", {
         level: "warning",
         extra: { clientId: payment.client.id },
@@ -286,10 +301,17 @@ async function handleFirstInvoicePayment(payment, invoice) {
 
     // Search CallRail with each phone number, collecting all unqualified calls
     let unqualifiedCalls = [];
+    let firstCallAt = null;
+    let hasQualifiedCall = false;
     for (let phoneE164 of phoneSet) {
       let calls = await searchCallByPhone(phoneE164);
       for (let candidate of calls) {
+        let startedAt = new Date(candidate.start_time);
+        if (!isNaN(startedAt) && (!firstCallAt || startedAt < firstCallAt)) {
+          firstCallAt = startedAt;
+        }
         if (candidate.value && parseFloat(candidate.value) > 0) {
+          hasQualifiedCall = true;
           console.log(
             `CallRail: Call ${candidate.id} already qualified (value: ${candidate.value}), skipping`,
           );
@@ -297,6 +319,24 @@ async function handleFirstInvoicePayment(payment, invoice) {
         }
         unqualifiedCalls.push(candidate);
       }
+    }
+
+    if (lead && !lead.uploadedAt && hasQualifiedCall) {
+      // A call already carries this client's value; don't credit both
+      console.log(
+        `CallRail: Lead form lead ${lead.leadId} not credited, a call already carries the value`,
+      );
+    } else if (lead) {
+      if (!firstCallAt || new Date(lead.createdAt) < firstCallAt) {
+        console.log(
+          `CallRail: Lead form lead ${lead.leadId} came before any call, crediting the lead form instead of CallRail`,
+        );
+        await sendLeadFormValue(lead, invoice.amounts.total);
+        return;
+      }
+      console.log(
+        `CallRail: Lead form lead ${lead.leadId} came after the client's first call, crediting CallRail`,
+      );
     }
 
     let conversionNote = `Client: ${payment.client.jobberWebUri}\nInvoice: ${invoice.jobberWebUri}`;
