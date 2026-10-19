@@ -294,12 +294,18 @@ model GoogleAdsAssetCallValue {
   @@index([gclid])
 }
 
-// One row per Google Ads lead form submission, so the lead's click can carry
-// the customer's first invoice value. Phone and email are stored only as
+// One row per form lead: every Google Ads lead form, and every website contact
+// form (with or without a Google Ads click ID), so the first contact can carry
+// the customer's first invoice value. Organic forms have no click ID and only
+// block a later Google Ads contact from getting the value. Phone and email are stored only as
 // SHA-256 hashes of their normalized form, just enough to match a Jobber client.
 model GoogleAdsLeadFormLead {
-  leadId             String    @id // Google lead_id
-  gclid              String
+  leadId             String    @id // Google lead_id, or "web-<uuid>" for website forms
+  source             String    @default("google_lead_form") // google_lead_form | website_form
+  conversionAction   String? // value action resource name; null = GOOGLE_ADS_LEAD_FORM_VALUE_CONVERSION_ACTION_ID
+  gclid              String?
+  gbraid             String? // iOS click IDs, sent when there is no gclid
+  wbraid             String?
   phoneHash          String?
   emailHash          String?
   conversionDateTime String // eventTimestamp of the submission; uploads and restatements use it

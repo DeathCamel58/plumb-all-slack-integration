@@ -65,8 +65,10 @@ export async function uploadConversionAdjustment({
     return false;
   }
 
-  if (!gclid) {
-    console.log("GoogleAds: No GCLID provided, skipping conversion adjustment");
+  if (!gclid && !orderId) {
+    console.log(
+      "GoogleAds: No GCLID or orderId provided, skipping conversion adjustment",
+    );
     return false;
   }
 
@@ -192,17 +194,23 @@ export async function uploadConversionAdjustment({
  * @param {string} params.gclid - The Google Click ID from the original ad click
  * @param {string} params.conversionDateTime - ISO 8601 datetime of the conversion (CallRail start_time)
  * @param {string} [params.transactionId] - Dedupe key (CallRail call id), makes retries idempotent
+ * @param {string} [params.gbraid] - iOS app-to-web click ID, when there is no gclid
+ * @param {string} [params.wbraid] - iOS web-to-web click ID, when there is no gclid
  * @param {number} [params.conversionValue] - Dollar value of the conversion (default 0)
  * @param {string} [params.conversionActionId] - Conversion action resource name (defaults to GOOGLE_ADS_CONVERSION_ACTION_ID)
+ * @param {string} [params.eventSource] - Data Manager event source: "PHONE" (default) or "WEB"
  * @returns {Promise<{success: boolean, requestId: string|null, validateOnly: boolean}>}
  *   validateOnly is true when GOOGLE_DATA_MANAGER_VALIDATE_ONLY made this a dry run (nothing was created)
  */
 export async function uploadClickConversion({
   gclid,
+  gbraid,
+  wbraid,
   conversionDateTime,
   transactionId,
   conversionValue = 0,
   conversionActionId = process.env.GOOGLE_ADS_CONVERSION_ACTION_ID,
+  eventSource = "PHONE",
 }) {
   if (!process.env.GOOGLE_ADS_CUSTOMER_ID || !conversionActionId) {
     console.warn(
@@ -211,14 +219,26 @@ export async function uploadClickConversion({
     return { success: false, requestId: null, validateOnly: false };
   }
 
-  if (!gclid) {
-    console.log("GoogleAds: No GCLID provided, skipping click conversion");
+  if (!gclid && !gbraid && !wbraid) {
+    console.log("GoogleAds: No click ID provided, skipping click conversion");
     return { success: false, requestId: null, validateOnly: false };
   }
 
+  // iOS clicks may carry only gbraid/wbraid; send whichever IDs exist
+  const adIdentifiers = {
+    ...(gclid ? { gclid } : {}),
+    ...(gbraid ? { gbraid } : {}),
+    ...(wbraid ? { wbraid } : {}),
+  };
+  const clickLabel = gclid
+    ? `gclid=${gclid}`
+    : gbraid
+      ? `gbraid=${gbraid}`
+      : `wbraid=${wbraid}`;
+
   if (!conversionDateTime || isNaN(new Date(conversionDateTime).getTime())) {
     console.warn(
-      `GoogleAds: Invalid conversionDateTime "${conversionDateTime}" for gclid=${gclid}, skipping click conversion`,
+      `GoogleAds: Invalid conversionDateTime "${conversionDateTime}" for ${clickLabel}, skipping click conversion`,
     );
     return { success: false, requestId: null, validateOnly: false };
   }
@@ -230,7 +250,7 @@ export async function uploadClickConversion({
       process.env.GOOGLE_DATA_MANAGER_VALIDATE_ONLY?.toUpperCase() === "TRUE";
 
     console.log(
-      `GoogleAds: Uploading click conversion via Data Manager — gclid=${gclid} value=$${conversionValue} datetime=${eventTimestamp} transactionId=${transactionId || "none"}${validateOnly ? " (validateOnly)" : ""}`,
+      `GoogleAds: Uploading click conversion via Data Manager — ${clickLabel} value=$${conversionValue} datetime=${eventTimestamp} transactionId=${transactionId || "none"}${validateOnly ? " (validateOnly)" : ""}`,
     );
 
     const destination = {
@@ -258,10 +278,10 @@ export async function uploadClickConversion({
         destinations: [destination],
         events: [
           {
-            adIdentifiers: { gclid },
+            adIdentifiers,
             eventTimestamp,
             ...(transactionId ? { transactionId } : {}),
-            eventSource: "PHONE",
+            eventSource,
             conversionValue,
             currency: "USD",
           },
@@ -291,13 +311,13 @@ export async function uploadClickConversion({
 
     if (result.fieldWarnings?.length) {
       console.warn(
-        `GoogleAds: Data Manager field warnings for gclid=${gclid}:`,
+        `GoogleAds: Data Manager field warnings for ${clickLabel}:`,
         JSON.stringify(result.fieldWarnings),
       );
     }
 
     console.log(
-      `GoogleAds: Successfully uploaded click conversion for gclid=${gclid} datetime=${eventTimestamp} transactionId=${transactionId || "none"} requestId=${result.requestId}${validateOnly ? " (validateOnly — not applied)" : ""}`,
+      `GoogleAds: Successfully uploaded click conversion for ${clickLabel} datetime=${eventTimestamp} transactionId=${transactionId || "none"} requestId=${result.requestId}${validateOnly ? " (validateOnly — not applied)" : ""}`,
     );
     return { success: true, requestId: result.requestId ?? null, validateOnly };
   } catch (e) {

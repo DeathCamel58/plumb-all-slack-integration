@@ -33,14 +33,16 @@ jest.unstable_mockModule("../../util/apis/GoogleAdsConversions.js", () => ({
 }));
 
 const {
-  findLeadFormLead,
+  findFormLead,
   hashEmail,
   hashPhone,
   recordLeadFormLead,
-  sendLeadFormValue,
+  recordWebsiteFormLead,
+  sendFormValue,
 } = await import("../../util/apis/GoogleAdsLeadFormValues.js");
 
 const LEAD_ACTION = "customers/6490233839/conversionActions/555000222";
+const FORM_ACTION = "customers/6490233839/conversionActions/555000333";
 const GCLID = "CjwKCAjwLeadFormGCLID";
 const LEAD_ID = "TeSter-123-ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const PHONE = "(770) 555-0100";
@@ -88,6 +90,7 @@ const client = (overrides = {}) => ({
 
 beforeEach(() => {
   process.env.GOOGLE_ADS_LEAD_FORM_VALUE_CONVERSION_ACTION_ID = LEAD_ACTION;
+  process.env.GOOGLE_ADS_FORM_CONVERSION_ACTION_ID = FORM_ACTION;
   model.updateMany.mockResolvedValue({ count: 1 });
   model.update.mockResolvedValue({});
   uploadClickConversionMock.mockResolvedValue({
@@ -105,6 +108,7 @@ afterEach(() => {
   jest.resetAllMocks();
   jest.restoreAllMocks();
   delete process.env.GOOGLE_ADS_LEAD_FORM_VALUE_CONVERSION_ACTION_ID;
+  delete process.env.GOOGLE_ADS_FORM_CONVERSION_ACTION_ID;
 });
 
 describe("hashing", () => {
@@ -173,23 +177,24 @@ describe("recordLeadFormLead", () => {
   });
 });
 
-describe("findLeadFormLead", () => {
-  test("looks up the most recent lead in the click window by phone hash", async () => {
+describe("findFormLead", () => {
+  test("looks up the earliest lead in the click window by phone hash", async () => {
     const lead = storedLead();
     model.findFirst.mockResolvedValue(lead);
 
-    await expect(findLeadFormLead(client())).resolves.toBe(lead);
+    await expect(findFormLead(client())).resolves.toBe(lead);
 
     const query = model.findFirst.mock.calls[0][0];
     expect(query.where.OR).toEqual([{ phoneHash: { in: [hashPhone(PHONE)] } }]);
     expect(query.where.createdAt.gte).toBeInstanceOf(Date);
-    expect(query.orderBy).toEqual({ createdAt: "desc" });
+    expect(query.orderBy).toEqual({ createdAt: "asc" });
+    expect(query.where.source).toBeUndefined();
   });
 
   test("matches on email too", async () => {
     model.findFirst.mockResolvedValue(storedLead());
 
-    await findLeadFormLead(
+    await findFormLead(
       client({ phones: [], emails: [{ address: "LEAD@example.com" }] }),
     );
 
@@ -197,27 +202,31 @@ describe("findLeadFormLead", () => {
     expect(where.OR).toEqual([{ emailHash: { in: [hashEmail(EMAIL)] } }]);
   });
 
-  test("returns null without the conversion action env var, so another source gets credit", async () => {
+  test("without the lead form value action, Google Ads lead form leads are skipped", async () => {
     delete process.env.GOOGLE_ADS_LEAD_FORM_VALUE_CONVERSION_ACTION_ID;
-    await expect(findLeadFormLead(client())).resolves.toBeNull();
-    expect(model.findFirst).not.toHaveBeenCalled();
+    model.findFirst.mockResolvedValue(null);
+
+    await expect(findFormLead(client())).resolves.toBeNull();
+
+    const { where } = model.findFirst.mock.calls[0][0];
+    expect(where.source).toEqual({ not: "google_lead_form" });
   });
 
   test("returns null for a client with no phone or email", async () => {
-    await expect(findLeadFormLead(client({ phones: [] }))).resolves.toBeNull();
+    await expect(findFormLead(client({ phones: [] }))).resolves.toBeNull();
     expect(model.findFirst).not.toHaveBeenCalled();
   });
 
   test("database errors are reported and return null", async () => {
     model.findFirst.mockRejectedValue(new Error("db down"));
-    await expect(findLeadFormLead(client())).resolves.toBeNull();
+    await expect(findFormLead(client())).resolves.toBeNull();
     expect(sentryMock.captureException).toHaveBeenCalled();
   });
 });
 
-describe("sendLeadFormValue", () => {
+describe("sendFormValue", () => {
   test("uploads the first value against the lead's click", async () => {
-    await sendLeadFormValue(storedLead(), 970);
+    await sendFormValue(storedLead(), 970);
 
     expect(uploadClickConversionMock).toHaveBeenCalledWith({
       gclid: GCLID,
@@ -236,16 +245,16 @@ describe("sendLeadFormValue", () => {
     });
   });
 
-  test("does nothing without the conversion action env var", async () => {
+  test("does nothing for a lead with no conversion action", async () => {
     delete process.env.GOOGLE_ADS_LEAD_FORM_VALUE_CONVERSION_ACTION_ID;
-    await sendLeadFormValue(storedLead(), 970);
+    await sendFormValue(storedLead(), 970);
     expect(model.updateMany).not.toHaveBeenCalled();
     expect(uploadClickConversionMock).not.toHaveBeenCalled();
   });
 
   test("skips a lead whose upload is already in progress", async () => {
     model.updateMany.mockResolvedValue({ count: 0 });
-    await sendLeadFormValue(storedLead({ claimedAt: new Date() }), 970);
+    await sendFormValue(storedLead({ claimedAt: new Date() }), 970);
     expect(uploadClickConversionMock).not.toHaveBeenCalled();
   });
 
@@ -256,7 +265,7 @@ describe("sendLeadFormValue", () => {
       validateOnly: false,
     });
 
-    await sendLeadFormValue(storedLead(), 970);
+    await sendFormValue(storedLead(), 970);
 
     expect(model.update).toHaveBeenCalledWith({
       where: { leadId: LEAD_ID },
@@ -271,7 +280,7 @@ describe("sendLeadFormValue", () => {
       validateOnly: true,
     });
 
-    await sendLeadFormValue(storedLead(), 970);
+    await sendFormValue(storedLead(), 970);
 
     expect(model.update).toHaveBeenCalledWith({
       where: { leadId: LEAD_ID },
@@ -280,7 +289,7 @@ describe("sendLeadFormValue", () => {
   });
 
   test("skips a value that was already sent", async () => {
-    await sendLeadFormValue(
+    await sendFormValue(
       storedLead({ value: "970.00", uploadedAt: new Date() }),
       970,
     );
@@ -290,7 +299,7 @@ describe("sendLeadFormValue", () => {
   });
 
   test("restates a changed value by lead_id", async () => {
-    await sendLeadFormValue(
+    await sendFormValue(
       storedLead({ value: "970.00", uploadedAt: new Date() }),
       1200,
     );
@@ -310,7 +319,179 @@ describe("sendLeadFormValue", () => {
 
   test("errors are reported, not thrown", async () => {
     model.updateMany.mockRejectedValue(new Error("db down"));
-    await expect(sendLeadFormValue(storedLead(), 970)).resolves.toBeUndefined();
+    await expect(sendFormValue(storedLead(), 970)).resolves.toBeUndefined();
     expect(sentryMock.captureException).toHaveBeenCalled();
+  });
+});
+
+describe("website form leads", () => {
+  const form = (overrides = {}) => ({
+    name: "Test",
+    phone: PHONE,
+    email: EMAIL,
+    message: "Clogged drain",
+    gclid: GCLID,
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    model.create.mockImplementation(async ({ data }) => storedLead(data));
+  });
+
+  test("records the click with hashed contact details and uploads a $0 Form Capture conversion", async () => {
+    await recordWebsiteFormLead(form());
+
+    const { data } = model.create.mock.calls[0][0];
+    expect(data).toEqual({
+      leadId: expect.stringMatching(/^web-[0-9a-f-]{36}$/),
+      source: "website_form",
+      conversionAction: FORM_ACTION,
+      gclid: GCLID,
+      gbraid: null,
+      wbraid: null,
+      phoneHash: hashPhone(PHONE),
+      emailHash: hashEmail(EMAIL),
+      conversionDateTime: EVENT_TS,
+    });
+    expect(JSON.stringify(data)).not.toContain("5550100");
+    expect(JSON.stringify(data).toLowerCase()).not.toContain("example.com");
+    expect(uploadClickConversionMock).toHaveBeenCalledWith({
+      gclid: GCLID,
+      gbraid: undefined,
+      wbraid: undefined,
+      conversionDateTime: EVENT_TS,
+      transactionId: data.leadId,
+      conversionValue: 0,
+      conversionActionId: FORM_ACTION,
+      eventSource: "WEB",
+    });
+    expect(model.update).toHaveBeenCalledWith({
+      where: { leadId: data.leadId },
+      data: expect.objectContaining({ value: 0, requestId: "req-1" }),
+    });
+  });
+
+  test("an iOS click with only a gbraid is recorded and uploaded", async () => {
+    await recordWebsiteFormLead(
+      form({ gclid: undefined, gbraid: "0AAAAAgbraid" }),
+    );
+
+    expect(model.create.mock.calls[0][0].data).toMatchObject({
+      gclid: null,
+      gbraid: "0AAAAAgbraid",
+    });
+    expect(uploadClickConversionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ gbraid: "0AAAAAgbraid", gclid: undefined }),
+    );
+  });
+
+  test("an organic form (no click ID) is recorded but never uploaded", async () => {
+    await recordWebsiteFormLead(form({ gclid: undefined }));
+
+    expect(model.create.mock.calls[0][0].data).toMatchObject({
+      source: "website_form",
+      conversionAction: null,
+      gclid: null,
+      gbraid: null,
+      wbraid: null,
+      phoneHash: hashPhone(PHONE),
+      emailHash: hashEmail(EMAIL),
+    });
+    expect(model.updateMany).not.toHaveBeenCalled();
+    expect(uploadClickConversionMock).not.toHaveBeenCalled();
+  });
+
+  test("an organic form with no phone or email isn't recorded", async () => {
+    await recordWebsiteFormLead(
+      form({ gclid: undefined, phone: "", email: undefined }),
+    );
+    expect(model.create).not.toHaveBeenCalled();
+  });
+
+  test("malformed click IDs are dropped, leaving an organic form", async () => {
+    await recordWebsiteFormLead(form({ gclid: "<script>alert(1)</script>" }));
+    await recordWebsiteFormLead(form({ gclid: { $ne: null } }));
+
+    for (const [{ data }] of model.create.mock.calls) {
+      expect(data.gclid).toBeNull();
+      expect(data.conversionAction).toBeNull();
+    }
+    expect(uploadClickConversionMock).not.toHaveBeenCalled();
+  });
+
+  test("an organic form as first contact sends nothing to Google Ads", async () => {
+    const organic = storedLead({
+      leadId: "web-organic",
+      source: "website_form",
+      conversionAction: null,
+      gclid: null,
+    });
+
+    await sendFormValue(organic, 970);
+
+    expect(model.updateMany).not.toHaveBeenCalled();
+    expect(uploadClickConversionMock).not.toHaveBeenCalled();
+    expect(uploadConversionAdjustmentMock).not.toHaveBeenCalled();
+  });
+
+  test("does nothing without the Form Capture env var", async () => {
+    delete process.env.GOOGLE_ADS_FORM_CONVERSION_ACTION_ID;
+    await recordWebsiteFormLead(form());
+    expect(model.create).not.toHaveBeenCalled();
+  });
+
+  test("database errors are reported, not thrown", async () => {
+    model.create.mockRejectedValue(new Error("db down"));
+    await expect(recordWebsiteFormLead(form())).resolves.toBeUndefined();
+    expect(sentryMock.captureException).toHaveBeenCalled();
+    expect(uploadClickConversionMock).not.toHaveBeenCalled();
+  });
+
+  test("the invoice value restates the website form's own $0 conversion", async () => {
+    const lead = storedLead({
+      leadId: "web-1",
+      source: "website_form",
+      conversionAction: FORM_ACTION,
+      value: "0.00",
+      uploadedAt: new Date(),
+    });
+
+    await sendFormValue(lead, 970);
+
+    expect(uploadClickConversionMock).not.toHaveBeenCalled();
+    expect(uploadConversionAdjustmentMock).toHaveBeenCalledWith({
+      gclid: GCLID,
+      conversionDateTime: EVENT_TS,
+      adjustedValue: 970,
+      orderId: "web-1",
+      conversionActionId: FORM_ACTION,
+    });
+  });
+
+  test("a website form whose $0 upload failed gets its value as a new upload", async () => {
+    const lead = storedLead({
+      leadId: "web-2",
+      source: "website_form",
+      conversionAction: FORM_ACTION,
+    });
+
+    await sendFormValue(lead, 450);
+
+    expect(uploadClickConversionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transactionId: "web-2",
+        conversionValue: 450,
+        conversionActionId: FORM_ACTION,
+        eventSource: "WEB",
+      }),
+    );
+  });
+
+  test("an uploaded lead with no stored value is restated, never treated as already sent", async () => {
+    await sendFormValue(
+      storedLead({ value: null, uploadedAt: new Date() }),
+      970,
+    );
+    expect(uploadConversionAdjustmentMock).toHaveBeenCalled();
   });
 });

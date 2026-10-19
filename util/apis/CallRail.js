@@ -5,10 +5,7 @@ import prisma from "../prismaClient.js";
 import { toE164 } from "../DataUtilities.js";
 import * as PostHog from "./PostHog.js";
 import * as Sentry from "@sentry/node";
-import {
-  findLeadFormLead,
-  sendLeadFormValue,
-} from "./GoogleAdsLeadFormValues.js";
+import { findFormLead, sendFormValue } from "./GoogleAdsLeadFormValues.js";
 
 const CALLRAIL_API_KEY = process.env.CALLRAIL_API_KEY;
 const CALLRAIL_ACCOUNT_ID = process.env.CALLRAIL_ACCOUNT_ID;
@@ -276,16 +273,18 @@ async function handleFirstInvoicePayment(payment, invoice) {
       console.warn("CallRail: PostHog phone lookup failed:", e.message);
     }
 
-    // Credit only the first way the client reached us. A Google Ads lead form
-    // submitted before their earliest call gets the value instead of CallRail.
-    let lead = await findLeadFormLead(payment.client);
+    // Credit only the first way the client reached us. A form (Google Ads lead
+    // form, or website form with or without an ad click) submitted before their
+    // earliest call gets the value instead of CallRail; for an organic website
+    // form that means no value goes to Google Ads at all.
+    let lead = await findFormLead(payment.client);
 
     if (phoneSet.size === 0) {
       if (lead) {
         console.log(
-          `CallRail: Client has no phone numbers but matched lead form lead ${lead.leadId}, crediting the lead form`,
+          `CallRail: Client has no phone numbers but matched form lead ${lead.leadId}, crediting the form`,
         );
-        await sendLeadFormValue(lead, invoice.amounts.total);
+        await sendFormValue(lead, invoice.amounts.total);
         return;
       }
       Sentry.captureMessage("CallRail: Client has no phone numbers", {
@@ -324,18 +323,18 @@ async function handleFirstInvoicePayment(payment, invoice) {
     if (lead && !lead.uploadedAt && hasQualifiedCall) {
       // A call already carries this client's value; don't credit both
       console.log(
-        `CallRail: Lead form lead ${lead.leadId} not credited, a call already carries the value`,
+        `CallRail: Form lead ${lead.leadId} not credited, a call already carries the value`,
       );
     } else if (lead) {
       if (!firstCallAt || new Date(lead.createdAt) < firstCallAt) {
         console.log(
-          `CallRail: Lead form lead ${lead.leadId} came before any call, crediting the lead form instead of CallRail`,
+          `CallRail: Form lead ${lead.leadId} came before any call, crediting the form instead of CallRail`,
         );
-        await sendLeadFormValue(lead, invoice.amounts.total);
+        await sendFormValue(lead, invoice.amounts.total);
         return;
       }
       console.log(
-        `CallRail: Lead form lead ${lead.leadId} came after the client's first call, crediting CallRail`,
+        `CallRail: Form lead ${lead.leadId} came after the client's first call, crediting CallRail`,
       );
     }
 

@@ -2,6 +2,7 @@ import Contact from "../contact.js";
 import * as APICoordinator from "../APICoordinator.js";
 import events from "../events.js";
 import { CheckRecaptcha } from "./Recaptcha.js";
+import { recordWebsiteFormLead } from "./GoogleAdsLeadFormValues.js";
 
 /**
  * Processes a website contact form webhook
@@ -29,6 +30,10 @@ async function WebsiteContactHandle(data) {
       );
 
       await APICoordinator.contactMade(contact, JSON.stringify(data));
+
+      // A form from a Google Ads click counts as a lead, and can carry the
+      // customer's first invoice value later
+      await recordWebsiteFormLead(data);
     } else {
       console.error("WebsiteContact: Bad recaptcha");
     }

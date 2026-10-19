@@ -11,7 +11,8 @@ import {
 } from "./GoogleAdsConversions.js";
 
 /**
- * Invoice values for Google Ads lead form submissions.
+ * Invoice values for form leads from Google Ads clicks: Google Ads lead forms
+ * and the website contact form.
  *
  * Lead form submissions already count once through Google's native
  * "Lead form - Submit" action, which can't be restated. So when a lead's first
@@ -20,13 +21,23 @@ import {
  * (GOOGLE_ADS_LEAD_FORM_VALUE_CONVERSION_ACTION_ID) that only carries value,
  * and bidding never counts the lead twice.
  *
- * Each submission is recorded with its GCLID and SHA-256 hashes of its phone
- * and email. CallRail's first-invoice handler matches a paying client to the
- * most recent recorded lead from within Google's 90-day click window, and
- * credits the value to whichever came first: the lead form or the client's
- * earliest CallRail call. Data Manager dedupes on transactionId (the lead_id),
+ * Website contact forms that arrive with a click ID are uploaded right away at
+ * $0 to their own action (GOOGLE_ADS_FORM_CONVERSION_ACTION_ID), so they count
+ * as leads, and that conversion is restated to the invoice total later, the
+ * same way Phone Call conversions are. Website forms without a click ID
+ * (organic) are recorded too, but never uploaded: if one is the client's first
+ * contact, no value is sent to Google Ads at all.
+ *
+ * Each submission is recorded with its click ID and SHA-256 hashes of its
+ * phone and email. CallRail's first-invoice handler matches a paying client to
+ * their earliest recorded form lead from within Google's 90-day click window,
+ * and credits the value to whichever came first: that form or the client's
+ * earliest CallRail call. Data Manager dedupes on transactionId (the lead id),
  * so a changed value goes through a restatement instead of a second upload.
  */
+
+export const SOURCE_GOOGLE_LEAD_FORM = "google_lead_form";
+export const SOURCE_WEBSITE_FORM = "website_form";
 
 /** Google only accepts click conversions within 90 days of the click. */
 export const LEAD_MATCH_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
@@ -57,7 +68,35 @@ export function hashEmail(email) {
  * @returns {boolean} Whether two dollar amounts are equal to the cent
  */
 function sameValue(a, b) {
+  if (a === null || a === undefined) {
+    return false;
+  }
   return Math.round(Number(a) * 100) === Math.round(Number(b) * 100);
+}
+
+/**
+ * @param {object} lead - A GoogleAdsLeadFormLead row
+ * @returns {string|undefined} The conversion action resource name the lead's
+ *   value goes to
+ */
+function conversionActionFor(lead) {
+  return (
+    lead.conversionAction ??
+    process.env.GOOGLE_ADS_LEAD_FORM_VALUE_CONVERSION_ACTION_ID
+  );
+}
+
+/**
+ * Accepts a click ID from untrusted input only if it looks like one.
+ * @param {*} id
+ * @returns {string|null}
+ */
+function cleanClickId(id) {
+  if (typeof id !== "string") {
+    return null;
+  }
+  const trimmed = id.trim();
+  return /^[\w-]{1,512}$/.test(trimmed) ? trimmed : null;
 }
 
 /**
@@ -110,9 +149,74 @@ export async function recordLeadFormLead(
 }
 
 /**
+ * @param {object} lead - A GoogleAdsLeadFormLead row
+ * @returns {boolean} Whether the lead came from a Google Ads click
+ */
+function hasClickId(lead) {
+  return Boolean(lead.gclid || lead.gbraid || lead.wbraid);
+}
+
+/**
+ * Records a website contact form. One from a Google Ads click is uploaded as a
+ * $0 conversion, so it counts as a lead, and its value is restated if it turns
+ * out to be the client's first contact. One without a click ID (organic) is
+ * only recorded, so it can still be the client's first contact and keep the
+ * value from going to Google Ads. Never throws.
+ *
+ * @param {object} data - The website contact form body (gclid/gbraid/wbraid,
+ *   phone, email)
+ * @param {Date} [receivedAt] - When the form arrived
+ */
+export async function recordWebsiteFormLead(data, receivedAt = new Date()) {
+  const conversionActionId = process.env.GOOGLE_ADS_FORM_CONVERSION_ACTION_ID;
+  if (!conversionActionId) {
+    return;
+  }
+
+  const gclid = cleanClickId(data?.gclid);
+  const gbraid = cleanClickId(data?.gbraid);
+  const wbraid = cleanClickId(data?.wbraid);
+  const fromAd = Boolean(gclid || gbraid || wbraid);
+
+  const phoneHash = hashPhone(data?.phone);
+  const emailHash = hashEmail(data?.email);
+  if (!fromAd && !phoneHash && !emailHash) {
+    // Nothing to match a client on, and nothing to upload
+    return;
+  }
+
+  const leadId = `web-${crypto.randomUUID()}`;
+  try {
+    const lead = await prisma.googleAdsLeadFormLead.create({
+      data: {
+        leadId,
+        source: SOURCE_WEBSITE_FORM,
+        conversionAction: fromAd ? conversionActionId : null,
+        gclid,
+        gbraid,
+        wbraid,
+        phoneHash,
+        emailHash,
+        conversionDateTime: toEventTimestamp(receivedAt.toISOString()),
+      },
+    });
+    if (!fromAd) {
+      console.log(`GoogleAds: Recorded organic website form lead ${leadId}`);
+      return;
+    }
+    console.log(`GoogleAds: Recorded website form lead ${leadId}`);
+    await claimAndUpload(lead, 0, conversionActionId);
+  } catch (e) {
+    Sentry.captureException(e, { extra: { leadId } });
+    console.error(`GoogleAds: Error recording website form lead ${leadId}:`, e);
+  }
+}
+
+/**
  * Claims the lead's row, then uploads its value as a new click conversion.
  * The claim is released if the upload fails (or is a dry run), so the next
- * payment event for the client retries.
+ * payment event for the client retries. (A website form's $0 upload isn't
+ * retried; its value is then sent as a new upload when the invoice is paid.)
  */
 async function claimAndUpload(lead, value, conversionActionId) {
   const { count } = await prisma.googleAdsLeadFormLead.updateMany({
@@ -128,17 +232,20 @@ async function claimAndUpload(lead, value, conversionActionId) {
   });
   if (count === 0) {
     console.log(
-      `GoogleAds: Lead form lead ${lead.leadId} has an upload in progress, skipping`,
+      `GoogleAds: Form lead ${lead.leadId} has an upload in progress, skipping`,
     );
     return;
   }
 
   const result = await uploadClickConversion({
-    gclid: lead.gclid,
+    gclid: lead.gclid ?? undefined,
+    gbraid: lead.gbraid ?? undefined,
+    wbraid: lead.wbraid ?? undefined,
     conversionDateTime: lead.conversionDateTime,
     transactionId: lead.leadId,
     conversionValue: value,
     conversionActionId,
+    ...(lead.source === SOURCE_WEBSITE_FORM ? { eventSource: "WEB" } : {}),
   });
 
   await prisma.googleAdsLeadFormLead.update({
@@ -156,17 +263,20 @@ async function claimAndUpload(lead, value, conversionActionId) {
 }
 
 /**
- * Finds the client's most recent recorded lead form lead from within Google's
- * click window, matched by phone or email hash. Never throws.
+ * Finds the client's earliest recorded form lead (Google Ads lead form or
+ * website form) from within Google's click window, matched by phone or email
+ * hash. The earliest one is the client's first contact by form. Never throws.
  *
- * Returns null when the value action isn't configured, so callers fall back to
- * crediting another source rather than a lead that can't be sent.
+ * Google Ads lead form leads are skipped when their value action isn't
+ * configured, so callers fall back to crediting another source rather than a
+ * lead that can't be sent. Organic website form leads are included: they have
+ * no value to send, but they still count as the first contact.
  *
  * @param {object} client - The Jobber client (phones[].number, emails[].address)
  * @returns {Promise<object|null>} The GoogleAdsLeadFormLead row, or null
  */
-export async function findLeadFormLead(client) {
-  if (!process.env.GOOGLE_ADS_LEAD_FORM_VALUE_CONVERSION_ACTION_ID || !client) {
+export async function findFormLead(client) {
+  if (!client) {
     return null;
   }
 
@@ -188,13 +298,17 @@ export async function findLeadFormLead(client) {
           ...(phoneHashes.length ? [{ phoneHash: { in: phoneHashes } }] : []),
           ...(emailHashes.length ? [{ emailHash: { in: emailHashes } }] : []),
         ],
+        // Google Ads lead form rows need the lead form value action
+        ...(process.env.GOOGLE_ADS_LEAD_FORM_VALUE_CONVERSION_ACTION_ID
+          ? {}
+          : { source: { not: SOURCE_GOOGLE_LEAD_FORM } }),
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: "asc" },
     });
   } catch (e) {
     Sentry.captureException(e, { extra: { clientId: client.id } });
     console.error(
-      `GoogleAds: Error looking up lead form lead for client ${client.id}:`,
+      `GoogleAds: Error looking up form lead for client ${client.id}:`,
       e,
     );
     return null;
@@ -202,18 +316,26 @@ export async function findLeadFormLead(client) {
 }
 
 /**
- * Sends a lead form lead's invoice value to the lead form value action.
- * Uploads it the first time; restates it by lead_id if it changes. Never throws.
+ * Sends a form lead's invoice value to its conversion action. Uploads it if
+ * the lead was never uploaded; otherwise restates it by lead id (a website
+ * form's $0 conversion, or a changed value). An organic form has no Google
+ * Ads click, so nothing is sent. Never throws.
  *
- * @param {object} lead - A row from findLeadFormLead()
+ * @param {object} lead - A row from findFormLead()
  * @param {number} value - The invoice total
  */
-export async function sendLeadFormValue(lead, value) {
-  const conversionActionId =
-    process.env.GOOGLE_ADS_LEAD_FORM_VALUE_CONVERSION_ACTION_ID;
+export async function sendFormValue(lead, value) {
+  if (!hasClickId(lead)) {
+    console.log(
+      `GoogleAds: First contact was organic website form ${lead.leadId}, not sending its $${value} value to Google Ads`,
+    );
+    return;
+  }
+
+  const conversionActionId = conversionActionFor(lead);
   if (!conversionActionId) {
     console.warn(
-      "GoogleAds: Missing GOOGLE_ADS_LEAD_FORM_VALUE_CONVERSION_ACTION_ID, skipping lead form value",
+      `GoogleAds: No conversion action for form lead ${lead.leadId}, skipping its value`,
     );
     return;
   }
@@ -221,7 +343,7 @@ export async function sendLeadFormValue(lead, value) {
   try {
     if (!lead.uploadedAt) {
       console.log(
-        `GoogleAds: Sending lead form lead ${lead.leadId} first invoice value $${value}`,
+        `GoogleAds: Sending form lead ${lead.leadId} first invoice value $${value}`,
       );
       await claimAndUpload(lead, value, conversionActionId);
       return;
@@ -229,16 +351,16 @@ export async function sendLeadFormValue(lead, value) {
 
     if (sameValue(lead.value, value)) {
       console.log(
-        `GoogleAds: Lead form lead ${lead.leadId} value $${value} already sent, skipping`,
+        `GoogleAds: Form lead ${lead.leadId} value $${value} already sent, skipping`,
       );
       return;
     }
 
     console.log(
-      `GoogleAds: Restating lead form lead ${lead.leadId} from $${Number(lead.value)} to $${value}`,
+      `GoogleAds: Restating form lead ${lead.leadId} from $${Number(lead.value)} to $${value}`,
     );
     const result = await uploadConversionAdjustment({
-      gclid: lead.gclid,
+      gclid: lead.gclid ?? undefined,
       conversionDateTime: lead.conversionDateTime,
       adjustedValue: value,
       orderId: lead.leadId,
@@ -253,7 +375,7 @@ export async function sendLeadFormValue(lead, value) {
   } catch (e) {
     Sentry.captureException(e, { extra: { leadId: lead.leadId, value } });
     console.error(
-      `GoogleAds: Error sending lead form value for lead ${lead.leadId}:`,
+      `GoogleAds: Error sending form value for lead ${lead.leadId}:`,
       e,
     );
   }

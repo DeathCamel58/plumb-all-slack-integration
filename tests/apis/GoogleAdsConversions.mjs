@@ -106,6 +106,26 @@ describe("GoogleAdsConversions", () => {
       });
     });
 
+    test("iOS click IDs and a WEB event source are sent when there is no gclid", async () => {
+      mockApi(jsonResponse({ requestId: "req-1" }));
+
+      const result = await uploadClickConversion({
+        gbraid: "0AAAAAgbraid",
+        wbraid: "CkQKCAwbraid",
+        conversionDateTime: "2026-09-23T13:42:24.157-04:00",
+        transactionId: "web-1",
+        eventSource: "WEB",
+      });
+
+      expect(result.success).toBe(true);
+      const [event] = apiCall().body.events;
+      expect(event.adIdentifiers).toEqual({
+        gbraid: "0AAAAAgbraid",
+        wbraid: "CkQKCAwbraid",
+      });
+      expect(event.eventSource).toBe("WEB");
+    });
+
     test("conversionValue and conversionActionId overrides are used when passed", async () => {
       const assetAction = "customers/1112223333/conversionActions/555000111";
       mockApi(jsonResponse({ requestId: "req-1" }));
@@ -384,6 +404,21 @@ describe("GoogleAdsConversions", () => {
       expect(result).toBe(true);
       const adjustment = apiCall().body.conversionAdjustments[0];
       expect(adjustment.orderId).toBe("CAL01a13679c24c7cc494c0faccb08f761b");
+      expect(adjustment).not.toHaveProperty("gclidDateTimePair");
+    });
+
+    test("orderId alone (no gclid) is enough to restate", async () => {
+      mockApi(jsonResponse({ results: [{}] }));
+
+      const result = await uploadConversionAdjustment({
+        conversionDateTime: "2026-03-22T14:30:00.000-04:00",
+        adjustedValue: 970,
+        orderId: "web-1",
+      });
+
+      expect(result).toBe(true);
+      const adjustment = apiCall().body.conversionAdjustments[0];
+      expect(adjustment.orderId).toBe("web-1");
       expect(adjustment).not.toHaveProperty("gclidDateTimePair");
     });
 

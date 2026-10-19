@@ -5,6 +5,7 @@ const eventsOnMock = jest.fn();
 const contactMadeMock = jest.fn();
 const feedbackMadeMock = jest.fn();
 const checkRecaptchaMock = jest.fn();
+const recordWebsiteFormLeadMock = jest.fn();
 
 jest.unstable_mockModule("../../util/events.js", () => ({
   default: {
@@ -22,6 +23,10 @@ jest.unstable_mockModule("../../util/apis/Recaptcha.js", () => ({
   CheckRecaptcha: checkRecaptchaMock,
 }));
 
+jest.unstable_mockModule("../../util/apis/GoogleAdsLeadFormValues.js", () => ({
+  recordWebsiteFormLead: recordWebsiteFormLeadMock,
+}));
+
 await import("../../util/apis/WebsiteContact.js");
 
 // Capture the handlers registered by WebsiteContact.js
@@ -37,6 +42,7 @@ beforeEach(() => {
   contactMadeMock.mockReset();
   feedbackMadeMock.mockReset();
   checkRecaptchaMock.mockReset();
+  recordWebsiteFormLeadMock.mockReset();
 });
 
 describe("WebsiteContact", () => {
@@ -78,6 +84,29 @@ describe("WebsiteContact", () => {
 
     expect(checkRecaptchaMock).toHaveBeenCalledWith("bad-token", "contact_form");
     expect(contactMadeMock).not.toHaveBeenCalled();
+    expect(recordWebsiteFormLeadMock).not.toHaveBeenCalled();
+  });
+
+  test("Valid reCAPTCHA → the form is recorded for Google Ads after dispatch gets it", async () => {
+    checkRecaptchaMock.mockResolvedValue(true);
+    const order = [];
+    contactMadeMock.mockImplementation(async () => order.push("dispatch"));
+    recordWebsiteFormLeadMock.mockImplementation(async () =>
+      order.push("google-ads"),
+    );
+
+    const data = {
+      recaptchaToken: "valid-token",
+      name: "Jane Doe",
+      phone: "555-123-4567",
+      message: "Hello",
+      gclid: "CjwKCAjwWebsiteGCLID",
+    };
+
+    await contactHandler(data);
+
+    expect(recordWebsiteFormLeadMock).toHaveBeenCalledWith(data);
+    expect(order).toEqual(["dispatch", "google-ads"]);
   });
 
   test("Missing recaptchaToken → contact not created", async () => {
