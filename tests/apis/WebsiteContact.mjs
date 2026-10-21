@@ -5,6 +5,7 @@ const eventsOnMock = jest.fn();
 const contactMadeMock = jest.fn();
 const feedbackMadeMock = jest.fn();
 const checkRecaptchaMock = jest.fn();
+const verifyRecaptchaMock = jest.fn();
 const recordWebsiteFormLeadMock = jest.fn();
 
 jest.unstable_mockModule("../../util/events.js", () => ({
@@ -21,6 +22,7 @@ jest.unstable_mockModule("../../util/APICoordinator.js", () => ({
 
 jest.unstable_mockModule("../../util/apis/Recaptcha.js", () => ({
   CheckRecaptcha: checkRecaptchaMock,
+  VerifyRecaptcha: verifyRecaptchaMock,
 }));
 
 jest.unstable_mockModule("../../util/apis/GoogleAdsLeadFormValues.js", () => ({
@@ -42,83 +44,101 @@ beforeEach(() => {
   contactMadeMock.mockReset();
   feedbackMadeMock.mockReset();
   checkRecaptchaMock.mockReset();
+  verifyRecaptchaMock.mockReset();
   recordWebsiteFormLeadMock.mockReset();
 });
 
 describe("WebsiteContact", () => {
+  const form = (overrides = {}) => ({
+    recaptchaToken: "valid-token",
+    name: "Jane Doe",
+    phone: "555-123-4567",
+    email: "jane@example.com",
+    address: "123 Main St",
+    message: "Hello, I need help",
+    website: "",
+    ...overrides,
+  });
+  const passed = { ok: true, reason: null, score: 0.9 };
+  const unverifiedEmits = () =>
+    eventsEmitMock.mock.calls.filter(
+      ([name]) => name === "slackbot-send-unverified-website-contact",
+    );
+
   test("Valid reCAPTCHA → contact created", async () => {
-    checkRecaptchaMock.mockResolvedValue(true);
-    contactMadeMock.mockResolvedValue(undefined);
+    verifyRecaptchaMock.mockResolvedValue(passed);
 
-    const data = {
-      recaptchaToken: "valid-token",
-      name: "Jane Doe",
-      phone: "555-123-4567",
-      email: "jane@example.com",
-      address: "123 Main St",
-      message: "Hello, I need help",
-    };
+    await contactHandler(form());
 
-    await contactHandler(data);
-
-    expect(checkRecaptchaMock).toHaveBeenCalledWith("valid-token", "contact_form");
+    expect(verifyRecaptchaMock).toHaveBeenCalledWith("valid-token", "contact_form");
     expect(contactMadeMock).toHaveBeenCalledTimes(1);
-
     const [contact] = contactMadeMock.mock.calls[0];
     expect(contact.name).toBe("Jane Doe");
     expect(contact.email).toBe("jane@example.com");
-  });
-
-  test("Failed reCAPTCHA → contact not created", async () => {
-    checkRecaptchaMock.mockResolvedValue(false);
-
-    const data = {
-      recaptchaToken: "bad-token",
-      name: "Bad Actor",
-      phone: "555-000-0000",
-      email: "spam@example.com",
-      message: "Spam",
-    };
-
-    await contactHandler(data);
-
-    expect(checkRecaptchaMock).toHaveBeenCalledWith("bad-token", "contact_form");
-    expect(contactMadeMock).not.toHaveBeenCalled();
-    expect(recordWebsiteFormLeadMock).not.toHaveBeenCalled();
+    expect(unverifiedEmits()).toHaveLength(0);
   });
 
   test("Valid reCAPTCHA → the form is recorded for Google Ads after dispatch gets it", async () => {
-    checkRecaptchaMock.mockResolvedValue(true);
+    verifyRecaptchaMock.mockResolvedValue(passed);
     const order = [];
     contactMadeMock.mockImplementation(async () => order.push("dispatch"));
     recordWebsiteFormLeadMock.mockImplementation(async () =>
       order.push("google-ads"),
     );
 
-    const data = {
-      recaptchaToken: "valid-token",
-      name: "Jane Doe",
-      phone: "555-123-4567",
-      message: "Hello",
-      gclid: "CjwKCAjwWebsiteGCLID",
-    };
-
+    const data = form({ gclid: "CjwKCAjwWebsiteGCLID" });
     await contactHandler(data);
 
-    expect(recordWebsiteFormLeadMock).toHaveBeenCalledWith(data);
+    expect(recordWebsiteFormLeadMock).toHaveBeenCalledWith(data, expect.any(Date));
     expect(order).toEqual(["dispatch", "google-ads"]);
   });
 
-  test("Missing recaptchaToken → contact not created", async () => {
-    const data = {
-      name: "No Token",
-      phone: "555-000-0000",
-    };
+  test("Failed reCAPTCHA → sent to call-logs for review, not to dispatch or Google Ads", async () => {
+    verifyRecaptchaMock.mockResolvedValue({
+      ok: false,
+      reason: "reCAPTCHA token expired or reused",
+      score: null,
+    });
 
+    const data = form({ recaptchaToken: "stale-token" });
     await contactHandler(data);
 
-    expect(checkRecaptchaMock).not.toHaveBeenCalled();
     expect(contactMadeMock).not.toHaveBeenCalled();
+    expect(recordWebsiteFormLeadMock).not.toHaveBeenCalled();
+    expect(unverifiedEmits()).toEqual([
+      [
+        "slackbot-send-unverified-website-contact",
+        data,
+        "reCAPTCHA token expired or reused",
+        expect.any(Date),
+      ],
+    ]);
+  });
+
+  test("Missing or empty recaptchaToken → still sent to call-logs (it used to be dropped)", async () => {
+    verifyRecaptchaMock.mockResolvedValue({
+      ok: false,
+      reason: "no reCAPTCHA token",
+      score: null,
+    });
+
+    const { recaptchaToken, ...noToken } = form();
+    void recaptchaToken;
+    await contactHandler(noToken);
+    await contactHandler(form({ recaptchaToken: "" }));
+
+    expect(verifyRecaptchaMock).toHaveBeenCalledWith(undefined, "contact_form");
+    expect(verifyRecaptchaMock).toHaveBeenCalledWith("", "contact_form");
+    expect(unverifiedEmits()).toHaveLength(2);
+    expect(contactMadeMock).not.toHaveBeenCalled();
+  });
+
+  test("Honeypot filled → discarded without a reCAPTCHA check", async () => {
+    await contactHandler(form({ website: "http://spam.example" }));
+
+    expect(verifyRecaptchaMock).not.toHaveBeenCalled();
+    expect(contactMadeMock).not.toHaveBeenCalled();
+    expect(unverifiedEmits()).toHaveLength(0);
   });
 
   test("Valid reCAPTCHA for feedback → feedbackMade called", async () => {

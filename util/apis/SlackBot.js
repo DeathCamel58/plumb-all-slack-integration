@@ -8,6 +8,7 @@ import { findUserInvoices, findUserJobs } from "./Jobber.js";
 import prisma from "../prismaClient.js";
 import Contact from "../contact.js";
 import * as CallRail from "./CallRail.js";
+import { deliverWebsiteContact } from "./WebsiteContact.js";
 import {
   callEmployeeThenCustomer,
   getOrAssignEmployeeNumber,
@@ -1407,6 +1408,103 @@ async function handleCallRailLogMessage(event) {
   }
 }
 
+/** Fields of a website form kept on the "Send as contact" button */
+const WEBSITE_FORM_FIELDS = [
+  "name",
+  "phone",
+  "email",
+  "address",
+  "message",
+  "sms",
+  "gclid",
+  "gbraid",
+  "wbraid",
+];
+
+/**
+ * Builds the "Send as contact" button value for an unverified website form,
+ * shortening the message to fit Slack's 2000 character limit.
+ * @param {object} data - The website contact form body
+ * @param {Date} receivedAt - When the form was submitted
+ * @returns {string}
+ */
+export function websiteFormButtonValue(data, receivedAt) {
+  const form = {};
+  for (const field of WEBSITE_FORM_FIELDS) {
+    if (data?.[field] !== undefined && data?.[field] !== "") {
+      form[field] = data[field];
+    }
+  }
+  let value = JSON.stringify({ form, receivedAt: receivedAt.toISOString() });
+  while (value.length > 2000 && form.message) {
+    form.message = `${String(form.message).slice(0, Math.max(0, form.message.length - (value.length - 2000) - 20))}…`;
+    value = JSON.stringify({ form, receivedAt: receivedAt.toISOString() });
+  }
+  return value;
+}
+
+/**
+ * Posts a website contact form that failed reCAPTCHA to the call-logs channel
+ * for review, with a "Send as contact" button that forwards it to dispatch.
+ * Falls back to the main contact channel if call-logs isn't configured, so a
+ * form is never lost.
+ * @param {object} data - The website contact form body
+ * @param {string} reason - Why the form failed reCAPTCHA
+ * @param {Date} receivedAt - When the form was submitted
+ * @returns {Promise<void>}
+ */
+async function sendUnverifiedWebsiteContact(data, reason, receivedAt) {
+  const channel = process.env.SLACK_CALL_LOGS || slackCallChannelName;
+  const lines = [
+    `Unverified website form (${reason}). Review it, and send it as a contact if it's real.`,
+    "",
+    `Name: ${data?.name || "-"}`,
+    `Phone: ${data?.phone || "-"}`,
+    `Email: ${data?.email || "-"}`,
+    `Address: ${data?.address || "-"}`,
+    `Message: ${data?.message || "-"}`,
+  ];
+  const text = lines.join("\n");
+
+  try {
+    await app.client.chat.postMessage({
+      channel,
+      text,
+      blocks: [
+        {
+          type: "section",
+          // plain_text, so nothing typed into the form can format or link
+          text: { type: "plain_text", text: text.slice(0, 3000) },
+        },
+        {
+          type: "actions",
+          elements: [
+            {
+              type: "button",
+              text: { type: "plain_text", text: "Send as contact" },
+              style: "primary",
+              value: websiteFormButtonValue(data, receivedAt),
+              action_id: "send-website-contact-0",
+            },
+          ],
+        },
+      ],
+      unfurl_links: false,
+      username: "Website Form Bot",
+      icon_url:
+        "https://plumb-all.com/wp-content/uploads/2018/08/cropped-icon.png",
+    });
+    console.info("Slack: Sent unverified website form to call-logs");
+  } catch (e) {
+    Sentry.captureException(e, { extra: { reason } });
+    console.error("Slack: Failed to post unverified website form:", e);
+  }
+}
+events.on(
+  "slackbot-send-unverified-website-contact",
+  sendUnverifiedWebsiteContact,
+);
+
 /**
  * Handles Slack event webhooks.
  * @param {import("express").Request} req
@@ -1832,6 +1930,55 @@ async function interactivity(req) {
                 ],
               },
             });
+
+            break;
+          case "send-website-contact-0":
+            console.log(
+              "Slack: User sending unverified website form as contact!",
+            );
+
+            try {
+              const { form, receivedAt } = JSON.parse(action.value);
+
+              // Same path as a verified form: dispatch, then Google Ads
+              await deliverWebsiteContact(form, new Date(receivedAt));
+
+              try {
+                await app.client.chat.update({
+                  channel: event.channel?.id,
+                  ts: event.container?.message_ts,
+                  text: `Website form sent as contact by <@${event.user.id}>`,
+                  blocks: [
+                    ...(event.message?.blocks ?? []).filter(
+                      (b) => b.type !== "actions",
+                    ),
+                    {
+                      type: "context",
+                      elements: [
+                        {
+                          type: "mrkdwn",
+                          text: `Sent as contact by <@${event.user.id}>`,
+                        },
+                      ],
+                    },
+                  ],
+                });
+              } catch (_e) {
+                // Non-critical — the contact was still sent
+              }
+            } catch (e) {
+              Sentry.captureException(e);
+              console.error(
+                "Slack: Failed to send website form as contact:",
+                e,
+              );
+
+              await app.client.chat.postEphemeral({
+                channel: event.channel?.id,
+                user: event.user.id,
+                text: "Failed to send as contact. Please try again.",
+              });
+            }
 
             break;
           case "send-callrail-contact-0":
