@@ -621,6 +621,82 @@ export async function logContact(contact, originalMessage) {
 events.on("posthog-log-contact", logContact);
 
 /**
+ * Records a CallRail call's marketing source in PostHog, from CallRail's
+ * post-call webhook. The webhook already carries the source, so this never
+ * calls the (paid) CallRail API.
+ *
+ * Each call becomes a "callrail call" event with its source, so every call is
+ * attributed, not just a caller's first one. The caller's person also gets
+ * latestCallrailSource and firstCallrailSource, and callrailSource is filled
+ * in when it was missing or "none" (the paid lookup in sendClientToPostHog
+ * found nothing).
+ *
+ * Never throws.
+ * @param {object} call - The CallRail post-call webhook body
+ */
+export async function logCallRailCall(call) {
+  try {
+    const phone = toE164(call?.customer_phone_number);
+    if (!phone) {
+      return;
+    }
+
+    const ids = await searchByPhone(phone);
+    // Same fallback identity sendClientToPostHog uses for a new caller
+    const id = ids[0] || phone;
+    const source = call.source_name || call.source || null;
+
+    let existingSource = null;
+    if (ids[0]) {
+      const person = await individualSearch(id, "distinct_id");
+      existingSource = person?.results?.[0]?.properties?.callrailSource ?? null;
+    }
+
+    const set = {};
+    const setOnce = {};
+    if (source) {
+      set.latestCallrailSource = source;
+      setOnce.firstCallrailSource = source;
+      if (!existingSource || existingSource === "none") {
+        set.callrailSource = source;
+      }
+    }
+    if (call.medium) set.latestCallrailMedium = call.medium;
+
+    await useAPI("capture/", "post", {
+      api_key: process.env.POSTHOG_TOKEN,
+      distinct_id: id,
+      event: "$identify",
+      $set: set,
+      $set_once: setOnce,
+    });
+
+    await useAPI("capture/", "post", {
+      api_key: process.env.POSTHOG_TOKEN,
+      event: "callrail call",
+      ...(call.start_time ? { timestamp: call.start_time } : {}),
+      properties: {
+        distinct_id: id,
+        source,
+        medium: call.medium || null,
+        campaign: call.campaign || null,
+        firstCall: call.first_call === true,
+        answered: call.answered === true,
+        durationSeconds: Number(call.duration) || 0,
+        direction: call.direction || null,
+        hasGclid: Boolean(call.gclid),
+        trackingNumber: call.tracking_phone_number || null,
+        callId: call.resource_id || null,
+      },
+    });
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("PostHog: Error logging CallRail call:", e);
+  }
+}
+events.on("posthog-log-callrail-call", logCallRailCall);
+
+/**
  * Logs a created client in Jobber to PostHog.
  * Uses the Jobber client ID as the distinct_id to guarantee a stable identity
  * and avoid duplicate persons from race conditions or search mismatches.

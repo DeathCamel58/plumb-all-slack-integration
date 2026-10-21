@@ -184,6 +184,12 @@ async function handlePostCall(req) {
       `CallRail Webhook: post-call caller=${callId} duration=${call.duration} gclid=${gclid || "none"} source=${sourceName} direction=${call.direction || "none"} start_time=${call.start_time || "none"}`,
     );
 
+    // Record the call's marketing source in PostHog (from this webhook, so no
+    // paid CallRail API lookup)
+    if (!call.direction || call.direction === "inbound") {
+      events.emit("posthog-log-callrail-call", call);
+    }
+
     let skipReason = null;
     if (call.direction && call.direction !== "inbound") {
       skipReason = `direction=${call.direction} is not inbound`;

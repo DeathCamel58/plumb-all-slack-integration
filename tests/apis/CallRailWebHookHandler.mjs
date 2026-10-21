@@ -309,6 +309,28 @@ describe("CallRailWebHookHandler", () => {
       expect(uploadClickConversionMock).not.toHaveBeenCalled();
     });
 
+    test("Every inbound call is sent to PostHog with its source, even ones that aren't uploaded", async () => {
+      eventsEmitMock.mockReset();
+      const shortOrganic = { ...baseCall, duration: 10, gclid: "", source_name: "Google Organic" };
+
+      await postCallHandler(makeReq(shortOrganic));
+
+      expect(eventsEmitMock).toHaveBeenCalledWith(
+        "posthog-log-callrail-call",
+        shortOrganic,
+      );
+      expect(uploadClickConversionMock).not.toHaveBeenCalled();
+    });
+
+    test("Outbound calls aren't sent to PostHog as CallRail calls", async () => {
+      eventsEmitMock.mockReset();
+      await postCallHandler(makeReq({ ...baseCall, direction: "outbound" }));
+      expect(eventsEmitMock).not.toHaveBeenCalledWith(
+        "posthog-log-callrail-call",
+        expect.anything(),
+      );
+    });
+
     test("GOOGLE_ADS_MIN_CALL_DURATION overrides the threshold", async () => {
       process.env.GOOGLE_ADS_MIN_CALL_DURATION = "90";
       await postCallHandler(makeReq({ ...baseCall, duration: 75 }));
