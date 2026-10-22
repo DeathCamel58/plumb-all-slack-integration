@@ -500,12 +500,13 @@ query ClientTagsQuery {
  * @returns {Promise<*>} The data for the invoice
  */
 export async function getInvoiceSearchData(filterValue) {
+  // The invoiceNumber filter is an exact match, and takes the number base64 encoded
+  let encodedNumber = Buffer.from(filterValue.toString()).toString("base64");
   let query = `
 query InvoiceQuery {
-  invoices (searchTerm: "${filterValue}", first: 25, sort: {key: INVOICE_NUMBER, direction: ASCENDING}) {
+  invoices (filter: {invoiceNumber: "${encodedNumber}"}, first: 1) {
     nodes {
       id
-      invoiceNumber
     }
   }
 }
@@ -513,10 +514,7 @@ query InvoiceQuery {
 
   let invoiceResponse = await makeRequest(query);
 
-  // The search also matches other text (e.g. an address with the same number), so find the exact invoice number
-  let match = invoiceResponse?.invoices?.nodes.find(
-    (invoice) => invoice.invoiceNumber.toString() === filterValue.toString(),
-  );
+  let match = invoiceResponse?.invoices?.nodes[0];
   if (!match) {
     return null;
   }
