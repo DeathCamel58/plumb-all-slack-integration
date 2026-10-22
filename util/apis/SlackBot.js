@@ -1168,12 +1168,76 @@ export function verifyWebhook(req, doYouLikeItRaw = false) {
 }
 
 /**
+ * Opens a modal with a loading message, then fills it in. A trigger_id expires
+ * 3 seconds after the click, and Jobber queries can take longer than that.
+ * @param {string} trigger_id
+ * @param {{callback_id: string, title: string, loadingText: string, errorText: string}} options
+ * @param {() => Promise<Array<object>>} loadBlocks - Builds the modal's blocks
+ * @returns {Promise<void>}
+ */
+async function openModalThenLoad(
+  trigger_id,
+  { callback_id, title, loadingText, errorText },
+  loadBlocks,
+) {
+  const textBlock = (text) => ({
+    type: "section",
+    text: { type: "mrkdwn", text },
+  });
+  const modal = (blocks) => ({
+    type: "modal",
+    callback_id,
+    title: { type: "plain_text", text: title },
+    blocks,
+  });
+
+  const opened = await app.client.views.open({
+    trigger_id,
+    view: modal([textBlock(`:hourglass_flowing_sand: ${loadingText}`)]),
+  });
+
+  let blocks;
+  try {
+    blocks = await loadBlocks();
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error(`Slack: Failed to load the ${title} modal:`, e);
+    blocks = [textBlock(errorText)];
+  }
+
+  await app.client.views.update({
+    view_id: opened.view.id,
+    hash: opened.view.hash,
+    view: modal(blocks),
+  });
+}
+
+/**
  * Opens a modal showing recent jobs for the user.
  * @param {string} trigger_id
  * @param {string} user
  * @returns {Promise<void>}
  */
 async function jobsModal(trigger_id, user) {
+  await openModalThenLoad(
+    trigger_id,
+    {
+      callback_id: "open_job_modal",
+      title: "Jobs",
+      loadingText: "Loading your jobs…",
+      errorText:
+        "Sorry, I couldn't get your jobs from Jobber. Please try again.",
+    },
+    () => userJobsBlocks(user),
+  );
+}
+
+/**
+ * Builds the blocks listing the user's recent jobs.
+ * @param {string} user
+ * @returns {Promise<Array<object>>}
+ */
+async function userJobsBlocks(user) {
   let jobs = await findUserJobs(user);
 
   let jobBlocks = [];
@@ -1205,27 +1269,16 @@ async function jobsModal(trigger_id, user) {
     });
   }
 
-  await app.client.views.open({
-    trigger_id: trigger_id,
-    view: {
-      type: "modal",
-      callback_id: "open_job_modal",
-      title: {
-        type: "plain_text",
-        text: "Jobs",
+  return [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `Here's jobs in the past 30 days found for \`${user}\`.\n:white_check_mark: means that the job is closed\n:x: means that the job isn't closed properly`,
       },
-      blocks: [
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `Here's jobs in the past 30 days found for \`${user}\`.\n:white_check_mark: means that the job is closed\n:x: means that the job isn't closed properly`,
-          },
-        },
-        ...jobBlocks,
-      ],
     },
-  });
+    ...jobBlocks,
+  ];
 }
 
 /**
@@ -1235,6 +1288,25 @@ async function jobsModal(trigger_id, user) {
  * @returns {Promise<void>}
  */
 async function invoicesModal(trigger_id, user) {
+  await openModalThenLoad(
+    trigger_id,
+    {
+      callback_id: "open_invoice_modal",
+      title: "Invoices",
+      loadingText: "Loading your invoices…",
+      errorText:
+        "Sorry, I couldn't get your invoices from Jobber. Please try again.",
+    },
+    () => userInvoicesBlocks(user),
+  );
+}
+
+/**
+ * Builds the blocks listing the user's recent invoices.
+ * @param {string} user
+ * @returns {Promise<Array<object>>}
+ */
+async function userInvoicesBlocks(user) {
   let invoices = await findUserInvoices(user);
 
   let invoiceBlocks = [];
@@ -1266,27 +1338,16 @@ async function invoicesModal(trigger_id, user) {
     });
   }
 
-  await app.client.views.open({
-    trigger_id: trigger_id,
-    view: {
-      type: "modal",
-      callback_id: "open_invoice_modal",
-      title: {
-        type: "plain_text",
-        text: "Invoices",
+  return [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `Here's invoices in the past 30 days found for \`${user}\``,
       },
-      blocks: [
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `Here's invoices in the past 30 days found for \`${user}\``,
-          },
-        },
-        ...invoiceBlocks,
-      ],
     },
-  });
+    ...invoiceBlocks,
+  ];
 }
 
 /**
@@ -1631,36 +1692,16 @@ async function interactivity(req) {
           case "get-open-jobs-0":
             console.log("Slack: User requests the get open jobs message!");
 
-            {
-              const openJobsView = (text) => ({
-                type: "modal",
+            await openModalThenLoad(
+              event.trigger_id,
+              {
                 callback_id: "open_job_modal",
-                title: {
-                  type: "plain_text",
-                  text: "Open Jobs",
-                },
-                blocks: [
-                  {
-                    type: "section",
-                    text: {
-                      type: "mrkdwn",
-                      text,
-                    },
-                  },
-                ],
-              });
-
-              // The trigger_id expires 3 seconds after the click, and the Jobber
-              // queries take longer, so open the modal first and fill it in after
-              const opened = await app.client.views.open({
-                trigger_id: event.trigger_id,
-                view: openJobsView(
-                  ":hourglass_flowing_sand: Loading open jobs…",
-                ),
-              });
-
-              let text;
-              try {
+                title: "Open Jobs",
+                loadingText: "Loading open jobs…",
+                errorText:
+                  "Sorry, I couldn't get the open jobs from Jobber. Please try again.",
+              },
+              async () => {
                 // Get the open jobs by user
                 let openJobs = await Jobber.findOpenJobBlame();
 
@@ -1678,22 +1719,19 @@ async function interactivity(req) {
                   message += currentUserMessage;
                 }
 
-                text = message
-                  ? `\`\`\`\n${message}\n\`\`\``
-                  : "No open jobs found.";
-              } catch (e) {
-                Sentry.captureException(e);
-                console.error("Slack: Failed to get open jobs:", e);
-                text =
-                  "Sorry, I couldn't get the open jobs from Jobber. Please try again.";
-              }
-
-              await app.client.views.update({
-                view_id: opened.view.id,
-                hash: opened.view.hash,
-                view: openJobsView(text),
-              });
-            }
+                return [
+                  {
+                    type: "section",
+                    text: {
+                      type: "mrkdwn",
+                      text: message
+                        ? `\`\`\`\n${message}\n\`\`\``
+                        : "No open jobs found.",
+                    },
+                  },
+                ];
+              },
+            );
 
             break;
           case "get-my-jobs-0":
