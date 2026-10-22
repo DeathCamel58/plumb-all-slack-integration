@@ -361,21 +361,33 @@ async function jobCreateUpdate(data) {
 }
 events.on("db-JOB_CREATE_UPDATE", jobCreateUpdate);
 
+/**
+ * Removes a job and its quote/invoice links. Timesheets and expenses on the
+ * job are kept with the job reference cleared.
+ * @param {string} id - Jobber job ID
+ */
 async function jobDestroy(id) {
-  await prisma.quotesOnJobs.deleteMany({
-    where: { jobId: id },
-  });
-
-  await prisma.jobsOnInvoices.deleteMany({
-    where: { jobId: id },
-  });
-
-  await prisma.job.deleteMany({
-    where: { id: id },
-  });
-  console.log("Postgres: Destroyed job");
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.quotesOnJobs.deleteMany({ where: { jobId: id } });
+      await tx.jobsOnInvoices.deleteMany({ where: { jobId: id } });
+      await tx.timeSheetEntry.updateMany({
+        where: { job: id },
+        data: { job: null },
+      });
+      await tx.expense.updateMany({
+        where: { linkedJob: id },
+        data: { linkedJob: null },
+      });
+      await tx.job.deleteMany({ where: { id } });
+    });
+    console.log("Postgres: Destroyed job");
+  } catch (e) {
+    Sentry.captureException(e, { extra: { jobId: id } });
+    console.error(`Postgres: Error destroying job ${id}:`, e);
+  }
 }
-events.on("db-JOB_DESTROY", invoiceDestroy);
+events.on("db-JOB_DESTROY", jobDestroy);
 
 async function ensureJobExists(id) {
   const job = await prisma.job.findMany({ where: { id: { equals: id } } });
@@ -567,12 +579,18 @@ async function propertyCreateUpdate(data) {
 events.on("db-PROPERTY_CREATE_UPDATE", propertyCreateUpdate);
 
 async function propertyDestroy(id) {
-  await prisma.property.deleteMany({
-    where: { id: id },
-  });
-  console.log("Postgres: Destroyed property");
+  try {
+    await prisma.property.deleteMany({
+      where: { id: id },
+    });
+    console.log("Postgres: Destroyed property");
+  } catch (e) {
+    // Fails if quotes or jobs still reference the property
+    Sentry.captureException(e, { extra: { propertyId: id } });
+    console.error(`Postgres: Error destroying property ${id}:`, e);
+  }
 }
-events.on("db-EXPENSE_DESTROY", propertyDestroy);
+events.on("db-PROPERTY_DESTROY", propertyDestroy);
 
 async function expenseCreateUpdate(data) {
   let userReferences = [data.enteredBy.id];

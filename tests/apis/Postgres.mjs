@@ -61,6 +61,9 @@ const quoteCreateUpdate = handlerFor("db-QUOTE_CREATE_UPDATE");
 const timesheetCreateUpdate = handlerFor("db-TIMESHEET_CREATE_UPDATE");
 const timesheetDestroy = handlerFor("db-TIMESHEET_DESTROY");
 const clientDestroy = handlerFor("db-CLIENT_DESTROY");
+const jobDestroy = handlerFor("db-JOB_DESTROY");
+const propertyDestroy = handlerFor("db-PROPERTY_DESTROY");
+const expenseDestroy = handlerFor("db-EXPENSE_DESTROY");
 
 /**
  * Builds a P2002 in the shape @prisma/adapter-pg produces. The driver adapter
@@ -385,6 +388,84 @@ describe("clientDestroy", () => {
     prismaMock.quote.deleteMany.mockRejectedValue(new Error("FK violation"));
 
     await expect(clientDestroy("client-1")).resolves.toBeUndefined();
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+});
+
+describe("jobDestroy", () => {
+  beforeEach(() => {
+    for (const model of Object.values(prismaMock)) {
+      model.deleteMany.mockReset().mockResolvedValue({ count: 1 });
+      model.updateMany.mockReset().mockResolvedValue({ count: 0 });
+    }
+  });
+
+  test("is wired to JOB_DESTROY and deletes the job, not an invoice", async () => {
+    await jobDestroy("job-1");
+
+    expect(prismaMock.job.deleteMany).toHaveBeenCalledWith({
+      where: { id: "job-1" },
+    });
+    expect(prismaMock.invoice.deleteMany).not.toHaveBeenCalled();
+    expect(prismaMock.quotesOnJobs.deleteMany).toHaveBeenCalledWith({
+      where: { jobId: "job-1" },
+    });
+    expect(prismaMock.jobsOnInvoices.deleteMany).toHaveBeenCalledWith({
+      where: { jobId: "job-1" },
+    });
+  });
+
+  test("keeps timesheets and expenses, clearing their job", async () => {
+    await jobDestroy("job-1");
+
+    expect(prismaMock.timeSheetEntry.updateMany).toHaveBeenCalledWith({
+      where: { job: "job-1" },
+      data: { job: null },
+    });
+    expect(prismaMock.expense.updateMany).toHaveBeenCalledWith({
+      where: { linkedJob: "job-1" },
+      data: { linkedJob: null },
+    });
+  });
+
+  test("catches a failed delete instead of rejecting", async () => {
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    prismaMock.job.deleteMany.mockRejectedValue(new Error("FK violation"));
+
+    await expect(jobDestroy("job-1")).resolves.toBeUndefined();
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+});
+
+describe("propertyDestroy", () => {
+  beforeEach(() => {
+    for (const model of Object.values(prismaMock)) {
+      model.deleteMany.mockReset().mockResolvedValue({ count: 1 });
+    }
+  });
+
+  test("is wired to PROPERTY_DESTROY and deletes the property", async () => {
+    await propertyDestroy("property-1");
+
+    expect(prismaMock.property.deleteMany).toHaveBeenCalledWith({
+      where: { id: "property-1" },
+    });
+  });
+
+  test("EXPENSE_DESTROY only deletes the expense", async () => {
+    await expenseDestroy("expense-1");
+
+    expect(prismaMock.expense.deleteMany).toHaveBeenCalled();
+    expect(prismaMock.property.deleteMany).not.toHaveBeenCalled();
+  });
+
+  test("catches a failed delete instead of rejecting", async () => {
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    prismaMock.property.deleteMany.mockRejectedValue(new Error("FK violation"));
+
+    await expect(propertyDestroy("property-1")).resolves.toBeUndefined();
     expect(errorSpy).toHaveBeenCalled();
     errorSpy.mockRestore();
   });
