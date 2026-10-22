@@ -1631,26 +1631,8 @@ async function interactivity(req) {
           case "get-open-jobs-0":
             console.log("Slack: User requests the get open jobs message!");
 
-            // Get the open jobs by user
-            let openJobs = await Jobber.findOpenJobBlame();
-
-            // Now that we have the dict of open jobs by user, build the message someone can copy and paste in Slack
-            let message = "";
-            for (const key in openJobs) {
-              let currentUserMessage = `Do these jobs need to be open @${key}? `;
-
-              for (const job in openJobs[key]) {
-                currentUserMessage += `J#${job} `;
-              }
-
-              currentUserMessage += "\n";
-
-              message += currentUserMessage;
-            }
-
-            await app.client.views.open({
-              trigger_id: event.trigger_id,
-              view: {
+            {
+              const openJobsView = (text) => ({
                 type: "modal",
                 callback_id: "open_job_modal",
                 title: {
@@ -1662,12 +1644,56 @@ async function interactivity(req) {
                     type: "section",
                     text: {
                       type: "mrkdwn",
-                      text: `\`\`\`\n${message}\n\`\`\``,
+                      text,
                     },
                   },
                 ],
-              },
-            });
+              });
+
+              // The trigger_id expires 3 seconds after the click, and the Jobber
+              // queries take longer, so open the modal first and fill it in after
+              const opened = await app.client.views.open({
+                trigger_id: event.trigger_id,
+                view: openJobsView(
+                  ":hourglass_flowing_sand: Loading open jobs…",
+                ),
+              });
+
+              let text;
+              try {
+                // Get the open jobs by user
+                let openJobs = await Jobber.findOpenJobBlame();
+
+                // Now that we have the dict of open jobs by user, build the message someone can copy and paste in Slack
+                let message = "";
+                for (const key in openJobs) {
+                  let currentUserMessage = `Do these jobs need to be open @${key}? `;
+
+                  for (const job in openJobs[key]) {
+                    currentUserMessage += `J#${job} `;
+                  }
+
+                  currentUserMessage += "\n";
+
+                  message += currentUserMessage;
+                }
+
+                text = message
+                  ? `\`\`\`\n${message}\n\`\`\``
+                  : "No open jobs found.";
+              } catch (e) {
+                Sentry.captureException(e);
+                console.error("Slack: Failed to get open jobs:", e);
+                text =
+                  "Sorry, I couldn't get the open jobs from Jobber. Please try again.";
+              }
+
+              await app.client.views.update({
+                view_id: opened.view.id,
+                hash: opened.view.hash,
+                view: openJobsView(text),
+              });
+            }
 
             break;
           case "get-my-jobs-0":
