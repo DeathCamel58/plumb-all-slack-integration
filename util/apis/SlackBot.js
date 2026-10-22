@@ -526,38 +526,43 @@ async function sendContactMessage(
           text: contact.messageToSend(),
         },
       },
-      {
-        type: "divider",
-      },
-      {
-        type: "actions",
-        elements: [
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "Call",
-            },
-            style: "primary",
-            value: contact.phone,
-            action_id: "outbound-call-0",
-          },
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "Text",
-            },
-            value: contact.phone,
-            action_id: "outbound-text-0",
-          },
-        ],
-      },
     ];
+    // Call/Text buttons need a phone number (e.g. Jobber requests can have only an email)
+    if (contact.phone) {
+      blocks.push(
+        {
+          type: "divider",
+        },
+        {
+          type: "actions",
+          elements: [
+            {
+              type: "button",
+              text: {
+                type: "plain_text",
+                text: "Call",
+              },
+              style: "primary",
+              value: contact.phone,
+              action_id: "outbound-call-0",
+            },
+            {
+              type: "button",
+              text: {
+                type: "plain_text",
+                text: "Text",
+              },
+              value: contact.phone,
+              action_id: "outbound-text-0",
+            },
+          ],
+        },
+      );
+    }
     await app.client.chat.postMessage({
       channel: channelName,
       text: contact.messageToSend(),
-      thread_ts: thread_ts,
+      thread_ts: thread_ts ?? undefined,
       blocks: blocks,
       unfurl_links: false,
       username: username,
