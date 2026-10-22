@@ -502,7 +502,7 @@ query ClientTagsQuery {
 export async function getInvoiceSearchData(filterValue) {
   let query = `
 query InvoiceQuery {
-  invoices (searchTerm: "${filterValue}", first: 1, sort: {key: INVOICE_NUMBER, direction: ASCENDING}) {
+  invoices (searchTerm: "${filterValue}", first: 25, sort: {key: INVOICE_NUMBER, direction: ASCENDING}) {
     nodes {
       id
       invoiceNumber
@@ -513,20 +513,15 @@ query InvoiceQuery {
 
   let invoiceResponse = await makeRequest(query);
 
-  if (
-    invoiceResponse !== undefined &&
-    invoiceResponse.invoices.nodes.length > 0 &&
-    invoiceResponse.invoices.nodes[0].invoiceNumber.toString() ===
-      filterValue.toString()
-  ) {
-    invoiceResponse = await getInvoiceData(
-      invoiceResponse.invoices.nodes[0].id,
-    );
-  } else {
+  // The search also matches other text (e.g. an address with the same number), so find the exact invoice number
+  let match = invoiceResponse?.invoices?.nodes.find(
+    (invoice) => invoice.invoiceNumber.toString() === filterValue.toString(),
+  );
+  if (!match) {
     return null;
   }
 
-  return invoiceResponse;
+  return await getInvoiceData(match.id);
 }
 
 /**
@@ -717,7 +712,7 @@ query JobQuery {
 export async function getJobSearchData(filterValue) {
   let query = `
 query JobQuery {
-  jobs (searchTerm: "${filterValue}", first: 1, sort: {key: JOB_NUMBER, direction: ASCENDING}) {
+  jobs (searchTerm: "${filterValue}", first: 25, sort: {key: JOB_NUMBER, direction: ASCENDING}) {
     nodes {
       id
       jobNumber
@@ -728,17 +723,15 @@ query JobQuery {
 
   let jobResponse = await makeRequest(query);
 
-  if (
-    jobResponse !== undefined &&
-    jobResponse.jobs.nodes.length > 0 &&
-    jobResponse.jobs.nodes[0].jobNumber.toString() === filterValue.toString()
-  ) {
-    jobResponse = await getJobData(jobResponse.jobs.nodes[0].id);
-  } else {
+  // The search also matches other text (e.g. an address with the same number), so find the exact job number
+  let match = jobResponse?.jobs?.nodes.find(
+    (job) => job.jobNumber.toString() === filterValue.toString(),
+  );
+  if (!match) {
     return null;
   }
 
-  return jobResponse;
+  return await getJobData(match.id);
 }
 
 /**
