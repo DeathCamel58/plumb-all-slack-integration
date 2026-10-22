@@ -82,6 +82,9 @@ async function invoiceUpdateHandle(req) {
       );
       // Insert/Update Invoice
       events.emit("db-INVOICE_CREATE_UPDATE", invoice);
+      // Status changes (e.g. paid) feed the commission report
+      let clientID = await PostHog.logClient(invoice.client);
+      await PostHog.logInvoiceUpdate(invoice, clientID);
     }
   } catch (e) {
     Sentry.captureException(e);
@@ -704,6 +707,12 @@ async function expenseDestroyHandle(req) {
   if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
     // Destroy expense
     events.emit("db-EXPENSE_DESTROY", body.data["webHookEvent"]["itemId"]);
+    try {
+      await PostHog.logExpenseDestroy(body.data["webHookEvent"]["itemId"]);
+    } catch (e) {
+      Sentry.captureException(e);
+      console.error("Jobber webhook handler error:", e);
+    }
   }
 }
 events.on("jobber-EXPENSE_DESTROY", expenseDestroyHandle);

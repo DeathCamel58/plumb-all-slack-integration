@@ -410,6 +410,7 @@ query InvoiceQuery {
         jobs {
             nodes {
                 id
+                jobNumber
             }
         }
         # lineItems {
@@ -433,6 +434,9 @@ query InvoiceQuery {
         receivedDate
         salesperson {
             id
+            name {
+                full
+            }
         }
         subject
         # taxRate {
@@ -453,8 +457,41 @@ query InvoiceQuery {
   invoiceResponse["invoice"].client = await getClientData(
     invoiceResponse["invoice"].client.id,
   );
+  invoiceResponse["invoice"].clientTags = await getClientTags(
+    invoiceResponse["invoice"].client.id,
+  );
 
   return invoiceResponse["invoice"];
+}
+
+/**
+ * Gets the tag labels on a client (e.g. "Billout")
+ *
+ * Kept out of getClientData so a failure here can't stop a webhook from being
+ * processed; the commission report only needs the tags on invoice events.
+ * @param clientID The client's Jobber ID
+ * @returns {Promise<string[]|null>} The tag labels, or null if they couldn't be fetched
+ */
+export async function getClientTags(clientID) {
+  let query = `
+query ClientTagsQuery {
+  client (id: "${clientID}") {
+    tags {
+      nodes {
+        label
+      }
+    }
+  }
+}
+        `;
+
+  try {
+    let clientResponse = await makeRequest(query);
+    return clientResponse.client.tags.nodes.map((tag) => tag.label);
+  } catch (e) {
+    console.error("Jobber: Couldn't get client tags:", e.message);
+    return null;
+  }
 }
 
 /**

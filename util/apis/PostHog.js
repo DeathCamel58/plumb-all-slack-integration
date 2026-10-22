@@ -882,16 +882,11 @@ export async function logEmployee(jobberUser) {
   return jobberUser.uuid;
 }
 
-/**
- * Logs a created Invoice in Jobber to PostHog
- * @param jobberInvoice The Invoice that was parsed
- * @param clientID The client ID to use for the event
- */
-export async function logInvoice(jobberInvoice, clientID) {
-  // Create an event for invoice in PostHog
+async function logInvoiceEvent(eventName, jobberInvoice, clientID) {
+  let jobs = jobberInvoice.jobs ? jobberInvoice.jobs.nodes : [];
   let captureData = {
     api_key: process.env.POSTHOG_TOKEN,
-    event: "invoice made",
+    event: eventName,
     properties: {
       distinct_id: clientID,
       subject: jobberInvoice.subject,
@@ -902,9 +897,43 @@ export async function logInvoice(jobberInvoice, clientID) {
       paymentsTotal: jobberInvoice["amounts"].paymentsTotal,
       subtotal: jobberInvoice["amounts"].subtotal,
       total: jobberInvoice["amounts"].total,
+      // Used by the commission report
+      invoiceId: jobberInvoice.id,
+      invoiceStatus: jobberInvoice.invoiceStatus,
+      issuedDate: jobberInvoice.issuedDate,
+      // Jobber sets this when the invoice is paid in full
+      receivedDate: jobberInvoice.receivedDate,
+      salespersonId: jobberInvoice.salesperson
+        ? jobberInvoice.salesperson.id
+        : null,
+      salespersonName: jobberInvoice.salesperson?.name
+        ? jobberInvoice.salesperson.name.full
+        : null,
+      // Same IDs as linkedJob on expense events
+      jobIds: jobs.map((job) => job.id),
+      jobNumbers: jobs.map((job) => job.jobNumber),
+      clientTags: jobberInvoice.clientTags ?? null,
     },
   };
   await useAPI("capture/", "post", captureData);
+}
+
+/**
+ * Logs a created Invoice in Jobber to PostHog
+ * @param jobberInvoice The Invoice that was parsed
+ * @param clientID The client ID to use for the event
+ */
+export async function logInvoice(jobberInvoice, clientID) {
+  await logInvoiceEvent("invoice made", jobberInvoice, clientID);
+}
+
+/**
+ * Logs an updated Invoice in Jobber to PostHog, e.g. when it's paid
+ * @param jobberInvoice The Invoice that was parsed
+ * @param clientID The client ID to use for the event
+ */
+export async function logInvoiceUpdate(jobberInvoice, clientID) {
+  await logInvoiceEvent("invoice updated", jobberInvoice, clientID);
 }
 
 /**
@@ -1207,6 +1236,23 @@ export async function logExpenseCreate(jobberExpense, userID) {
  */
 export async function logExpenseUpdate(jobberExpense, userID) {
   await logExpenseEvent("expense updated", jobberExpense, userID);
+}
+
+/**
+ * Logs a deleted expense in Jobber to PostHog, so reports can leave it out
+ * @param expenseID The Jobber ID of the deleted expense
+ */
+export async function logExpenseDestroy(expenseID) {
+  let captureData = {
+    api_key: process.env.POSTHOG_TOKEN,
+    event: "expense deleted",
+    properties: {
+      // The expense details are gone by now, so there's no user to attach it to
+      distinct_id: expenseID,
+      id: expenseID,
+    },
+  };
+  await useAPI("capture/", "post", captureData);
 }
 
 /**
