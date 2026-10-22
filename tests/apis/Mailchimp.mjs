@@ -1,9 +1,16 @@
-import { beforeEach, describe, expect, jest, test } from "@jest/globals";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  jest,
+  test,
+} from "@jest/globals";
 
 const eventsEmitMock = jest.fn();
 const eventsOnMock = jest.fn();
-const getClientDataMock = jest.fn();
 const createListMemberEventMock = jest.fn();
+const sentryMock = { captureException: jest.fn() };
 
 jest.unstable_mockModule("../../util/events.js", () => ({
   default: {
@@ -12,9 +19,7 @@ jest.unstable_mockModule("../../util/events.js", () => ({
   },
 }));
 
-jest.unstable_mockModule("../../util/apis/Jobber.js", () => ({
-  getClientData: getClientDataMock,
-}));
+jest.unstable_mockModule("@sentry/node", () => sentryMock);
 
 jest.unstable_mockModule("@mailchimp/mailchimp_marketing", () => ({
   default: {
@@ -35,34 +40,41 @@ const mailchimpHandler = eventsOnMock.mock.calls.find(
   ([name]) => name === "mailchimp-INVOICE_CREATE_UPDATE",
 )[1];
 
-const mockClient = {
-  id: "client-id-1",
-  name: "Test Client",
-  emails: [{ address: "test@example.com", primary: true }],
-};
+const invoiceFor = (emails) => ({ client: { id: "client-id-1", emails } });
+
+/** An error shaped like the Mailchimp SDK's (superagent) errors. */
+function mailchimpError(status, detail) {
+  const e = new Error(detail);
+  e.status = status;
+  e.response = { body: { status, detail } };
+  return e;
+}
+
+let logSpy, errorSpy;
 
 beforeEach(() => {
   eventsEmitMock.mockReset();
-  getClientDataMock.mockReset();
   createListMemberEventMock.mockReset();
+  createListMemberEventMock.mockResolvedValue({ status: 204 });
+  sentryMock.captureException.mockReset();
+  logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+  errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+});
 
-  getClientDataMock.mockResolvedValue(mockClient);
+afterEach(() => {
+  logSpy.mockRestore();
+  errorSpy.mockRestore();
 });
 
 describe("Mailchimp", () => {
-  test("Valid client data triggers Mailchimp event", async () => {
-    createListMemberEventMock.mockResolvedValue({ status: 204 });
+  test("Sends the event to the client's primary email", async () => {
+    await mailchimpHandler(
+      invoiceFor([
+        { address: "other@example.com", primary: false },
+        { address: "test@example.com", primary: true },
+      ]),
+    );
 
-    const invoiceData = {
-      client: {
-        id: "client-id-1",
-        emails: [{ address: "test@example.com", primary: true }],
-      },
-    };
-
-    await mailchimpHandler(invoiceData);
-
-    expect(getClientDataMock).toHaveBeenCalledWith("client-id-1");
     expect(createListMemberEventMock).toHaveBeenCalledWith(
       "list123",
       "test@example.com",
@@ -70,35 +82,49 @@ describe("Mailchimp", () => {
     );
   });
 
-  test("Client with no primary email sends undefined email", async () => {
-    createListMemberEventMock.mockResolvedValue({ status: 204 });
-
-    const invoiceData = {
-      client: {
-        id: "client-id-2",
-        emails: [],
-      },
-    };
-
-    await mailchimpHandler(invoiceData);
+  test("Falls back to the first email when none is primary", async () => {
+    await mailchimpHandler(
+      invoiceFor([{ address: "first@example.com", primary: false }]),
+    );
 
     expect(createListMemberEventMock).toHaveBeenCalledWith(
       "list123",
-      undefined,
+      "first@example.com",
       { name: "invoice_made" },
     );
   });
 
-  test("Mailchimp API error is caught and does not throw", async () => {
-    createListMemberEventMock.mockRejectedValue(new Error("Mailchimp API error"));
+  test("Client with no email is skipped without calling Mailchimp", async () => {
+    await mailchimpHandler(invoiceFor([]));
 
-    const invoiceData = {
-      client: {
-        id: "client-id-1",
-        emails: [{ address: "test@example.com", primary: true }],
-      },
-    };
+    expect(createListMemberEventMock).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
 
-    await expect(mailchimpHandler(invoiceData)).resolves.not.toThrow();
+  test("Email not on the list (404) is skipped quietly", async () => {
+    createListMemberEventMock.mockRejectedValue(
+      mailchimpError(404, "The requested resource could not be found."),
+    );
+
+    await mailchimpHandler(invoiceFor([{ address: "a@b.com", primary: true }]));
+
+    expect(errorSpy).not.toHaveBeenCalled();
+    expect(sentryMock.captureException).not.toHaveBeenCalled();
+  });
+
+  test("Other API errors are reported and do not throw", async () => {
+    createListMemberEventMock.mockRejectedValue(
+      mailchimpError(500, "Internal error"),
+    );
+
+    await expect(
+      mailchimpHandler(invoiceFor([{ address: "a@b.com", primary: true }])),
+    ).resolves.toBeUndefined();
+    expect(sentryMock.captureException).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledWith(
+      "Mailchimp: Error sending invoice_made event for a@b.com:",
+      500,
+      "Internal error",
+    );
   });
 });
