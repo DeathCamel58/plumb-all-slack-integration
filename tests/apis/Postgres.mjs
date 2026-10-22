@@ -10,6 +10,7 @@ function modelMock() {
     update: jest.fn(),
     create: jest.fn(),
     deleteMany: jest.fn(),
+    updateMany: jest.fn(),
   };
 }
 
@@ -26,6 +27,10 @@ const prismaMock = {
   timeSheetEntry: modelMock(),
   user: modelMock(),
 };
+// Non-enumerable, so loops over the models skip it
+Object.defineProperty(prismaMock, "$transaction", {
+  value: (fn) => fn(prismaMock),
+});
 
 jest.unstable_mockModule("../../util/events.js", () => ({
   default: {
@@ -55,6 +60,7 @@ const jobCreateUpdate = handlerFor("db-JOB_CREATE_UPDATE");
 const quoteCreateUpdate = handlerFor("db-QUOTE_CREATE_UPDATE");
 const timesheetCreateUpdate = handlerFor("db-TIMESHEET_CREATE_UPDATE");
 const timesheetDestroy = handlerFor("db-TIMESHEET_DESTROY");
+const clientDestroy = handlerFor("db-CLIENT_DESTROY");
 
 /**
  * Builds a P2002 in the shape @prisma/adapter-pg produces. The driver adapter
@@ -301,5 +307,85 @@ describe("timesheetDestroy", () => {
     await expect(timesheetDestroy("timesheet-1")).resolves.toBeUndefined();
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+});
+
+describe("clientDestroy", () => {
+  /** Records the order of every delete/update across models. */
+  let calls;
+
+  beforeEach(() => {
+    calls = [];
+    for (const [name, model] of Object.entries(prismaMock)) {
+      model.findMany.mockReset().mockResolvedValue([]);
+      model.deleteMany
+        .mockReset()
+        .mockImplementation(
+          async () => (calls.push(`${name}.delete`), { count: 1 }),
+        );
+      model.updateMany
+        .mockReset()
+        .mockImplementation(
+          async () => (calls.push(`${name}.update`), { count: 0 }),
+        );
+    }
+    prismaMock.quote.findMany.mockResolvedValue([{ id: "quote-1" }]);
+    prismaMock.job.findMany.mockResolvedValue([{ id: "job-1" }]);
+    prismaMock.invoice.findMany.mockResolvedValue([{ id: "invoice-1" }]);
+  });
+
+  test("deletes link rows and payments before the quotes, jobs and invoices they point at", async () => {
+    await clientDestroy("client-1");
+
+    const before = (a, b) =>
+      expect(calls.indexOf(a)).toBeLessThan(calls.indexOf(b));
+    before("quotesOnJobs.delete", "quote.delete");
+    before("quotesOnJobs.delete", "job.delete");
+    before("jobsOnInvoices.delete", "job.delete");
+    before("jobsOnInvoices.delete", "invoice.delete");
+    before("payment.delete", "invoice.delete");
+    before("timeSheetEntry.update", "job.delete");
+    before("expense.update", "job.delete");
+    before("property.delete", "client.delete");
+    expect(calls.at(-1)).toBe("client.delete");
+
+    expect(prismaMock.quotesOnJobs.deleteMany).toHaveBeenCalledWith({
+      where: {
+        OR: [{ quoteId: { in: ["quote-1"] } }, { jobId: { in: ["job-1"] } }],
+      },
+    });
+    expect(prismaMock.payment.deleteMany).toHaveBeenCalledWith({
+      where: {
+        OR: [{ client: "client-1" }, { invoice: { in: ["invoice-1"] } }],
+      },
+    });
+  });
+
+  test("keeps timesheets and expenses, clearing their client and job", async () => {
+    await clientDestroy("client-1");
+
+    expect(prismaMock.timeSheetEntry.updateMany).toHaveBeenCalledWith({
+      where: { client: "client-1" },
+      data: { client: null },
+    });
+    expect(prismaMock.timeSheetEntry.updateMany).toHaveBeenCalledWith({
+      where: { job: { in: ["job-1"] } },
+      data: { job: null },
+    });
+    expect(prismaMock.expense.updateMany).toHaveBeenCalledWith({
+      where: { linkedJob: { in: ["job-1"] } },
+      data: { linkedJob: null },
+    });
+    expect(prismaMock.timeSheetEntry.deleteMany).not.toHaveBeenCalled();
+    expect(prismaMock.expense.deleteMany).not.toHaveBeenCalled();
+  });
+
+  test("catches a failed delete instead of rejecting", async () => {
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    prismaMock.quote.deleteMany.mockRejectedValue(new Error("FK violation"));
+
+    await expect(clientDestroy("client-1")).resolves.toBeUndefined();
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
   });
 });

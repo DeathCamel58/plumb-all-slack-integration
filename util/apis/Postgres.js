@@ -122,35 +122,65 @@ async function clientCreateUpdate(data) {
 }
 events.on("db-CLIENT_CREATE_UPDATE", clientCreateUpdate);
 
+/**
+ * Removes a client and everything of theirs. Link rows and payments are
+ * deleted before the rows they point at, and timesheets and expenses (which
+ * belong to employees) are kept with their client and job references cleared.
+ * @param {string} id - Jobber client ID
+ */
 async function clientDestroy(id) {
-  // Delete all related quotes
-  await prisma.quote.deleteMany({
-    where: { clientId: id },
-  });
+  try {
+    await prisma.$transaction(async (tx) => {
+      const ids = async (model, where) =>
+        (await tx[model].findMany({ where, select: { id: true } })).map(
+          (row) => row.id,
+        );
+      const quoteIds = await ids("quote", { clientId: id });
+      const jobIds = await ids("job", { clientId: id });
+      const invoiceIds = await ids("invoice", { clientId: id });
 
-  // Delete all related jobs
-  await prisma.job.deleteMany({
-    where: { clientId: id },
-  });
+      await tx.quotesOnJobs.deleteMany({
+        where: {
+          OR: [{ quoteId: { in: quoteIds } }, { jobId: { in: jobIds } }],
+        },
+      });
+      await tx.jobsOnInvoices.deleteMany({
+        where: {
+          OR: [{ jobId: { in: jobIds } }, { invoiceId: { in: invoiceIds } }],
+        },
+      });
+      await tx.payment.deleteMany({
+        where: { OR: [{ client: id }, { invoice: { in: invoiceIds } }] },
+      });
+      await tx.timeSheetEntry.updateMany({
+        where: { client: id },
+        data: { client: null },
+      });
+      await tx.timeSheetEntry.updateMany({
+        where: { job: { in: jobIds } },
+        data: { job: null },
+      });
+      await tx.expense.updateMany({
+        where: { linkedJob: { in: jobIds } },
+        data: { linkedJob: null },
+      });
 
-  // Delete all related invoices
-  await prisma.invoice.deleteMany({
-    where: { clientId: id },
-  });
+      await tx.quote.deleteMany({ where: { clientId: id } });
+      await tx.job.deleteMany({ where: { clientId: id } });
+      await tx.invoice.deleteMany({ where: { clientId: id } });
+      await tx.property.deleteMany({ where: { client: id } });
 
-  // Delete all related properties
-  await prisma.property.deleteMany({
-    where: { client: id },
-  });
-
-  // Now safely delete the client (may not exist if never synced)
-  let deleted = await prisma.client.deleteMany({
-    where: { id },
-  });
-  if (deleted.count > 0) {
-    console.log("Postgres: Destroyed client");
-  } else {
-    console.log("Postgres: Client not found in DB, nothing to delete");
+      // The client may not exist if it was never synced
+      const deleted = await tx.client.deleteMany({ where: { id } });
+      if (deleted.count > 0) {
+        console.log("Postgres: Destroyed client");
+      } else {
+        console.log("Postgres: Client not found in DB, nothing to delete");
+      }
+    });
+  } catch (e) {
+    Sentry.captureException(e, { extra: { clientId: id } });
+    console.error(`Postgres: Error destroying client ${id}:`, e);
   }
 }
 events.on("db-CLIENT_DESTROY", clientDestroy);
