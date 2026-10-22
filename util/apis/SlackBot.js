@@ -924,10 +924,10 @@ async function unfurlMessage(event) {
     },
   ];
 
-  // Check for Jobber URLs (e.g. https://secure.getjobber.com/invoices/152385939)
+  // Check for Jobber URLs (e.g. https://secure.getjobber.com/invoices/152385939, jobs are /work_orders/)
   // Parse these before stripping URLs from the text
   let jobberUrls = event.text.matchAll(
-    /https:\/\/secure\.getjobber\.com\/(invoices|jobs|quotes)\/(\d+)/gi,
+    /https:\/\/secure\.getjobber\.com\/(invoices|jobs|work_orders|quotes)\/(\d+)/gi,
   );
   for (let match of jobberUrls) {
     let type = match[1].toLowerCase();
@@ -941,7 +941,8 @@ async function unfurlMessage(event) {
           if (invoice) needToUnfurl.invoices.push(invoice);
           break;
         }
-        case "jobs": {
+        case "jobs":
+        case "work_orders": {
           let job = await Jobber.getJobData(graphqlId);
           if (job) needToUnfurl.jobs.push(job);
           break;
