@@ -1182,6 +1182,7 @@ query OpenJobQuery {
             id
             jobNumber
             title
+            startAt
             client {
                 name
             }
@@ -1224,6 +1225,11 @@ query OpenJobQuery {
     let jobResponse = await makeRequest(query);
 
     for (let job of jobResponse.jobs.nodes) {
+      // Skip jobs that haven't started yet
+      if (job.startAt && new Date(job.startAt) > new Date()) {
+        continue;
+      }
+
       // Use a number of different techniques to attempt to identify the user who created the job
       let user = "unknown";
       if (job.salesperson !== null && job.salesperson.name !== null) {
