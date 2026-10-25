@@ -644,7 +644,10 @@ export async function logCallRailCall(call) {
     const ids = await searchByPhone(phone);
     // Same fallback identity sendClientToPostHog uses for a new caller
     const id = ids[0] || phone;
-    const source = call.source_name || call.source || null;
+    // source is the caller's marketing source (Google Ads, Google Organic,
+    // Direct, ...); source_name is the tracking number's name (e.g. "Website
+    // pool"), which says nothing about where a website caller came from
+    const source = call.source || call.source_name || null;
 
     let existingSource = null;
     if (ids[0]) {
@@ -686,6 +689,7 @@ export async function logCallRailCall(call) {
         direction: call.direction || null,
         hasGclid: Boolean(call.gclid),
         trackingNumber: call.tracking_phone_number || null,
+        trackerName: call.source_name || null,
         callId: call.resource_id || null,
       },
     });

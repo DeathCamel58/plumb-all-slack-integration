@@ -31,7 +31,7 @@ const CALL = {
   medium: "cpc",
   campaign: "Septic",
   source: "Google Ads",
-  source_name: "Google Ads",
+  source_name: "Google Ads Assets",
   tracking_phone_number: "+17705550100",
   start_time: "2026-10-21T09:15:00.000-04:00",
 };
@@ -83,6 +83,7 @@ describe("logCallRailCall", () => {
       direction: "inbound",
       hasGclid: true,
       trackingNumber: "+17705550100",
+      trackerName: "Google Ads Assets",
       callId: "CAL123",
     });
     expect(JSON.stringify(event.properties)).not.toContain("4045551234");
@@ -115,6 +116,27 @@ describe("logCallRailCall", () => {
     expect(identify.$set.callrailSource).toBe("Google Ads");
     // No person lookup by distinct_id for a brand-new caller
     expect(fetchMock.mock.calls.some(([url]) => url.includes("distinct_id="))).toBe(false);
+  });
+
+  test("website pool calls use the caller's marketing source, not the pool's name", async () => {
+    posthog({ phoneIds: ["client-1"], existingSource: "none" });
+
+    await logCallRailCall({ ...CALL, source: "Google Organic", source_name: "Website pool", medium: "Organic", gclid: "" });
+
+    const event = captures().find((c) => c.event === "callrail call");
+    expect(event.properties.source).toBe("Google Organic");
+    expect(event.properties.trackerName).toBe("Website pool");
+    const identify = captures().find((c) => c.event === "$identify");
+    expect(identify.$set.latestCallrailSource).toBe("Google Organic");
+    expect(identify.$set.callrailSource).toBe("Google Organic");
+  });
+
+  test("falls back to the tracking number's name when CallRail sends no source", async () => {
+    posthog({ phoneIds: ["client-1"] });
+
+    await logCallRailCall({ ...CALL, source: "", source_name: "Nextdoor" });
+
+    expect(captures().find((c) => c.event === "callrail call").properties.source).toBe("Nextdoor");
   });
 
   test("never calls the CallRail API", async () => {
