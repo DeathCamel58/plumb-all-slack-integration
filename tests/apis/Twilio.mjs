@@ -6,6 +6,7 @@ const resolveUserByPhoneNumberMock = jest.fn();
 const sendMessageBlocksMock = jest.fn();
 const uploadFileMock = jest.fn();
 const captureExceptionMock = jest.fn();
+const captureMessageMock = jest.fn();
 
 const txFindFirstMock = jest.fn();
 const txUpdateManyMock = jest.fn();
@@ -161,7 +162,7 @@ jest.unstable_mockModule("../../util/apis/SlackBot.js", () => ({
 
 jest.unstable_mockModule("@sentry/node", () => ({
   captureException: captureExceptionMock,
-  captureMessage: jest.fn(),
+  captureMessage: captureMessageMock,
 }));
 
 const twilioFactoryMock = jest.fn(() => clientMock);
@@ -194,6 +195,7 @@ beforeEach(() => {
   sendMessageBlocksMock.mockReset();
   uploadFileMock.mockReset();
   captureExceptionMock.mockReset();
+  captureMessageMock.mockReset();
 
   prismaMock.twilioNumber.update.mockReset();
   prismaMock.twilioNumber.findMany.mockReset();
@@ -252,12 +254,10 @@ describe("Twilio", () => {
   });
 
   test("getOrAssignEmployeeNumber assigns first available unassigned number", async () => {
-    txFindFirstMock
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({
-        id: "+15550002222",
-        phoneNumber: "+15550002222",
-      });
+    txFindFirstMock.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      id: "+15550002222",
+      phoneNumber: "+15550002222",
+    });
     txUpdateManyMock.mockResolvedValue({ count: 1 });
     prismaMock.twilioNumber.updateMany.mockResolvedValue({ count: 1 });
 
@@ -326,9 +326,97 @@ describe("Twilio", () => {
   });
 
   test("handleInboundCall without To routes to fallback number", async () => {
-    const twiml = await Twilio.handleInboundCall({ body: { From: "+15554443333" } }, {});
+    const twiml = await Twilio.handleInboundCall(
+      { body: { From: "+15554443333" } },
+      {},
+    );
 
     expect(twiml).toContain("+15559990000");
     expect(captureExceptionMock).toHaveBeenCalled();
+  });
+  describe("handleRecordingDone without a Slack thread", () => {
+    function recordingRequest() {
+      return {
+        body: {
+          RecordingSid: "RE1",
+          CallSid: "CA-child",
+          RecordingDuration: "42",
+          RecordingUrl: "https://api.twilio.test/recording",
+        },
+      };
+    }
+
+    function getUpload() {
+      return eventsEmitMock.mock.calls.find(
+        ([name]) => name === "slackbot-upload-file",
+      );
+    }
+
+    beforeEach(() => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => new ArrayBuffer(4),
+        text: async () => "{}",
+        json: async () => ({ results: [] }),
+      });
+      prismaMock.twilioContact.findUnique.mockResolvedValue({
+        id: "+15553334444",
+        slackThreadId: null,
+      });
+      prismaMock.twilioNumber.findUnique.mockResolvedValue(null);
+    });
+
+    test("an inbound call starts a thread for the caller without a Sentry warning", async () => {
+      callsFetchMock
+        .mockResolvedValueOnce({
+          sid: "CA-child",
+          direction: "outbound-dial",
+          from: "+15553334444",
+          to: "+15556667777",
+          parentCallSid: "CA-parent",
+        })
+        .mockResolvedValueOnce({
+          sid: "CA-parent",
+          direction: "inbound",
+          from: "+15553334444",
+          to: "+15550001111",
+        });
+      const res = { status: jest.fn(() => res), send: jest.fn() };
+
+      await Twilio.handleRecordingDone(recordingRequest(), res);
+
+      expect(captureMessageMock).not.toHaveBeenCalled();
+      const upload = getUpload();
+      expect(upload[6]).toBeNull();
+      expect(upload[9]).toEqual({ from: "+15553334444" });
+    });
+
+    test("an outbound call saves the thread on the customer, not our number, and warns", async () => {
+      callsFetchMock.mockResolvedValueOnce({
+        sid: "CA-parent",
+        direction: "outbound-api",
+        from: "+15550001111",
+        to: "+15556667777",
+        parentCallSid: null,
+      });
+      callsListMock.mockResolvedValue([
+        {
+          sid: "CA-child",
+          direction: "outbound-dial",
+          from: "+15550001111",
+          to: "+15553334444",
+        },
+      ]);
+      const res = { status: jest.fn(() => res), send: jest.fn() };
+
+      await Twilio.handleRecordingDone(recordingRequest(), res);
+
+      expect(captureMessageMock).toHaveBeenCalledWith(
+        "Recording handler: no slackThreadId for customer",
+        expect.anything(),
+      );
+      expect(getUpload()[9]).toEqual({ from: "+15553334444" });
+    });
   });
 });

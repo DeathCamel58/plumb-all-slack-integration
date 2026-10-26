@@ -1353,27 +1353,32 @@ export async function handleRecordingDone(req, res) {
       console.log(
         `Twilio Recording: No slackThreadId — creating new thread for recording`,
       );
-      Sentry.captureMessage(
-        "Recording handler: no slackThreadId for customer",
-        {
-          level: "warning",
-          extra: {
-            customerNumber,
-            ourNumber,
-            recordingSid,
-            recordingCallSid,
-            resolutionPath,
-            twilioContact: twilioContact ?? null,
-            thisCallSid: thisCall.sid,
-            thisCallDirection: thisCall.direction,
-            thisCallFrom: thisCall.from,
-            thisCallTo: thisCall.to,
-            thisCallParent: thisCall.parentCallSid || null,
-            resolvedCallSid: call.sid,
-            resolvedCallDirection: call.direction,
+      // An answered inbound call from a new caller has no thread until its
+      // recording creates one. Outbound calls start from a Slack thread, so
+      // a missing one there is unexpected.
+      if (resolutionPath !== "inbound") {
+        Sentry.captureMessage(
+          "Recording handler: no slackThreadId for customer",
+          {
+            level: "warning",
+            extra: {
+              customerNumber,
+              ourNumber,
+              recordingSid,
+              recordingCallSid,
+              resolutionPath,
+              twilioContact: twilioContact ?? null,
+              thisCallSid: thisCall.sid,
+              thisCallDirection: thisCall.direction,
+              thisCallFrom: thisCall.from,
+              thisCallTo: thisCall.to,
+              thisCallParent: thisCall.parentCallSid || null,
+              resolvedCallSid: call.sid,
+              resolvedCallDirection: call.direction,
+            },
           },
-        },
-      );
+        );
+      }
       let twilioNumber = await prisma.twilioNumber.findUnique({
         where: { id: ourNumber },
       });
@@ -1429,7 +1434,9 @@ export async function handleRecordingDone(req, res) {
         null,
         blocks,
         `Call To ${toName} From ${normalizePhoneNumber(customerNumber)}`,
-        call,
+        // The new thread is saved on the customer's TwilioContact. call.from
+        // is only the customer on inbound calls; outbound it's our number.
+        { from: customerNumber },
       );
     }
 
