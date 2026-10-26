@@ -5,6 +5,32 @@ import events from "../events.js";
 import * as Sentry from "@sentry/node";
 
 const JOBBER_BASE_URL = "https://api.getjobber.com/api/graphql";
+
+/** Every custom field type, with its label and value */
+const CUSTOM_FIELDS = `
+        customFields {
+            __typename
+            ... on CustomFieldText { label valueText }
+            ... on CustomFieldNumeric { label valueNumeric unit }
+            ... on CustomFieldTrueFalse { label valueTrueFalse }
+            ... on CustomFieldDropdown { label valueDropdown }
+            ... on CustomFieldLink { label valueLink { text url } }
+            ... on CustomFieldArea { label unit valueArea { length width } }
+        }`;
+
+/** Line item fields shared by quotes, jobs and invoices */
+const LINE_ITEM_FIELDS = `
+                id
+                name
+                description
+                category
+                quantity
+                unitPrice
+                totalPrice
+                taxable
+                createdAt
+                updatedAt
+                linkedProductOrService { id }`;
 let JOBBER_ACCESS_TOKEN;
 
 /**
@@ -381,25 +407,41 @@ query InvoiceQuery {
             paymentsTotal
             subtotal
             total
+            legacyDiscountAmount
+            nonTaxAmount
+            taxAmount
+            tipsTotal
         }
-        # billingAddress {
-        #     city
-        #     postalCode
-        #     province
-        #     street
-        #     street1
-        #     street2
-        # }
+        billingAddress {
+            city
+            country
+            postalCode
+            province
+            street
+            street1
+            street2
+        }
+        allowReviewRequest
+        clientHubUri
+        dateViewedInClientHub
+        waitingForFinancedPayment
+        voidDetails {
+            voidedAt
+            voidReasonCode
+            voidReasonDetails
+        }
+        lineItems (first: 100) {
+            nodes {${LINE_ITEM_FIELDS}
+                originalCost
+                date
+                jobLineItem { id }
+            }
+        }
         client {
             id
         }
         createdAt
-        customFields {
-            ... on CustomFieldText {
-                label
-                valueText
-            }
-        }
+        ${CUSTOM_FIELDS}
         dueDate
         id
         invoiceNet
@@ -560,6 +602,23 @@ query QuoteQuery {
             changesRequestedAt
             convertedAt
         }
+        sentAt
+        transitionedAt
+        eligibleForFinancing
+        request {
+            id
+        }
+        lineItems (first: 100) {
+            nodes {${LINE_ITEM_FIELDS}
+                unitCost
+                totalCost
+                markup
+                optional
+                recommended
+                textOnly
+                sortOrder
+            }
+        }
         message
         property {
             id
@@ -575,12 +634,7 @@ query QuoteQuery {
         }
         title
         updatedAt
-        customFields {
-            ... on CustomFieldText {
-                label
-                valueText
-            }
-        }
+        ${CUSTOM_FIELDS}
     }
 }
         `;
@@ -636,16 +690,17 @@ export async function getJobData(itemID) {
 query JobQuery {
     job (id: "${itemID}") {
         allowReviewRequest
-        #arrivalWindow
-        #billingType
-        #bookingConfirmationSentAt
+        billingType
+        bookingConfirmationSentAt
+        completedAndUninvoicedVisitsCount
+        completedAndUninvoicedVisitsTotal
         client {
             id
         }
         completedAt
         createdAt
-        #customFields
-        #defaultVisitTitle
+        ${CUSTOM_FIELDS}
+        defaultVisitTitle
         endAt
         #expenses
         id
@@ -655,28 +710,47 @@ query JobQuery {
                 id
             }
         }
-        #invoiceSchedule
-        #invoicedTotal
-        #jobs
-        #jobBalanceTotals
+        invoicedTotal
+        jobBalanceTotals {
+            outstandingAmount
+        }
+        jobCosting {
+            expenseCost
+            labourCost
+            labourDuration
+            lineItemCost
+            profitAmount
+            profitPercentage
+            totalCost
+            totalRevenue
+        }
         jobNumber
         jobStatus
         jobType
         jobberWebUri
-        #lineItems
-        #nextDateToSendReviewSms
+        lineItems (first: 100) {
+            nodes {${LINE_ITEM_FIELDS}
+                unitCost
+                totalCost
+            }
+        }
+        nextDateToSendReviewSms
         #noteAttachments
         #notes
         #paymentRecords
         property {
             id
         }
-        #quote
-        #request
+        quote {
+            id
+        }
+        request {
+            id
+        }
         salesperson {
             id
         }
-        #source
+        source
         startAt
         #timeSheetEntries
         title
@@ -748,10 +822,13 @@ query ClientQuery {
     phones {
       number
       primary
+      description
+      smsAllowed
     }
     emails {
       address
       primary
+      description
     }
     firstName
     isArchivable
@@ -766,12 +843,33 @@ query ClientQuery {
     title
     billingAddress {
       street
+      street1
+      street2
       city
       province
       postalCode
       country
     }
     updatedAt
+    balance
+    leadSource
+    utmMedium
+    sourceAttribution {
+      displayLeadSource
+      sourceText
+      metadata
+    }
+    receivesFollowUps
+    receivesInvoiceFollowUps
+    receivesQuoteFollowUps
+    receivesReminders
+    receivesReviewRequests
+    tags {
+      nodes {
+        label
+      }
+    }
+    ${CUSTOM_FIELDS}
   }
 }
         `;
@@ -790,6 +888,15 @@ export async function getPaymentData(itemID) {
   let query = `
 query PaymentQuery {
     paymentRecord (id: "${itemID}") {
+        __typename
+        rawAmount
+        refundableAmount
+        ... on JobberPaymentsCreditCardPaymentRecord {
+            tipAmount
+        }
+        ... on JobberPaymentsACHPaymentRecord {
+            tipAmount
+        }
         adjustmentType
         amount
         canEdit
@@ -871,10 +978,15 @@ query PropertyQuery {
             postalCode
             province
             street
+            street1
+            street2
         }
         client {
             id
         }
+        createdAt
+        name
+        ${CUSTOM_FIELDS}
         id
         isBillingAddress
         jobberWebUri
@@ -911,8 +1023,30 @@ query VisitQuery {
         completedAt
         createdAt
         createdBy {
+            id
             name {
                 full
+            }
+        }
+        completedBy
+        clientConfirmed
+        isRecurring
+        job {
+            id
+        }
+        property {
+            id
+        }
+        invoice {
+            id
+        }
+        arrivalWindow {
+            startAt
+            endAt
+        }
+        assignedUsers (first: 50) {
+            nodes {
+                id
             }
         }
         duration
@@ -975,6 +1109,14 @@ query RequestQuery {
         title
         updatedAt
         id
+        isArchivable
+        isScheduled
+        amounts {
+            total
+        }
+        salesperson {
+            id
+        }
     }
 }
         `;
@@ -986,6 +1128,35 @@ query RequestQuery {
   );
 
   return requestResponse["request"];
+}
+
+/**
+ * Runs Jobber product or service query for given itemID, and returns the data
+ * @param itemID The itemID in the webhook
+ * @returns {Promise<*>} The data for the product or service (null if deleted)
+ */
+export async function getProductOrServiceData(itemID) {
+  let query = `
+query ProductOrServiceQuery {
+    product (id: "${itemID}") {
+        id
+        name
+        description
+        category
+        defaultUnitCost
+        internalUnitCost
+        markup
+        durationMinutes
+        taxable
+        visible
+        ${CUSTOM_FIELDS}
+    }
+}
+        `;
+
+  let productResponse = await makeRequest(query);
+
+  return productResponse?.product ?? null;
 }
 
 /**
@@ -1024,11 +1195,14 @@ query RequestQuery {
           id
         }
         targetItem {
+          __typename
           ... on Visit {
             id
           }
         }
         targetDurationTotal
+        payable
+        timeSheetCategory
     }
 }
         `;
@@ -1039,7 +1213,8 @@ query RequestQuery {
   if (timesheet) {
     // API 2026-09-25 replaced visit/visitDurationTotal with targetItem/targetDurationTotal.
     // targetItem can also be a Job or Assessment; only a Visit maps to the old fields.
-    const isVisit = timesheet.targetItem?.id !== undefined;
+    timesheet.targetType = timesheet.targetItem?.__typename ?? null;
+    const isVisit = timesheet.targetType === "Visit";
     timesheet.visit = isVisit ? { id: timesheet.targetItem.id } : null;
     timesheet.visitDurationTotal = isVisit
       ? timesheet.targetDurationTotal
@@ -1149,6 +1324,16 @@ query UserQuery {
         }
         status
         uuid
+        assignedColor
+        timezone
+        address {
+            street
+            city
+            province
+            postalCode
+            country
+        }
+        ${CUSTOM_FIELDS}
     }
 }
         `;

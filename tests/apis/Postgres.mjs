@@ -6,9 +6,11 @@ const eventsOnMock = jest.fn();
 function modelMock() {
   return {
     findMany: jest.fn(),
+    findUnique: jest.fn(),
     upsert: jest.fn(),
     update: jest.fn(),
     create: jest.fn(),
+    createMany: jest.fn(),
     deleteMany: jest.fn(),
     updateMany: jest.fn(),
   };
@@ -20,6 +22,10 @@ const prismaMock = {
   invoice: modelMock(),
   job: modelMock(),
   jobsOnInvoices: modelMock(),
+  lineItem: modelMock(),
+  productOrService: modelMock(),
+  request: modelMock(),
+  visit: modelMock(),
   payment: modelMock(),
   property: modelMock(),
   quote: modelMock(),
@@ -29,7 +35,8 @@ const prismaMock = {
 };
 // Non-enumerable, so loops over the models skip it
 Object.defineProperty(prismaMock, "$transaction", {
-  value: (fn) => fn(prismaMock),
+  value: (arg) =>
+    typeof arg === "function" ? arg(prismaMock) : Promise.all(arg),
 });
 
 jest.unstable_mockModule("../../util/events.js", () => ({
@@ -51,7 +58,10 @@ jest.unstable_mockModule("../../util/apis/Jobber.js", () => ({
   getClientData: jest.fn(),
 }));
 
-await import("../../util/apis/Postgres.js");
+const { customFieldsJson, USER_REFRESH_MS } = await import(
+  "../../util/apis/Postgres.js"
+);
+const Jobber = await import("../../util/apis/Jobber.js");
 
 const handlerFor = (event) =>
   eventsOnMock.mock.calls.find(([name]) => name === event)[1];
@@ -60,6 +70,7 @@ const jobCreateUpdate = handlerFor("db-JOB_CREATE_UPDATE");
 const quoteCreateUpdate = handlerFor("db-QUOTE_CREATE_UPDATE");
 const timesheetCreateUpdate = handlerFor("db-TIMESHEET_CREATE_UPDATE");
 const timesheetDestroy = handlerFor("db-TIMESHEET_DESTROY");
+const visitCreateUpdate = handlerFor("db-VISIT_CREATE_UPDATE");
 const clientDestroy = handlerFor("db-CLIENT_DESTROY");
 const jobDestroy = handlerFor("db-JOB_DESTROY");
 const propertyDestroy = handlerFor("db-PROPERTY_DESTROY");
@@ -468,5 +479,197 @@ describe("propertyDestroy", () => {
     await expect(propertyDestroy("property-1")).resolves.toBeUndefined();
     expect(errorSpy).toHaveBeenCalled();
     errorSpy.mockRestore();
+  });
+});
+
+describe("customFieldsJson", () => {
+  test("flattens every custom field type to label/type/value", () => {
+    expect(
+      customFieldsJson([
+        { __typename: "CustomFieldText", label: "Referred By", valueText: "" },
+        {
+          __typename: "CustomFieldNumeric",
+          label: "Tank size",
+          valueNumeric: 1000,
+          unit: "gal",
+        },
+        {
+          __typename: "CustomFieldTrueFalse",
+          label: "Gate code",
+          valueTrueFalse: false,
+        },
+        {
+          __typename: "CustomFieldLink",
+          label: "Photos",
+          valueLink: { text: "Album", url: "https://example.com" },
+        },
+      ]),
+    ).toEqual([
+      { label: "Referred By", type: "CustomFieldText", value: "" },
+      {
+        label: "Tank size",
+        type: "CustomFieldNumeric",
+        value: 1000,
+        unit: "gal",
+      },
+      { label: "Gate code", type: "CustomFieldTrueFalse", value: false },
+      {
+        label: "Photos",
+        type: "CustomFieldLink",
+        value: { text: "Album", url: "https://example.com" },
+      },
+    ]);
+  });
+
+  test("leaves the column unchanged when the query didn't include them", () => {
+    expect(customFieldsJson(undefined)).toBeUndefined();
+  });
+});
+
+describe("quoteCreateUpdate fields", () => {
+  test("reads approval dates from lastTransitioned and tax from taxDetails", async () => {
+    await quoteCreateUpdate({
+      ...mockQuote,
+      lastTransitioned: {
+        approvedAt: "2026-02-01T00:00:00Z",
+        changesRequestedAt: null,
+        convertedAt: "2026-02-02T00:00:00Z",
+      },
+      taxDetails: { totalTaxAmount: 7.5 },
+    });
+
+    const { create } = prismaMock.quote.upsert.mock.calls[0][0];
+    expect(create.approvedAt).toEqual(new Date("2026-02-01T00:00:00Z"));
+    expect(create.changesRequestedAt).toBeNull();
+    expect(create.convertedAt).toEqual(new Date("2026-02-02T00:00:00Z"));
+    expect(create.totalTaxAmount).toBe(7.5);
+  });
+
+  test("replaces the quote's line items", async () => {
+    await quoteCreateUpdate({
+      ...mockQuote,
+      lineItems: {
+        nodes: [
+          {
+            id: "qli-1",
+            name: "Install toilet",
+            quantity: 1,
+            unitPrice: 450,
+            totalPrice: 450,
+            linkedProductOrService: { id: "pos-1" },
+          },
+        ],
+      },
+    });
+
+    expect(prismaMock.lineItem.deleteMany).toHaveBeenCalledWith({
+      where: { quoteId: "quote-1" },
+    });
+    const { data } = prismaMock.lineItem.createMany.mock.calls[0][0];
+    expect(data).toEqual([
+      expect.objectContaining({
+        id: "qli-1",
+        kind: "quote",
+        quoteId: "quote-1",
+        productOrServiceId: "pos-1",
+        totalPrice: 450,
+      }),
+    ]);
+  });
+});
+
+describe("jobCreateUpdate fields", () => {
+  test("stores an unfinished job's missing completedAt as null, not the epoch", async () => {
+    await jobCreateUpdate({ ...mockJob, completedAt: null });
+
+    const { create } = prismaMock.job.upsert.mock.calls[0][0];
+    expect(create.completedAt).toBeNull();
+  });
+
+  test("stores job costing and the linked quote", async () => {
+    await jobCreateUpdate({
+      ...mockJob,
+      quote: { id: "quote-1" },
+      jobCosting: { labourCost: 120, profitAmount: 300, totalRevenue: 500 },
+    });
+
+    const { create } = prismaMock.job.upsert.mock.calls[0][0];
+    expect(create).toEqual(
+      expect.objectContaining({
+        quoteId: "quote-1",
+        labourCost: 120,
+        profitAmount: 300,
+        totalRevenue: 500,
+      }),
+    );
+  });
+});
+
+describe("user refresh", () => {
+  beforeEach(() => {
+    Jobber.getUserData.mockReset();
+  });
+
+  const timesheet = {
+    id: "ts-1",
+    finalDuration: 60,
+    user: { id: "user-1" },
+  };
+
+  test("doesn't refetch a user synced recently", async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ syncedAt: new Date() });
+
+    await timesheetCreateUpdate(timesheet);
+
+    expect(Jobber.getUserData).not.toHaveBeenCalled();
+  });
+
+  test("refetches a user last synced more than a day ago", async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      syncedAt: new Date(Date.now() - USER_REFRESH_MS - 1000),
+    });
+    Jobber.getUserData.mockResolvedValue({
+      id: "user-1",
+      createdAt: "2025-01-01T00:00:00Z",
+      email: { raw: "tech@example.com" },
+      isAccountAdmin: false,
+      isAccountOwner: false,
+      name: { first: "Pat", last: "Tech", full: "Pat Tech" },
+      phone: { friendly: "(555) 555-5555" },
+      status: "ACTIVATED",
+    });
+
+    await timesheetCreateUpdate(timesheet);
+
+    expect(Jobber.getUserData).toHaveBeenCalledWith("user-1");
+    const { create } = prismaMock.user.upsert.mock.calls[0][0];
+    expect(create).toEqual(
+      expect.objectContaining({ firstName: "Pat", syncedAt: expect.any(Date) }),
+    );
+  });
+});
+
+describe("visitCreateUpdate", () => {
+  test("stores the visit with its job and assigned users", async () => {
+    await visitCreateUpdate({
+      id: "visit-1",
+      job: { id: "job-1" },
+      client: { id: "client-1" },
+      startAt: "2026-03-01T14:00:00Z",
+      completedAt: null,
+      assignedUsers: { nodes: [{ id: "user-1" }, { id: "user-2" }] },
+    });
+
+    const { where, create } = prismaMock.visit.upsert.mock.calls[0][0];
+    expect(where).toEqual({ id: "visit-1" });
+    expect(create).toEqual(
+      expect.objectContaining({
+        id: "visit-1",
+        jobId: "job-1",
+        completedAt: null,
+        startAt: new Date("2026-03-01T14:00:00Z"),
+        assignedUserIds: ["user-1", "user-2"],
+      }),
+    );
   });
 });

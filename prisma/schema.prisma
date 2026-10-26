@@ -15,25 +15,47 @@ datasource db {
 // }
 
 model Client {
-  companyName      String?
-  createdAt        DateTime
-  firstName        String?
-  id               String           @id
-  isArchivable     Boolean
-  isArchived       Boolean
-  isCompany        Boolean
-  isLead           Boolean
-  lastName         String?
-  name             String?
-  title            String?
-  updatedAt        DateTime
-  jobberWebUri     String?
-  invoices         Invoice[]
-  jobs             Job[]
-  quotes           Quote[]
-  payments         Payment[]
-  property         Property[]
-  timeSheetEntries TimeSheetEntry[] @relation("TimeSheetEntryToClient")
+  companyName              String?
+  createdAt                DateTime
+  firstName                String?
+  id                       String           @id
+  isArchivable             Boolean
+  isArchived               Boolean
+  isCompany                Boolean
+  isLead                   Boolean
+  lastName                 String?
+  name                     String?
+  title                    String?
+  updatedAt                DateTime
+  jobberWebUri             String?
+  balance                  Float?
+  billingStreet            String?
+  billingStreet1           String?
+  billingStreet2           String?
+  billingCity              String?
+  billingProvince          String?
+  billingPostalCode        String?
+  billingCountry           String?
+  leadSource               String?
+  sourceText               String?
+  sourceMetadata           Json?
+  utmMedium                String?
+  secondaryName            String?
+  receivesFollowUps        Boolean?
+  receivesInvoiceFollowUps Boolean?
+  receivesQuoteFollowUps   Boolean?
+  receivesReminders        Boolean?
+  receivesReviewRequests   Boolean?
+  phones                   Json?
+  emails                   Json?
+  tags                     String[]
+  customFields             Json?
+  invoices                 Invoice[]
+  jobs                     Job[]
+  quotes                   Quote[]
+  payments                 Payment[]
+  property                 Property[]
+  timeSheetEntries         TimeSheetEntry[] @relation("TimeSheetEntryToClient")
 }
 
 model Expense {
@@ -55,30 +77,49 @@ model Expense {
 }
 
 model Invoice {
-  depositAmount  Float
-  discountAmount Float
-  invoiceBalance Float
-  paymentsTotal  Float
-  subtotal       Float
-  total          Float
-  clientId       String
-  createdAt      DateTime
-  dueDate        DateTime?
-  id             String           @id
-  invoiceNet     Int?
-  invoiceNumber  Int
-  invoiceStatus  String
-  issuedDate     DateTime?
-  jobberWebUri   String?
-  message        String?
-  receivedDate   DateTime?
-  salesperson    String?
-  subject        String
-  updatedAt      DateTime
-  clients        Client           @relation(fields: [clientId], references: [id])
-  users          User?            @relation(fields: [salesperson], references: [id])
-  jobs           JobsOnInvoices[]
-  payments       Payment[]
+  depositAmount             Float
+  discountAmount            Float
+  invoiceBalance            Float
+  paymentsTotal             Float
+  subtotal                  Float
+  total                     Float
+  clientId                  String
+  createdAt                 DateTime
+  dueDate                   DateTime?
+  id                        String           @id
+  invoiceNet                Int?
+  invoiceNumber             Int
+  invoiceStatus             String
+  issuedDate                DateTime?
+  jobberWebUri              String?
+  message                   String?
+  receivedDate              DateTime?
+  salesperson               String?
+  subject                   String
+  updatedAt                 DateTime
+  legacyDiscountAmount      Float?
+  nonTaxAmount              Float?
+  taxAmount                 Float?
+  tipsTotal                 Float?
+  billingStreet             String?
+  billingStreet1            String?
+  billingStreet2            String?
+  billingCity               String?
+  billingProvince           String?
+  billingPostalCode         String?
+  billingCountry            String?
+  clientHubUri              String?
+  dateViewedInClientHub     DateTime?
+  allowReviewRequest        Boolean?
+  waitingForFinancedPayment Boolean?
+  voidedAt                  DateTime?
+  voidReasonCode            String?
+  voidReasonDetails         String?
+  customFields              Json?
+  clients                   Client           @relation(fields: [clientId], references: [id])
+  users                     User?            @relation(fields: [salesperson], references: [id])
+  jobs                      JobsOnInvoices[]
+  payments                  Payment[]
 }
 
 model JobsOnInvoices {
@@ -91,32 +132,52 @@ model JobsOnInvoices {
 }
 
 model Job {
-  allowReviewRequest               Boolean
-  clientId                         String
-  completedAt                      DateTime
-  createdAt                        DateTime
-  endAt                            DateTime
-  id                               String           @id
-  instructions                     String?
-  jobNumber                        Int              @unique(map: "jobs_pk")
-  jobStatus                        String?
-  jobType                          String?
-  jobberWebUri                     String?
-  property                         String
-  salesperson                      String?
-  startAt                          DateTime
-  title                            String?
-  total                            Float
-  uninvoicedTotal                  Float
-  updatedAt                        DateTime
-  willClientBeAutomaticallyCharged Boolean
-  expenses                         Expense[]
-  invoices                         JobsOnInvoices[]
-  quotes                           QuotesOnJobs[]
-  clients                          Client           @relation(fields: [clientId], references: [id])
-  properties                       Property         @relation(fields: [property], references: [id])
-  users                            User?            @relation(fields: [salesperson], references: [id])
-  timeSheetEntry                   TimeSheetEntry[]
+  allowReviewRequest                Boolean
+  clientId                          String
+  completedAt                       DateTime?
+  createdAt                         DateTime
+  endAt                             DateTime?
+  id                                String           @id
+  instructions                      String?
+  jobNumber                         Int              @unique(map: "jobs_pk")
+  jobStatus                         String?
+  jobType                           String?
+  jobberWebUri                      String?
+  property                          String
+  salesperson                       String?
+  startAt                           DateTime?
+  title                             String?
+  total                             Float
+  uninvoicedTotal                   Float
+  updatedAt                         DateTime
+  willClientBeAutomaticallyCharged  Boolean
+  billingType                       String?
+  bookingConfirmationSentAt         DateTime?
+  completedAndUninvoicedVisitsCount Int?
+  completedAndUninvoicedVisitsTotal Float?
+  defaultVisitTitle                 String?
+  invoicedTotal                     Float?
+  nextDateToSendReviewSms           DateTime?
+  source                            String?
+  quoteId                           String?
+  requestId                         String?
+  outstandingAmount                 Float?
+  expenseCost                       Float?
+  labourCost                        Float?
+  labourDuration                    Int?
+  lineItemCost                      Float?
+  profitAmount                      Float?
+  profitPercentage                  Float?
+  totalCost                         Float?
+  totalRevenue                      Float?
+  customFields                      Json?
+  expenses                          Expense[]
+  invoices                          JobsOnInvoices[]
+  quotes                            QuotesOnJobs[]
+  clients                           Client           @relation(fields: [clientId], references: [id])
+  properties                        Property         @relation(fields: [property], references: [id])
+  users                             User?            @relation(fields: [salesperson], references: [id])
+  timeSheetEntry                    TimeSheetEntry[]
 }
 
 model QuotesOnJobs {
@@ -160,29 +221,39 @@ model Quote {
   salesperson              User?          @relation(fields: [salespersonId], references: [id])
   totalTaxAmount           Float?
   title                    String?
+  sentAt                   DateTime?
+  transitionedAt           DateTime?
+  eligibleForFinancing     Boolean?
+  requestId                String?
+  customFields             Json?
   updatedAt                DateTime
 }
 
 model Payment {
-  adjustmentType String
-  amount         Float
-  canEdit        Boolean
-  client         String
-  details        String
-  entryDate      DateTime
-  id             String    @id
-  invoice        String?
-  paymentOrigin  String
-  sentAt         DateTime?
-  paymentType    String?
-  clients        Client    @relation(fields: [client], references: [id])
-  invoices       Invoice?  @relation(fields: [invoice], references: [id])
+  adjustmentType   String
+  amount           Float
+  canEdit          Boolean
+  client           String
+  details          String
+  entryDate        DateTime
+  id               String    @id
+  invoice          String?
+  paymentOrigin    String
+  sentAt           DateTime?
+  paymentType      String?
+  paymentKind      String?
+  quote            String?
+  tipAmount        Float?
+  rawAmount        Float?
+  refundableAmount Float?
+  clients          Client    @relation(fields: [client], references: [id])
+  invoices         Invoice?  @relation(fields: [invoice], references: [id])
 }
 
 model Property {
   city             String?
   country          String?
-  id               String  @id
+  id               String    @id
   latitude         Float?
   longitude        Float?
   postalCode       String?
@@ -190,9 +261,15 @@ model Property {
   street           String?
   isBillingAddress Boolean
   jobberWebUri     String
+  name             String?
+  street1          String?
+  street2          String?
+  routingOrder     Int?
+  createdAt        DateTime?
+  customFields     Json?
   jobs             Job[]
   client           String
-  clients          Client  @relation(fields: [client], references: [id])
+  clients          Client    @relation(fields: [client], references: [id])
   quotes           Quote[]
 }
 
@@ -208,6 +285,20 @@ model User {
   earnsCommission      Boolean          @default(false)
   commissionPercent    Float            @default(0)
   hourlyRate           Float?
+  firstName            String?
+  lastName             String?
+  assignedColor        String?
+  lastLoginAt          DateTime?
+  timezone             String?
+  uuid                 String?
+  addressStreet        String?
+  addressCity          String?
+  addressProvince      String?
+  addressPostalCode    String?
+  addressCountry       String?
+  customFields         Json?
+  // When the row was last refreshed from Jobber (Jobber sends no user webhooks)
+  syncedAt             DateTime?
   expensesEntered      Expense[]        @relation("expensesEnteredByTousers")
   expensesPaid         Expense[]        @relation("expensesPaidByToUsers")
   expensesReimbursable Expense[]        @relation("expensesReimbursableToUsers")
@@ -242,8 +333,112 @@ model TimeSheetEntry {
   user               String?
   users              User?     @relation("TimeSheetEntryUserToUser", fields: [user], references: [id])
   visit              String?
+  payable            Boolean?
+  timeSheetCategory  String?
+  targetType         String?
   // visits        Visit?    @relation(fields: [visit], references: [id])
   visitDurationTotal Int?
+}
+
+// The models below have no foreign keys, so a record can be saved before the
+// records it points at (webhooks and backfills arrive in any order).
+
+model Visit {
+  id                   String    @id
+  jobId                String?
+  clientId             String?
+  propertyId           String?
+  invoiceId            String?
+  title                String?
+  instructions         String?
+  startAt              DateTime?
+  endAt                DateTime?
+  completedAt          DateTime?
+  completedBy          String?
+  createdAt            DateTime?
+  createdById          String?
+  duration             Int?
+  allDay               Boolean?
+  isComplete           Boolean?
+  isRecurring          Boolean?
+  isLastScheduledVisit Boolean?
+  clientConfirmed      Boolean?
+  visitStatus          String?
+  arrivalWindowStartAt DateTime?
+  arrivalWindowEndAt   DateTime?
+  assignedUserIds      String[]
+
+  @@index([jobId])
+}
+
+model Request {
+  id                String    @id
+  clientId          String?
+  propertyId        String?
+  referringClientId String?
+  salespersonId     String?
+  title             String?
+  companyName       String?
+  contactName       String?
+  email             String?
+  phone             String?
+  source            String?
+  requestStatus     String?
+  isArchivable      Boolean?
+  isScheduled       Boolean?
+  total             Float?
+  jobberWebUri      String?
+  createdAt         DateTime?
+  updatedAt         DateTime?
+
+  @@index([clientId])
+}
+
+/// Line items of quotes, jobs and invoices. `kind` is "quote", "job" or "invoice".
+model LineItem {
+  id                 String    @id
+  kind               String
+  quoteId            String?
+  jobId              String?
+  invoiceId          String?
+  productOrServiceId String?
+  jobLineItemId      String?
+  name               String?
+  description        String?
+  category           String?
+  quantity           Float?
+  unitPrice          Float?
+  unitCost           Float?
+  totalPrice         Float?
+  totalCost          Float?
+  originalCost       Float?
+  markup             Float?
+  taxable            Boolean?
+  optional           Boolean?
+  recommended        Boolean?
+  textOnly           Boolean?
+  sortOrder          Int?
+  date               DateTime?
+  createdAt          DateTime?
+  updatedAt          DateTime?
+
+  @@index([quoteId])
+  @@index([jobId])
+  @@index([invoiceId])
+}
+
+model ProductOrService {
+  id               String   @id
+  name             String?
+  description      String?
+  category         String?
+  defaultUnitCost  Float?
+  internalUnitCost Float?
+  markup           Float?
+  durationMinutes  Int?
+  taxable          Boolean?
+  visible          Boolean?
+  customFields     Json?
 }
 
 model TwilioNumber {

@@ -16,6 +16,81 @@ import {
 
 export { uniqueConstraintFields, isUniqueConstraintOn };
 
+/** Jobber sends no user webhooks, so a stored user is refreshed when it's this old */
+export const USER_REFRESH_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Parses an optional Jobber timestamp. `new Date(null)` is the epoch, so a
+ * missing value (e.g. endAt on a running timer) must stay null instead.
+ * @param {string|null|undefined} value
+ * @returns {Date|null}
+ */
+function optionalDate(value) {
+  return value ? new Date(value) : null;
+}
+
+/**
+ * Flattens Jobber custom fields (any of the six types) to label/type/value.
+ * @param {Array<object>|undefined} fields
+ * @returns {Array<object>|undefined} undefined leaves the column unchanged
+ */
+export function customFieldsJson(fields) {
+  if (!Array.isArray(fields)) return undefined;
+  return fields.map((field) => ({
+    label: field.label ?? null,
+    type: field.__typename ?? null,
+    value:
+      field.valueText ??
+      field.valueNumeric ??
+      field.valueTrueFalse ??
+      field.valueDropdown ??
+      field.valueLink ??
+      field.valueArea ??
+      null,
+    ...(field.unit ? { unit: field.unit } : {}),
+  }));
+}
+
+/**
+ * Replaces a quote's, job's or invoice's stored line items with Jobber's.
+ * @param {"quote"|"job"|"invoice"} kind
+ * @param {string} parentId
+ * @param {{nodes: Array<object>}|undefined} lineItems
+ */
+async function replaceLineItems(kind, parentId, lineItems) {
+  if (!Array.isArray(lineItems?.nodes)) return;
+  const parentKey = `${kind}Id`;
+  const rows = lineItems.nodes.map((item) => ({
+    id: item.id,
+    kind,
+    [parentKey]: parentId,
+    productOrServiceId: item.linkedProductOrService?.id ?? null,
+    jobLineItemId: item.jobLineItem?.id ?? null,
+    name: item.name ?? null,
+    description: item.description ?? null,
+    category: item.category ?? null,
+    quantity: item.quantity ?? null,
+    unitPrice: item.unitPrice ?? null,
+    unitCost: item.unitCost ?? null,
+    totalPrice: item.totalPrice ?? null,
+    totalCost: item.totalCost ?? null,
+    originalCost: item.originalCost ?? null,
+    markup: item.markup ?? null,
+    taxable: item.taxable ?? null,
+    optional: item.optional ?? null,
+    recommended: item.recommended ?? null,
+    textOnly: item.textOnly ?? null,
+    sortOrder: item.sortOrder ?? null,
+    date: optionalDate(item.date),
+    createdAt: optionalDate(item.createdAt),
+    updatedAt: optionalDate(item.updatedAt),
+  }));
+  await prisma.$transaction([
+    prisma.lineItem.deleteMany({ where: { [parentKey]: parentId } }),
+    prisma.lineItem.createMany({ data: rows, skipDuplicates: true }),
+  ]);
+}
+
 async function userUpsert(data) {
   const row = {
     createdAt: new Date(data.createdAt),
@@ -26,6 +101,19 @@ async function userUpsert(data) {
     name: data.name.full,
     phone: data.phone.friendly,
     status: data.status,
+    firstName: data.name.first ?? null,
+    lastName: data.name.last ?? null,
+    assignedColor: data.assignedColor ?? null,
+    lastLoginAt: optionalDate(data.lastLoginAt),
+    timezone: data.timezone ?? null,
+    uuid: data.uuid ?? null,
+    addressStreet: data.address?.street || null,
+    addressCity: data.address?.city || null,
+    addressProvince: data.address?.province || null,
+    addressPostalCode: data.address?.postalCode || null,
+    addressCountry: data.address?.country || null,
+    customFields: customFieldsJson(data.customFields),
+    syncedAt: new Date(),
   };
   // Separate the data for update and create operations
   // The update operation should not include the id field as it's already in the where clause
@@ -39,13 +127,26 @@ async function userUpsert(data) {
   console.log("Postgres: Upserted user");
 }
 
+/**
+ * Saves a user that isn't stored yet, and refreshes one last synced more than
+ * USER_REFRESH_MS ago (Jobber sends no webhooks for user changes).
+ * @param {string|null} id
+ */
 async function ensureUserExists(id) {
-  const user = await prisma.user.findMany({ where: { id: { equals: id } } });
+  if (!id) return;
+  const user = await prisma.user.findUnique({
+    where: { id },
+    select: { syncedAt: true },
+  });
+  if (
+    user?.syncedAt &&
+    Date.now() - new Date(user.syncedAt).getTime() < USER_REFRESH_MS
+  ) {
+    return;
+  }
 
-  // Query the API for the user and insert it
-  if (user.length === 0) {
-    // Create the user
-    const apiResponse = await getUserData(id);
+  const apiResponse = await getUserData(id);
+  if (apiResponse) {
     await userUpsert(apiResponse);
   }
 }
@@ -67,6 +168,12 @@ async function propertyUpsert(data) {
     isBillingAddress: data.isBillingAddress,
     jobberWebUri: data.jobberWebUri,
     client: data.client.id,
+    name: data.name ?? null,
+    street1: data.address.street1 ?? null,
+    street2: data.address.street2 || null,
+    routingOrder: data.routingOrder ?? null,
+    createdAt: optionalDate(data.createdAt),
+    customFields: customFieldsJson(data.customFields),
   };
   // Separate the data for update and create operations
   // The update operation should not include the id field as it's already in the where clause
@@ -108,6 +215,31 @@ async function clientCreateUpdate(data) {
     title: data.title,
     updatedAt: new Date(data.updatedAt),
     jobberWebUri: data.jobberWebUri,
+    balance: data.balance,
+    billingStreet: data.billingAddress?.street,
+    billingStreet1: data.billingAddress?.street1,
+    billingStreet2: data.billingAddress?.street2,
+    billingCity: data.billingAddress?.city,
+    billingProvince: data.billingAddress?.province,
+    billingPostalCode: data.billingAddress?.postalCode,
+    billingCountry: data.billingAddress?.country,
+    leadSource: data.leadSource,
+    sourceText:
+      data.sourceAttribution?.sourceText ||
+      data.sourceAttribution?.displayLeadSource ||
+      null,
+    sourceMetadata: data.sourceAttribution?.metadata ?? undefined,
+    utmMedium: data.utmMedium,
+    secondaryName: data.secondaryName,
+    receivesFollowUps: data.receivesFollowUps,
+    receivesInvoiceFollowUps: data.receivesInvoiceFollowUps,
+    receivesQuoteFollowUps: data.receivesQuoteFollowUps,
+    receivesReminders: data.receivesReminders,
+    receivesReviewRequests: data.receivesReviewRequests,
+    phones: data.phones ?? undefined,
+    emails: data.emails ?? undefined,
+    tags: data.tags?.nodes?.map((tag) => tag.label),
+    customFields: customFieldsJson(data.customFields),
   };
   // Separate the data for update and create operations
   // The update operation should not include the id field as it's already in the where clause
@@ -165,6 +297,18 @@ async function clientDestroy(id) {
         data: { linkedJob: null },
       });
 
+      await tx.lineItem.deleteMany({
+        where: {
+          OR: [
+            { quoteId: { in: quoteIds } },
+            { jobId: { in: jobIds } },
+            { invoiceId: { in: invoiceIds } },
+          ],
+        },
+      });
+      await tx.visit.deleteMany({ where: { clientId: id } });
+      await tx.request.deleteMany({ where: { clientId: id } });
+
       await tx.quote.deleteMany({ where: { clientId: id } });
       await tx.job.deleteMany({ where: { clientId: id } });
       await tx.invoice.deleteMany({ where: { clientId: id } });
@@ -198,22 +342,39 @@ async function invoiceCreateUpdate(data) {
     paymentsTotal: data.amounts.paymentsTotal,
     subtotal: data.amounts.subtotal,
     total: data.amounts.total,
+    legacyDiscountAmount: data.amounts.legacyDiscountAmount,
+    nonTaxAmount: data.amounts.nonTaxAmount,
+    taxAmount: data.amounts.taxAmount,
+    tipsTotal: data.amounts.tipsTotal,
     clientId: data.client.id,
     createdAt: new Date(data.createdAt),
-    dueDate: new Date(data.dueDate),
+    dueDate: optionalDate(data.dueDate),
     id: data.id,
     invoiceNet: data.invoiceNet,
     invoiceNumber: Number(data.invoiceNumber),
     invoiceStatus: data.invoiceStatus,
-    issuedDate: new Date(data.issuedDate),
+    issuedDate: optionalDate(data.issuedDate),
     jobberWebUri: data.jobberWebUri,
     message: data.message,
-    receivedDate: new Date(data.receivedDate),
+    receivedDate: optionalDate(data.receivedDate),
     salesperson: data.salesperson ? data.salesperson.id : null,
     subject: data.subject,
     updatedAt: new Date(data.updatedAt),
-    // jobs:
-    // payments:
+    billingStreet: data.billingAddress?.street,
+    billingStreet1: data.billingAddress?.street1,
+    billingStreet2: data.billingAddress?.street2,
+    billingCity: data.billingAddress?.city,
+    billingProvince: data.billingAddress?.province,
+    billingPostalCode: data.billingAddress?.postalCode,
+    billingCountry: data.billingAddress?.country,
+    clientHubUri: data.clientHubUri,
+    dateViewedInClientHub: optionalDate(data.dateViewedInClientHub),
+    allowReviewRequest: data.allowReviewRequest,
+    waitingForFinancedPayment: data.waitingForFinancedPayment,
+    voidedAt: optionalDate(data.voidDetails?.voidedAt),
+    voidReasonCode: data.voidDetails?.voidReasonCode ?? null,
+    voidReasonDetails: data.voidDetails?.voidReasonDetails ?? null,
+    customFields: customFieldsJson(data.customFields),
   };
 
   // TODO: Handle multiple properties
@@ -254,11 +415,14 @@ async function invoiceCreateUpdate(data) {
     }
   }
 
+  await replaceLineItems("invoice", data.id, data.lineItems);
+
   console.log("Postgres: Upserted invoice");
 }
 events.on("db-INVOICE_CREATE_UPDATE", invoiceCreateUpdate);
 
 async function invoiceDestroy(id) {
+  await prisma.lineItem.deleteMany({ where: { invoiceId: id } });
   await prisma.jobsOnInvoices.deleteMany({
     where: { invoiceId: id },
   });
@@ -297,9 +461,9 @@ async function jobCreateUpdate(data) {
   const row = {
     allowReviewRequest: data.allowReviewRequest,
     clientId: data.client.id,
-    completedAt: new Date(data.completedAt),
+    completedAt: optionalDate(data.completedAt),
     createdAt: new Date(data.createdAt),
-    endAt: new Date(data.endAt),
+    endAt: optionalDate(data.endAt),
     id: data.id,
     instructions: data.instructions,
     jobNumber: data.jobNumber,
@@ -308,12 +472,32 @@ async function jobCreateUpdate(data) {
     jobberWebUri: data.jobberWebUri,
     property: data.property.id,
     salesperson: data.salesperson ? data.salesperson.id : null,
-    startAt: new Date(data.startAt),
+    startAt: optionalDate(data.startAt),
     title: data.title,
     total: data.total,
     uninvoicedTotal: data.uninvoicedTotal,
     updatedAt: new Date(data.updatedAt),
     willClientBeAutomaticallyCharged: data.willClientBeAutomaticallyCharged,
+    billingType: data.billingType,
+    bookingConfirmationSentAt: optionalDate(data.bookingConfirmationSentAt),
+    completedAndUninvoicedVisitsCount: data.completedAndUninvoicedVisitsCount,
+    completedAndUninvoicedVisitsTotal: data.completedAndUninvoicedVisitsTotal,
+    defaultVisitTitle: data.defaultVisitTitle,
+    invoicedTotal: data.invoicedTotal,
+    nextDateToSendReviewSms: optionalDate(data.nextDateToSendReviewSms),
+    source: data.source,
+    quoteId: data.quote?.id ?? null,
+    requestId: data.request?.id ?? null,
+    outstandingAmount: data.jobBalanceTotals?.outstandingAmount,
+    expenseCost: data.jobCosting?.expenseCost,
+    labourCost: data.jobCosting?.labourCost,
+    labourDuration: data.jobCosting?.labourDuration,
+    lineItemCost: data.jobCosting?.lineItemCost,
+    profitAmount: data.jobCosting?.profitAmount,
+    profitPercentage: data.jobCosting?.profitPercentage,
+    totalCost: data.jobCosting?.totalCost,
+    totalRevenue: data.jobCosting?.totalRevenue,
+    customFields: customFieldsJson(data.customFields),
   };
 
   // Separate the data for update and create operations
@@ -357,6 +541,7 @@ async function jobCreateUpdate(data) {
       throw e;
     }
   }
+  await replaceLineItems("job", data.id, data.lineItems);
   console.log("Postgres: Upserted job");
 }
 events.on("db-JOB_CREATE_UPDATE", jobCreateUpdate);
@@ -371,6 +556,8 @@ async function jobDestroy(id) {
     await prisma.$transaction(async (tx) => {
       await tx.quotesOnJobs.deleteMany({ where: { jobId: id } });
       await tx.jobsOnInvoices.deleteMany({ where: { jobId: id } });
+      await tx.lineItem.deleteMany({ where: { jobId: id } });
+      await tx.visit.deleteMany({ where: { jobId: id } });
       await tx.timeSheetEntry.updateMany({
         where: { job: id },
         data: { job: null },
@@ -437,11 +624,9 @@ async function quoteCreateUpdate(data) {
     id: data.id,
     jobberWebUri: data.jobberWebUri,
     // jobs:
-    approvedAt: data.approvedAt ? new Date(data.approvedAt) : null,
-    changesRequestedAt: data.changesRequestedAt
-      ? new Date(data.changesRequestedAt)
-      : null,
-    convertedAt: data.convertedAt ? new Date(data.convertedAt) : null,
+    approvedAt: optionalDate(data.lastTransitioned?.approvedAt),
+    changesRequestedAt: optionalDate(data.lastTransitioned?.changesRequestedAt),
+    convertedAt: optionalDate(data.lastTransitioned?.convertedAt),
     message: data.message,
     property: { connect: { id: data.property.id } },
     quoteNumber: Number(data.quoteNumber),
@@ -449,9 +634,14 @@ async function quoteCreateUpdate(data) {
     ...(data.salesperson && {
       salesperson: { connect: { id: data.salesperson.id } },
     }),
-    totalTaxAmount: data.totalTaxAmount,
+    totalTaxAmount: data.taxDetails?.totalTaxAmount ?? null,
     title: data.title,
     updatedAt: new Date(data.updatedAt),
+    sentAt: optionalDate(data.sentAt),
+    transitionedAt: optionalDate(data.transitionedAt),
+    eligibleForFinancing: data.eligibleForFinancing,
+    requestId: data.request?.id ?? null,
+    customFields: customFieldsJson(data.customFields),
   };
 
   // Separate the data for update and create operations
@@ -506,11 +696,14 @@ async function quoteCreateUpdate(data) {
     }
   }
 
+  await replaceLineItems("quote", data.id, data.lineItems);
+
   console.log("Postgres: Upserted quote");
 }
 events.on("db-QUOTE_CREATE_UPDATE", quoteCreateUpdate);
 
 async function quoteDestroy(id) {
+  await prisma.lineItem.deleteMany({ where: { quoteId: id } });
   await prisma.quotesOnJobs.deleteMany({
     where: { quoteId: id },
   });
@@ -543,8 +736,12 @@ async function paymentCreateUpdate(data) {
     paymentOrigin: data.paymentOrigin,
     // For some reason, Jobber's API makes a payment webhook when the invoice is marked as sent
     paymentType: data.paymentType ? data.paymentType : "NONE",
-    // quote: data.quote.id ? data.quote : null,
-    sentAt: new Date(data.sentAt),
+    sentAt: optionalDate(data.sentAt),
+    paymentKind: data.__typename ?? null,
+    quote: data.quote?.id ?? null,
+    tipAmount: data.tipAmount ?? null,
+    rawAmount: data.rawAmount ?? null,
+    refundableAmount: data.refundableAmount ?? null,
     clients: data.client ? { connect: { id: data.client.id } } : undefined,
     invoices: data.invoice ? { connect: { id: data.invoice.id } } : undefined,
   };
@@ -642,16 +839,6 @@ async function expenseDestroy(id) {
 }
 events.on("db-EXPENSE_DESTROY", expenseDestroy);
 
-/**
- * Parses an optional Jobber timestamp. `new Date(null)` is the epoch, so a
- * missing value (e.g. endAt on a running timer) must stay null instead.
- * @param {string|null|undefined} value
- * @returns {Date|null}
- */
-function optionalDate(value) {
-  return value ? new Date(value) : null;
-}
-
 async function timesheetCreateUpdate(data) {
   try {
     await upsertTimesheet(data);
@@ -687,6 +874,7 @@ async function upsertTimesheet(data) {
     approvedByUser: data.approvedBy
       ? { connect: { id: data.approvedBy.id } }
       : undefined,
+    clients: data.client ? { connect: { id: data.client.id } } : undefined,
     createdAt: optionalDate(data.createdAt),
     endAt: optionalDate(data.endAt),
     finalDuration: data.finalDuration,
@@ -700,18 +888,36 @@ async function upsertTimesheet(data) {
     ticking: data.ticking,
     updatedAt: data.updatedAt,
     users: data.user ? { connect: { id: data.user.id } } : undefined,
-    // visits: data.visit ? { connect: { id: data.visit.id } } : undefined,
+    visit: data.visit?.id ?? null,
     visitDurationTotal: data.visitDurationTotal,
+    payable: data.payable,
+    timeSheetCategory: data.timeSheetCategory ?? null,
+    targetType: data.targetType ?? null,
   };
   // Separate the data for update and create operations
   // The update operation should not include the id field as it's already in the where clause
   const { id, ...updateData } = row;
 
-  await prisma.timeSheetEntry.upsert({
-    where: { id: data.id },
-    update: { ...updateData },
-    create: { ...row },
-  });
+  try {
+    await prisma.timeSheetEntry.upsert({
+      where: { id: data.id },
+      update: { ...updateData },
+      create: { ...row },
+    });
+  } catch (e) {
+    // The connects above make Prisma emulate the upsert as update-then-create,
+    // so TIMESHEET_CREATE and TIMESHEET_UPDATE arriving together race the create.
+    if (!isUniqueConstraintOn(e, "id")) {
+      throw e;
+    }
+    console.log(
+      `Postgres: Timesheet ${data.id} was created concurrently, updating instead`,
+    );
+    await prisma.timeSheetEntry.update({
+      where: { id: data.id },
+      data: { ...updateData },
+    });
+  }
   console.log("Postgres: Upserted timesheet");
 }
 
@@ -727,3 +933,152 @@ async function timesheetDestroy(id) {
   }
 }
 events.on("db-TIMESHEET_DESTROY", timesheetDestroy);
+
+/**
+ * Saves a visit. Visits, requests and products are stored without foreign
+ * keys, so they're saved without first fetching what they reference.
+ * @param {object} data - From Jobber.getVisitData
+ */
+async function visitCreateUpdate(data) {
+  try {
+    const row = {
+      jobId: data.job?.id ?? null,
+      clientId: data.client?.id ?? null,
+      propertyId: data.property?.id ?? null,
+      invoiceId: data.invoice?.id ?? null,
+      title: data.title ?? null,
+      instructions: data.instructions ?? null,
+      startAt: optionalDate(data.startAt),
+      endAt: optionalDate(data.endAt),
+      completedAt: optionalDate(data.completedAt),
+      completedBy: data.completedBy ?? null,
+      createdAt: optionalDate(data.createdAt),
+      createdById: data.createdBy?.id ?? null,
+      duration: data.duration ?? null,
+      allDay: data.allDay ?? null,
+      isComplete: data.isComplete ?? null,
+      isRecurring: data.isRecurring ?? null,
+      isLastScheduledVisit: data.isLastScheduledVisit ?? null,
+      clientConfirmed: data.clientConfirmed ?? null,
+      visitStatus: data.visitStatus ?? null,
+      arrivalWindowStartAt: optionalDate(data.arrivalWindow?.startAt),
+      arrivalWindowEndAt: optionalDate(data.arrivalWindow?.endAt),
+      assignedUserIds: (data.assignedUsers?.nodes ?? []).map((u) => u.id),
+    };
+    await prisma.visit.upsert({
+      where: { id: data.id },
+      update: row,
+      create: { id: data.id, ...row },
+    });
+    console.log("Postgres: Upserted visit");
+  } catch (e) {
+    Sentry.captureException(e, { extra: { visitId: data?.id } });
+    console.error(`Postgres: Error upserting visit ${data?.id}:`, e);
+  }
+}
+events.on("db-VISIT_CREATE_UPDATE", visitCreateUpdate);
+
+async function visitDestroy(id) {
+  try {
+    await prisma.visit.deleteMany({ where: { id } });
+    console.log("Postgres: Destroyed visit");
+  } catch (e) {
+    Sentry.captureException(e, { extra: { visitId: id } });
+    console.error(`Postgres: Error destroying visit ${id}:`, e);
+  }
+}
+events.on("db-VISIT_DESTROY", visitDestroy);
+
+/**
+ * Saves a request.
+ * @param {object} data - From Jobber.getRequestData
+ */
+async function requestCreateUpdate(data) {
+  try {
+    const row = {
+      clientId: data.client?.id ?? null,
+      propertyId: data.property?.id ?? null,
+      referringClientId: data.referringClient?.id ?? null,
+      salespersonId: data.salesperson?.id ?? null,
+      title: data.title ?? null,
+      companyName: data.companyName ?? null,
+      contactName: data.contactName ?? null,
+      email: data.email ?? null,
+      phone: data.phone ?? null,
+      source: data.source ?? null,
+      requestStatus: data.requestStatus ?? null,
+      isArchivable: data.isArchivable ?? null,
+      isScheduled: data.isScheduled ?? null,
+      total: data.amounts?.total ?? null,
+      jobberWebUri: data.jobberWebUri ?? null,
+      createdAt: optionalDate(data.createdAt),
+      updatedAt: optionalDate(data.updatedAt),
+    };
+    await prisma.request.upsert({
+      where: { id: data.id },
+      update: row,
+      create: { id: data.id, ...row },
+    });
+    console.log("Postgres: Upserted request");
+  } catch (e) {
+    Sentry.captureException(e, { extra: { requestId: data?.id } });
+    console.error(`Postgres: Error upserting request ${data?.id}:`, e);
+  }
+}
+events.on("db-REQUEST_CREATE_UPDATE", requestCreateUpdate);
+
+async function requestDestroy(id) {
+  try {
+    await prisma.request.deleteMany({ where: { id } });
+    console.log("Postgres: Destroyed request");
+  } catch (e) {
+    Sentry.captureException(e, { extra: { requestId: id } });
+    console.error(`Postgres: Error destroying request ${id}:`, e);
+  }
+}
+events.on("db-REQUEST_DESTROY", requestDestroy);
+
+/**
+ * Saves a product or service from the products and services list.
+ * @param {object} data - From Jobber.getProductOrServiceData
+ */
+async function productOrServiceCreateUpdate(data) {
+  try {
+    const row = {
+      name: data.name ?? null,
+      description: data.description ?? null,
+      category: data.category ?? null,
+      defaultUnitCost: data.defaultUnitCost ?? null,
+      internalUnitCost: data.internalUnitCost ?? null,
+      markup: data.markup ?? null,
+      durationMinutes: data.durationMinutes ?? null,
+      taxable: data.taxable ?? null,
+      visible: data.visible ?? null,
+      customFields: customFieldsJson(data.customFields),
+    };
+    await prisma.productOrService.upsert({
+      where: { id: data.id },
+      update: row,
+      create: { id: data.id, ...row },
+    });
+    console.log("Postgres: Upserted product or service");
+  } catch (e) {
+    Sentry.captureException(e, { extra: { productOrServiceId: data?.id } });
+    console.error(
+      `Postgres: Error upserting product or service ${data?.id}:`,
+      e,
+    );
+  }
+}
+events.on("db-PRODUCT_OR_SERVICE_CREATE_UPDATE", productOrServiceCreateUpdate);
+
+async function productOrServiceDestroy(id) {
+  try {
+    await prisma.productOrService.deleteMany({ where: { id } });
+    console.log("Postgres: Destroyed product or service");
+  } catch (e) {
+    Sentry.captureException(e, { extra: { productOrServiceId: id } });
+    console.error(`Postgres: Error destroying product or service ${id}:`, e);
+  }
+}
+events.on("db-PRODUCT_OR_SERVICE_DESTROY", productOrServiceDestroy);

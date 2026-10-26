@@ -322,7 +322,6 @@ async function jobUpdateHandle(req) {
   }
 }
 events.on("jobber-JOB_UPDATE", jobUpdateHandle);
-events.on("jobber-JOB_CLOSE", jobUpdateHandle);
 
 /**
  * Adds job destroy event
@@ -551,7 +550,7 @@ async function visitCreateHandle(req) {
     // Insert/Update client
     let clientID = await PostHog.logClient(visit.client);
     // Insert visit
-    // TODO: Insert into DB
+    events.emit("db-VISIT_CREATE_UPDATE", visit);
     await PostHog.logVisit(visit, clientID);
   }
 }
@@ -572,7 +571,7 @@ async function visitUpdateHandle(req) {
     // Insert/Update client
     let clientID = await PostHog.logClient(visit.client);
     // Insert visit
-    // TODO: Insert into DB
+    events.emit("db-VISIT_CREATE_UPDATE", visit);
     await PostHog.logVisitUpdate(visit, clientID);
   }
 }
@@ -593,7 +592,7 @@ async function visitCompleteHandle(req) {
     // Insert/Update client
     let clientID = await PostHog.logClient(visit.client);
     // Insert visit
-    // TODO: Insert into DB
+    events.emit("db-VISIT_CREATE_UPDATE", visit);
     await PostHog.logVisitComplete(visit, clientID);
   }
 }
@@ -630,6 +629,7 @@ async function requestCreateHandle(req) {
       `<${request.jobberWebUri}> (You may have to hold on that link, copy it, and paste it into your web browser to access it)`,
       "Jobber",
     );
+    events.emit("db-REQUEST_CREATE_UPDATE", request);
     await APICoordinator.contactMade(contact, JSON.stringify(body));
   }
 }
@@ -734,7 +734,7 @@ async function requestUpdateHandle(req) {
     // Insert/Update client
     let clientID = await PostHog.logClient(request.client);
     // Insert request
-    // TODO: Insert into DB
+    events.emit("db-REQUEST_CREATE_UPDATE", request);
     await PostHog.logRequestUpdate(request, clientID);
   }
 }
@@ -776,3 +776,82 @@ async function timesheetDestroyHandle(req) {
   }
 }
 events.on("jobber-TIMESHEET_DESTROY", timesheetDestroyHandle);
+
+/**
+ * Builds a handler that only saves the record to the database, for topics that
+ * mean "this record changed" and need no PostHog event or Slack message.
+ * @param {(id: string) => Promise<object|null>} fetchRecord - A Jobber.get*Data function
+ * @param {string} dbEvent - The db-* event to emit with the record
+ * @returns {(req: object) => Promise<void>}
+ */
+function databaseUpdateHandler(fetchRecord, dbEvent) {
+  return async (req) => {
+    try {
+      const body = req.body;
+      if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
+        const record = await fetchRecord(body.data["webHookEvent"]["itemId"]);
+        if (record) {
+          events.emit(dbEvent, record);
+        }
+      }
+    } catch (e) {
+      Sentry.captureException(e);
+      console.error("Jobber webhook handler error:", e);
+    }
+  };
+}
+
+/**
+ * Builds a handler that removes the record from the database.
+ * @param {string} dbEvent - The db-*_DESTROY event to emit with the item id
+ * @returns {(req: object) => Promise<void>}
+ */
+function databaseDestroyHandler(dbEvent) {
+  return async (req) => {
+    try {
+      const body = req.body;
+      if (jobberVerify(body, req.header("X-Jobber-Hmac-SHA256"))) {
+        events.emit(dbEvent, body.data["webHookEvent"]["itemId"]);
+      }
+    } catch (e) {
+      Sentry.captureException(e);
+      console.error("Jobber webhook handler error:", e);
+    }
+  };
+}
+
+events.on(
+  "jobber-QUOTE_SENT",
+  databaseUpdateHandler(Jobber.getQuoteData, "db-QUOTE_CREATE_UPDATE"),
+);
+events.on(
+  "jobber-QUOTE_APPROVED",
+  databaseUpdateHandler(Jobber.getQuoteData, "db-QUOTE_CREATE_UPDATE"),
+);
+events.on(
+  "jobber-JOB_CLOSED",
+  databaseUpdateHandler(Jobber.getJobData, "db-JOB_CREATE_UPDATE"),
+);
+events.on("jobber-VISIT_DESTROY", databaseDestroyHandler("db-VISIT_DESTROY"));
+events.on(
+  "jobber-REQUEST_DESTROY",
+  databaseDestroyHandler("db-REQUEST_DESTROY"),
+);
+events.on(
+  "jobber-PRODUCT_OR_SERVICE_CREATE",
+  databaseUpdateHandler(
+    Jobber.getProductOrServiceData,
+    "db-PRODUCT_OR_SERVICE_CREATE_UPDATE",
+  ),
+);
+events.on(
+  "jobber-PRODUCT_OR_SERVICE_UPDATE",
+  databaseUpdateHandler(
+    Jobber.getProductOrServiceData,
+    "db-PRODUCT_OR_SERVICE_CREATE_UPDATE",
+  ),
+);
+events.on(
+  "jobber-PRODUCT_OR_SERVICE_DESTROY",
+  databaseDestroyHandler("db-PRODUCT_OR_SERVICE_DESTROY"),
+);
