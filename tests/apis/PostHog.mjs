@@ -71,7 +71,10 @@ function installFetchMock() {
         });
       }
 
-      if (key === "phone" && (value === "3395269875" || value === "(339) 526-9875")) {
+      if (
+        key === "phone" &&
+        (value === "3395269875" || value === "(339) 526-9875")
+      ) {
         return buildResponse({
           results: [
             {
@@ -100,6 +103,27 @@ function installFetchMock() {
   });
 }
 
+function buildClient(overrides = {}) {
+  return {
+    id: "Z2lkOi8vSm9iYmVyL0NsaWVudC82MjI3MDc0Mg==",
+    name: "TEST TEST",
+    companyName: null,
+    phones: [{ number: "(404) 555-0100", primary: true }],
+    emails: [],
+    isCompany: false,
+    jobberWebUri: "https://secure.getjobber.com/clients/62270742",
+    billingAddress: null,
+    ...overrides,
+  };
+}
+
+function getIdentifyBodies() {
+  return fetchMock.mock.calls
+    .filter(([url]) => String(url).includes("/capture/"))
+    .map(([, options]) => JSON.parse(options.body))
+    .filter((body) => body.event === "$identify");
+}
+
 function getCaptureEvents() {
   return fetchMock.mock.calls
     .filter(([url]) => String(url).includes("/capture/"))
@@ -114,6 +138,7 @@ beforeEach(() => {
   process.env.POSTHOG_TOKEN = "project-token";
 
   fetchMock.mockReset();
+  PostHog.clearLoggedClients();
   searchPlaceMock.mockReset();
   getCallDetailsMock.mockReset();
   getCallDetailsMock.mockResolvedValue({ source: null, gclid: null });
@@ -426,7 +451,9 @@ describe("PostHog", () => {
       };
       const clientId = "ac72f523deeaac10c22b817d67016273";
 
-      await expect(PostHog.logInvoice(invoice, clientId)).resolves.not.toThrow();
+      await expect(
+        PostHog.logInvoice(invoice, clientId),
+      ).resolves.not.toThrow();
       expect(getCaptureEvents()).toContain("invoice made");
     });
 
@@ -440,8 +467,100 @@ describe("PostHog", () => {
       };
       const clientId = "ac72f523deeaac10c22b817d67016273";
 
-      await expect(PostHog.logPayment(payment, clientId)).resolves.not.toThrow();
+      await expect(
+        PostHog.logPayment(payment, clientId),
+      ).resolves.not.toThrow();
       expect(getCaptureEvents()).toContain("payment made");
+    });
+  });
+  describe("Rate limiting", () => {
+    test("Waits out a 429 and retries the lookup", async () => {
+      fetchMock.mockResolvedValueOnce({
+        ...buildResponse({}, 429),
+        headers: { get: (name) => (name === "retry-after" ? "0.01" : null) },
+      });
+
+      const results = await PostHog.individualSearch(
+        [
+          {
+            key: "name",
+            value: "Dylan Corrales",
+            operator: "exact",
+            type: "person",
+          },
+        ],
+        null,
+      );
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(results.results[0].properties.name).toBe("Dylan Corrales");
+    });
+
+    test("Runs at most two lookups at once", async () => {
+      let active = 0;
+      let maxActive = 0;
+      fetchMock.mockImplementation(async () => {
+        active++;
+        maxActive = Math.max(maxActive, active);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        active--;
+        return buildResponse({ results: [] });
+      });
+
+      await Promise.all(
+        Array.from({ length: 6 }, (_, i) =>
+          PostHog.individualSearch(`id-${i}`, "distinct_id"),
+        ),
+      );
+
+      expect(fetchMock).toHaveBeenCalledTimes(6);
+      expect(maxActive).toBe(2);
+    });
+  });
+
+  describe("Log Client lookups", () => {
+    test("Skips a client whose details haven't changed", async () => {
+      await PostHog.logClient(buildClient());
+      fetchMock.mockClear();
+
+      const clientID = await PostHog.logClient(buildClient());
+
+      expect(clientID).toBe("Z2lkOi8vSm9iYmVyL0NsaWVudC82MjI3MDc0Mg==");
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    test("Shares one log between concurrent webhooks for a client", async () => {
+      await Promise.all([
+        PostHog.logClient(buildClient()),
+        PostHog.logClient(buildClient()),
+        PostHog.logClient(buildClient()),
+      ]);
+
+      expect(getIdentifyBodies()).toHaveLength(1);
+    });
+
+    test("Logs a client again when its details change", async () => {
+      await PostHog.logClient(buildClient());
+      await PostHog.logClient(buildClient({ name: "NEW NAME" }));
+
+      const bodies = getIdentifyBodies();
+      expect(bodies).toHaveLength(2);
+      expect(bodies[1].$set.name).toBe("NEW NAME");
+    });
+
+    test("Leaves phones alone and retries next time when the person lookup fails", async () => {
+      fetchMock.mockImplementation(async (url) =>
+        String(url).includes("/persons/")
+          ? buildResponse({}, 500)
+          : buildResponse({ results: [] }),
+      );
+
+      await PostHog.logClient(buildClient());
+      await PostHog.logClient(buildClient());
+
+      const bodies = getIdentifyBodies();
+      expect(bodies).toHaveLength(2);
+      expect(bodies[0].$set).not.toHaveProperty("phones");
     });
   });
 });

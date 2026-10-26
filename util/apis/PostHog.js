@@ -8,6 +8,81 @@ import events from "../events.js";
 import fetch from "node-fetch";
 import * as Sentry from "@sentry/node";
 
+// PostHog rate-limits its private API (person and HogQL lookups), not
+// capture. Lookups share a small concurrency limit, and a 429 pauses them all.
+const MAX_CONCURRENT_READS = 2;
+const MAX_RATE_LIMIT_WAITS = 4;
+const MAX_RATE_LIMIT_DELAY_MS = 60 * 1000;
+let activeReads = 0;
+const readWaiters = [];
+let readsPausedUntil = 0;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function acquireReadSlot() {
+  if (activeReads >= MAX_CONCURRENT_READS) {
+    // releaseReadSlot hands its slot straight to the next waiter
+    await new Promise((resolve) => readWaiters.push(resolve));
+  } else {
+    activeReads++;
+  }
+}
+
+function releaseReadSlot() {
+  const next = readWaiters.shift();
+  if (next) {
+    next();
+  } else {
+    activeReads--;
+  }
+}
+
+/**
+ * Fetches from PostHog's private API within the shared lookup limit. On a 429
+ * it waits as long as Retry-After says (or backs off exponentially), pausing
+ * every other lookup too, so a burst of webhooks doesn't keep hitting the limit.
+ * @returns {Promise<Response>} The response; a 429 only once the waits are used up
+ */
+export async function rateLimitedFetch(url, options) {
+  await acquireReadSlot();
+  try {
+    for (let wait = 1; ; wait++) {
+      const pause = readsPausedUntil - Date.now();
+      if (pause > 0) {
+        await sleep(pause);
+      }
+
+      const response = await fetch(url, options);
+      if (response.status !== 429 || wait > MAX_RATE_LIMIT_WAITS) {
+        return response;
+      }
+
+      const retryAfter = Number(response.headers?.get?.("retry-after"));
+      const delay = Math.min(
+        retryAfter > 0 ? retryAfter * 1000 : 5000 * 2 ** (wait - 1),
+        MAX_RATE_LIMIT_DELAY_MS,
+      );
+      readsPausedUntil = Math.max(readsPausedUntil, Date.now() + delay);
+      console.warn(
+        `PostHog: Rate limited, pausing lookups for ${delay / 1000}s (wait ${wait}/${MAX_RATE_LIMIT_WAITS})`,
+      );
+    }
+  } finally {
+    releaseReadSlot();
+  }
+}
+
+// Jobber sends a webhook per job, visit, invoice, etc., each carrying its
+// client, so a burst of changes logs the same client over and over. A client
+// whose details haven't changed since it was last logged is skipped.
+const LOGGED_CLIENT_TTL_MS = 60 * 60 * 1000;
+const loggedClients = new Map();
+
+/** Forgets which clients were logged, so the next logClient sends them again. */
+export function clearLoggedClients() {
+  loggedClients.clear();
+}
+
 /**
  * Sends a raw request to PostHog's API
  * @param url The endpoint url. E.g. `contact/`
@@ -67,7 +142,7 @@ export async function individualSearch(searchQuery, parameter) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     let response;
     try {
-      response = await fetch(url, {
+      response = await rateLimitedFetch(url, {
         method: "get",
         headers: { Authorization: `Bearer ${process.env.POSTHOG_API_TOKEN}` },
       });
@@ -86,7 +161,8 @@ export async function individualSearch(searchQuery, parameter) {
       console.error(
         `PostHog: API returned status ${response.status} (attempt ${attempt}/${maxRetries})`,
       );
-      if (attempt === maxRetries) {
+      // rateLimitedFetch has already waited out a 429
+      if (response.status === 429 || attempt === maxRetries) {
         Sentry.captureException(
           new Error(
             `PostHog: API returned status ${response.status} after ${maxRetries} attempts`,
@@ -152,7 +228,7 @@ export async function searchByPhone(phone) {
           : digits;
       // Escape single quotes in the original phone for HogQL
       let safePhone = phone.replace(/'/g, "\\'");
-      response = await fetch(
+      response = await rateLimitedFetch(
         `${process.env.POSTHOG_HOST}/api/projects/${process.env.POSTHOG_PROJECT_ID}/query/`,
         {
           method: "POST",
@@ -183,7 +259,8 @@ export async function searchByPhone(phone) {
       console.error(
         `PostHog: HogQL query returned status ${response.status} (attempt ${attempt}/${maxRetries})`,
       );
-      if (attempt === maxRetries) {
+      // rateLimitedFetch has already waited out a 429
+      if (response.status === 429 || attempt === maxRetries) {
         Sentry.captureException(
           new Error(
             `PostHog: HogQL query returned status ${response.status} after ${maxRetries} attempts`,
@@ -708,6 +785,61 @@ events.on("posthog-log-callrail-call", logCallRailCall);
  * @returns {Promise<string>} The Jobber client ID used as PostHog distinct_id
  */
 export async function logClient(jobberClient) {
+  let id = jobberClient.id;
+  let fingerprint = JSON.stringify([
+    jobberClient.name,
+    jobberClient.emails,
+    jobberClient.phones,
+    jobberClient.billingAddress,
+    jobberClient.jobberWebUri,
+    jobberClient.isCompany,
+    jobberClient.companyName,
+  ]);
+
+  // Reuse a recent or in-flight log of the same details
+  let logged = loggedClients.get(id);
+  if (logged?.fingerprint === fingerprint) {
+    if (logged.pending) {
+      return logged.pending;
+    }
+    if (Date.now() - logged.at < LOGGED_CLIENT_TTL_MS) {
+      console.log(
+        `PostHog: Client ${id} is unchanged since it was last logged`,
+      );
+      return id;
+    }
+  }
+
+  let entry = { fingerprint, at: 0, pending: null };
+  let forget = () => {
+    if (loggedClients.get(id) === entry) {
+      loggedClients.delete(id);
+    }
+  };
+  entry.pending = sendJobberClient(jobberClient).then(
+    (remember) => {
+      entry.pending = null;
+      entry.at = Date.now();
+      if (!remember) {
+        forget();
+      }
+      return id;
+    },
+    (e) => {
+      forget();
+      throw e;
+    },
+  );
+  loggedClients.set(id, entry);
+  return entry.pending;
+}
+
+/**
+ * Sends a Jobber client to PostHog for logClient.
+ * @returns {Promise<boolean>} Whether the person lookup succeeded, so the
+ *   client can be skipped until its details change
+ */
+async function sendJobberClient(jobberClient) {
   let defaultEmail;
   if ("emails" in jobberClient) {
     for (let i = 0; i < jobberClient.emails.length; i++) {
@@ -751,6 +883,9 @@ export async function logClient(jobberClient) {
   // Only resolve geo data if the address is new or changed, to avoid
   // unnecessary Google Maps API calls for existing persons.
   let existingPerson = await individualSearch(`${id}`, "distinct_id");
+  // A failed lookup returns [], with no results list. Then the person's
+  // phones aren't known, so they're left alone instead of overwritten.
+  let lookupFailed = !Array.isArray(existingPerson?.results);
   let existingAddress = null;
   let existingPhones = [];
   if (existingPerson?.results?.length > 0) {
@@ -777,7 +912,9 @@ export async function logClient(jobberClient) {
   // (e.g. a Twilio caller ID that Jobber doesn't know about)
   let jobberPhones =
     "phones" in jobberClient ? jobberClient.phones.map((p) => p.number) : [];
-  clientData.phones = mergePhoneArrays(existingPhones, jobberPhones);
+  if (!lookupFailed) {
+    clientData.phones = mergePhoneArrays(existingPhones, jobberPhones);
+  }
 
   let identifyData = {
     api_key: process.env.POSTHOG_TOKEN,
@@ -823,18 +960,11 @@ export async function logClient(jobberClient) {
       }
     }
 
-    // Look up distinct_ids already on this person so we don't re-merge them
-    let ownIds = new Set([id]);
-    try {
-      let ownPerson = await individualSearch(id, "distinct_id");
-      if (ownPerson?.results?.length > 0) {
-        for (let ownDistinctId of ownPerson.results[0]["distinct_ids"] || []) {
-          ownIds.add(ownDistinctId);
-        }
-      }
-    } catch (_e) {
-      // Non-critical — worst case we re-merge already-merged ids
-    }
+    // Skip distinct_ids already on this person so we don't re-merge them
+    let ownIds = new Set([
+      id,
+      ...(existingPerson?.results?.[0]?.["distinct_ids"] || []),
+    ]);
 
     for (let duplicateId of duplicateIds) {
       if (ownIds.has(duplicateId)) continue;
@@ -855,7 +985,7 @@ export async function logClient(jobberClient) {
     console.error("PostHog: Error merging duplicate persons:", e);
   }
 
-  return id;
+  return !lookupFailed;
 }
 
 /**
