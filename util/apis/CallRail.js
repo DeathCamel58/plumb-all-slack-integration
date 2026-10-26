@@ -287,10 +287,8 @@ async function handleFirstInvoicePayment(payment, invoice) {
         await sendFormValue(lead, invoice.amounts.total);
         return;
       }
-      Sentry.captureMessage("CallRail: Client has no phone numbers", {
-        level: "warning",
-        extra: { clientId: payment.client.id },
-      });
+      // Phones are often added in Jobber just after the first payment; the
+      // CLIENT_UPDATE webhook then re-runs this, so this isn't reported.
       console.warn(
         "CallRail: Client has no phone numbers, skipping",
         payment.client.id,
