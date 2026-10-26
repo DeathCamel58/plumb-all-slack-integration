@@ -20,8 +20,8 @@ module.exports = {
         DEBUGGING: true,
       },
       autorestart: true,
-      watch: true,
-      ignore_path: ["node_modules"],
+      // Deploys restart the app themselves; watching restarted it mid-deploy
+      watch: false,
       log_file: "/home/admin/plumb-all-slack-integration/runtime.log",
     },
   ],
