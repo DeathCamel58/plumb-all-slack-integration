@@ -790,7 +790,11 @@ async function propertyDestroy(id) {
 events.on("db-PROPERTY_DESTROY", propertyDestroy);
 
 async function expenseCreateUpdate(data) {
-  let userReferences = [data.enteredBy.id];
+  // Jobber returns no enteredBy on some older expenses
+  let userReferences = [];
+  if (data.enteredBy) {
+    userReferences.push(data.enteredBy.id);
+  }
   if (data.paidBy) {
     userReferences.push(data.paidBy.id);
   }
@@ -809,7 +813,7 @@ async function expenseCreateUpdate(data) {
     createdAt: new Date(data.createdAt),
     date: new Date(data.date),
     description: data.description,
-    enteredBy: data.enteredBy.id,
+    enteredBy: data.enteredBy ? data.enteredBy.id : null,
     id: data.id,
     linkedJob: data.linkedJob ? data.linkedJob.id : null,
     paidBy: data.paidBy ? data.paidBy.id : null,

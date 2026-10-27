@@ -74,6 +74,7 @@ const visitCreateUpdate = handlerFor("db-VISIT_CREATE_UPDATE");
 const clientDestroy = handlerFor("db-CLIENT_DESTROY");
 const jobDestroy = handlerFor("db-JOB_DESTROY");
 const propertyDestroy = handlerFor("db-PROPERTY_DESTROY");
+const expenseCreateUpdate = handlerFor("db-EXPENSE_CREATE_UPDATE");
 const expenseDestroy = handlerFor("db-EXPENSE_DESTROY");
 
 /**
@@ -670,6 +671,29 @@ describe("visitCreateUpdate", () => {
         startAt: new Date("2026-03-01T14:00:00Z"),
         assignedUserIds: ["user-1", "user-2"],
       }),
+    );
+  });
+});
+
+describe("expense upsert", () => {
+  test("saves an expense Jobber returns without enteredBy", async () => {
+    await expenseCreateUpdate({
+      id: "expense-1",
+      createdAt: "2020-01-10T14:21:49Z",
+      date: "2020-01-10T05:00:00Z",
+      updatedAt: "2020-01-10T14:21:49Z",
+      title: "Gas",
+      description: null,
+      total: 50.02,
+      enteredBy: null,
+      paidBy: null,
+      reimbursableTo: null,
+      linkedJob: null,
+    });
+
+    const { create } = prismaMock.expense.upsert.mock.calls[0][0];
+    expect(create).toEqual(
+      expect.objectContaining({ id: "expense-1", enteredBy: null }),
     );
   });
 });
