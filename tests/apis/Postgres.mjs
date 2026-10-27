@@ -59,9 +59,8 @@ jest.unstable_mockModule("../../util/apis/Jobber.js", () => ({
   getClientData: jest.fn(),
 }));
 
-const { customFieldsJson, USER_REFRESH_MS } = await import(
-  "../../util/apis/Postgres.js"
-);
+const { customFieldsJson, USER_REFRESH_MS } =
+  await import("../../util/apis/Postgres.js");
 const Jobber = await import("../../util/apis/Jobber.js");
 
 const handlerFor = (event) =>

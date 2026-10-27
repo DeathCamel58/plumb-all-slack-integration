@@ -1009,13 +1009,11 @@ async function unfurlMessage(event) {
     }
   }
 
-  if (
-    !(
-      needToUnfurl.quotes.length === 0 &&
-      needToUnfurl.jobs.length === 0 &&
-      needToUnfurl.invoices.length === 0
-    )
-  ) {
+  if (!(
+    needToUnfurl.quotes.length === 0 &&
+    needToUnfurl.jobs.length === 0 &&
+    needToUnfurl.invoices.length === 0
+  )) {
     // Unfurl found references
     for (let i = 0; i < needToUnfurl.quotes.length; i++) {
       if (needToUnfurl.quotes[i] !== null) {

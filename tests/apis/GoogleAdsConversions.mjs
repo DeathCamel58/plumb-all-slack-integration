@@ -9,9 +9,8 @@ const sentryMock = {
 jest.unstable_mockModule("node-fetch", () => ({ default: fetchMock }));
 jest.unstable_mockModule("@sentry/node", () => sentryMock);
 
-const { uploadClickConversion, uploadConversionAdjustment } = await import(
-  "../../util/apis/GoogleAdsConversions.js"
-);
+const { uploadClickConversion, uploadConversionAdjustment } =
+  await import("../../util/apis/GoogleAdsConversions.js");
 
 const CONVERSION_ACTION = "customers/1234567890/conversionActions/987654321";
 

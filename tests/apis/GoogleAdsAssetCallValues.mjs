@@ -34,9 +34,8 @@ jest.unstable_mockModule("../../util/apis/GoogleAdsConversions.js", () => ({
   uploadConversionAdjustment: uploadConversionAdjustmentMock,
 }));
 
-const { sendAssetCallValue } = await import(
-  "../../util/apis/GoogleAdsAssetCallValues.js"
-);
+const { sendAssetCallValue } =
+  await import("../../util/apis/GoogleAdsAssetCallValues.js");
 
 const ASSET_ACTION = "customers/6490233839/conversionActions/555000111";
 const GCLID = "CjwKCAjwAssetGCLID";
