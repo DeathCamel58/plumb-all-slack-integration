@@ -11,7 +11,7 @@
     "start": "node index.js",
     "test": "jest",
     "test:ci": "node --experimental-vm-modules node_modules/jest/bin/jest.js --ci --reporters='default' --reporters='./util/github-actions-reporter.mjs' --testPathIgnorePatterns='./tests/apis/(GoogleMaps|PostHog).mjs'",
-    "prepare": "husky install"
+    "prepare": "husky || true"
   },
   "dependencies": {
     "@googlemaps/google-maps-services-js": "^3.4.2",
@@ -31,6 +31,7 @@
     "node-html-parser": "^9.0.5",
     "openai": "^7.45.0",
     "pg": "^8.23.1",
+    "prisma": "^7.10.1",
     "twilio": "^6.2.0"
   },
   "devDependencies": {
@@ -38,8 +39,7 @@
     "husky": "^9.1.7",
     "jest": "^30.5.2",
     "lint-staged": "^17.6.0",
-    "prettier": "^3.9.10",
-    "prisma": "^7.10.1"
+    "prettier": "^3.9.10"
   },
   "lint-staged": {
     "*.{js,css,md}": "prettier --write"
