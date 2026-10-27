@@ -391,7 +391,11 @@ async function invoiceCreateUpdate(data) {
 
   // Create the necessary relations
   for (const job of data.jobs.nodes) {
-    await ensureJobExists(job.id);
+    // Invoicing a job changes its status and totals without a JOB_UPDATE
+    // webhook, so save the job again rather than only when it's missing
+    if (!(await refreshJob(job.id))) {
+      continue;
+    }
 
     // Link job to invoice, ignoring if already linked (race-safe)
     try {
@@ -422,6 +426,9 @@ async function invoiceCreateUpdate(data) {
 events.on("db-INVOICE_CREATE_UPDATE", invoiceCreateUpdate);
 
 async function invoiceDestroy(id) {
+  const links = await prisma.jobsOnInvoices.findMany({
+    where: { invoiceId: id },
+  });
   await prisma.lineItem.deleteMany({ where: { invoiceId: id } });
   await prisma.jobsOnInvoices.deleteMany({
     where: { invoiceId: id },
@@ -430,6 +437,17 @@ async function invoiceDestroy(id) {
     where: { id: id },
   });
   console.log("Postgres: Destroyed invoice");
+
+  // Deleting the invoice puts its jobs back to needing an invoice, again
+  // without a JOB_UPDATE webhook
+  for (const { jobId } of links) {
+    try {
+      await refreshJob(jobId);
+    } catch (e) {
+      Sentry.captureException(e, { extra: { jobId, invoiceId: id } });
+      console.error(`Postgres: Error refreshing job ${jobId}:`, e);
+    }
+  }
 }
 events.on("db-INVOICE_DESTROY", invoiceDestroy);
 
@@ -585,6 +603,21 @@ async function ensureJobExists(id) {
     const apiResponse = await getJobData(id);
     await jobCreateUpdate(apiResponse);
   }
+}
+
+/**
+ * Saves the job's current Jobber data, whether or not it's stored yet.
+ * @param {string} id - Jobber job ID
+ * @returns {Promise<boolean>} false when Jobber no longer has the job
+ */
+async function refreshJob(id) {
+  const apiResponse = await getJobData(id);
+  if (!apiResponse) {
+    console.log(`Postgres: Job ${id} not found in Jobber, not saving it`);
+    return false;
+  }
+  await jobCreateUpdate(apiResponse);
+  return true;
 }
 
 async function ensureClientExists(id) {
@@ -759,15 +792,38 @@ async function paymentCreateUpdate(data) {
 }
 events.on("db-PAYMENT_CREATE_UPDATE", paymentCreateUpdate);
 
-// TODO: Figure payment destroys
-// This is having an issue, as the Jobber API doesn't give us the payment ID they used initially
+/**
+ * Removes a payment. PAYMENT_DESTROY sends gid://Jobber/PaymentRecord/123,
+ * while the payment was stored under its type (e.g.
+ * gid://Jobber/CheckPaymentRecord/123), so it's matched by the number.
+ * @param {string} id - Jobber payment ID from the webhook
+ */
 async function paymentDestroy(id) {
-  await prisma.payment.deleteMany({
-    where: { id: id },
-  });
-  console.log("Postgres: Destroyed payment");
+  try {
+    const number = Buffer.from(id, "base64")
+      .toString()
+      .match(/PaymentRecord\/(\d+)$/)?.[1];
+    if (!number) {
+      console.error(`Postgres: Can't read a payment number from ${id}`);
+      return;
+    }
+    const rows = await prisma.$queryRaw`
+      SELECT id FROM "Payment"
+      WHERE convert_from(decode(id, 'base64'), 'UTF8') LIKE ${`%PaymentRecord/${number}`}`;
+    if (rows.length === 0) {
+      console.log("Postgres: Payment not found in DB, nothing to delete");
+      return;
+    }
+    await prisma.payment.deleteMany({
+      where: { id: { in: rows.map((row) => row.id) } },
+    });
+    console.log("Postgres: Destroyed payment");
+  } catch (e) {
+    Sentry.captureException(e, { extra: { paymentId: id } });
+    console.error(`Postgres: Error destroying payment ${id}:`, e);
+  }
 }
-// events.on("db-PAYMENT_DESTROY", paymentDestroy);
+events.on("db-PAYMENT_DESTROY", paymentDestroy);
 
 async function propertyCreateUpdate(data) {
   await clientCreateUpdate(data.client);

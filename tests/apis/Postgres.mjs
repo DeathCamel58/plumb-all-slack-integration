@@ -38,6 +38,7 @@ Object.defineProperty(prismaMock, "$transaction", {
   value: (arg) =>
     typeof arg === "function" ? arg(prismaMock) : Promise.all(arg),
 });
+Object.defineProperty(prismaMock, "$queryRaw", { value: jest.fn() });
 
 jest.unstable_mockModule("../../util/events.js", () => ({
   default: {
@@ -76,6 +77,9 @@ const jobDestroy = handlerFor("db-JOB_DESTROY");
 const propertyDestroy = handlerFor("db-PROPERTY_DESTROY");
 const expenseCreateUpdate = handlerFor("db-EXPENSE_CREATE_UPDATE");
 const expenseDestroy = handlerFor("db-EXPENSE_DESTROY");
+const invoiceCreateUpdate = handlerFor("db-INVOICE_CREATE_UPDATE");
+const invoiceDestroy = handlerFor("db-INVOICE_DESTROY");
+const paymentDestroy = handlerFor("db-PAYMENT_DESTROY");
 
 /**
  * Builds a P2002 in the shape @prisma/adapter-pg produces. The driver adapter
@@ -695,5 +699,125 @@ describe("expense upsert", () => {
     expect(create).toEqual(
       expect.objectContaining({ id: "expense-1", enteredBy: null }),
     );
+  });
+});
+
+const mockInvoice = {
+  amounts: {
+    depositAmount: 0,
+    discountAmount: 0,
+    invoiceBalance: 100,
+    paymentsTotal: 0,
+    subtotal: 100,
+    total: 100,
+  },
+  client: mockClient,
+  createdAt: "2026-01-04T00:00:00Z",
+  id: "invoice-1",
+  invoiceNumber: "7",
+  invoiceStatus: "awaiting_payment",
+  jobberWebUri: "https://jobber.example/invoice-1",
+  jobs: { nodes: [{ id: "job-1" }] },
+  salesperson: null,
+  updatedAt: "2026-01-04T00:00:00Z",
+};
+
+describe("invoice job refresh", () => {
+  beforeEach(() => {
+    Jobber.getJobData.mockReset();
+  });
+
+  test("saves a linked job again even when it's already stored", async () => {
+    Jobber.getJobData.mockResolvedValue({
+      ...mockJob,
+      jobStatus: "archived",
+      uninvoicedTotal: 0,
+    });
+
+    await invoiceCreateUpdate(mockInvoice);
+
+    expect(Jobber.getJobData).toHaveBeenCalledWith("job-1");
+    const { update } = prismaMock.job.upsert.mock.calls[0][0];
+    expect(update.jobStatus).toBe("archived");
+    expect(prismaMock.jobsOnInvoices.create).toHaveBeenCalled();
+  });
+
+  test("doesn't link a job Jobber no longer has", async () => {
+    Jobber.getJobData.mockResolvedValue(null);
+
+    await invoiceCreateUpdate(mockInvoice);
+
+    expect(prismaMock.job.upsert).not.toHaveBeenCalled();
+    expect(prismaMock.jobsOnInvoices.create).not.toHaveBeenCalled();
+  });
+
+  test("saves the invoice's jobs again after deleting it", async () => {
+    prismaMock.jobsOnInvoices.findMany.mockResolvedValue([
+      { invoiceId: "invoice-1", jobId: "job-1" },
+    ]);
+    Jobber.getJobData.mockResolvedValue({
+      ...mockJob,
+      jobStatus: "requires_invoicing",
+    });
+
+    await invoiceDestroy("invoice-1");
+
+    expect(prismaMock.invoice.deleteMany).toHaveBeenCalledWith({
+      where: { id: "invoice-1" },
+    });
+    expect(Jobber.getJobData).toHaveBeenCalledWith("job-1");
+    const { update } = prismaMock.job.upsert.mock.calls[0][0];
+    expect(update.jobStatus).toBe("requires_invoicing");
+  });
+});
+
+describe("paymentDestroy", () => {
+  const gid = (value) => Buffer.from(value).toString("base64");
+
+  beforeEach(() => {
+    prismaMock.$queryRaw.mockReset();
+  });
+
+  test("deletes the stored payment matching the webhook's number", async () => {
+    const stored = gid("gid://Jobber/CheckPaymentRecord/327736034");
+    prismaMock.$queryRaw.mockResolvedValue([{ id: stored }]);
+
+    await paymentDestroy(gid("gid://Jobber/PaymentRecord/327736034"));
+
+    expect(prismaMock.$queryRaw.mock.calls[0]).toContain(
+      "%PaymentRecord/327736034",
+    );
+    expect(prismaMock.payment.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: [stored] } },
+    });
+  });
+
+  test("does nothing when no payment has that number", async () => {
+    prismaMock.$queryRaw.mockResolvedValue([]);
+
+    await paymentDestroy(gid("gid://Jobber/PaymentRecord/1"));
+
+    expect(prismaMock.payment.deleteMany).not.toHaveBeenCalled();
+  });
+
+  test("ignores an id without a payment number", async () => {
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+
+    await paymentDestroy(gid("gid://Jobber/Invoice/1"));
+
+    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
+    expect(prismaMock.payment.deleteMany).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  test("catches a failed delete instead of rejecting", async () => {
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    prismaMock.$queryRaw.mockRejectedValue(new Error("DB down"));
+
+    await expect(
+      paymentDestroy(gid("gid://Jobber/PaymentRecord/1")),
+    ).resolves.toBeUndefined();
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
   });
 });
