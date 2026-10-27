@@ -275,14 +275,14 @@ events.on("callrail-outbound-post-call", handleOutboundPostCall);
 
 function handleTextMessageSent(req) {
   console.log(
-    `CallRail Webhook: text-message-sent to=${req.body.customer_phone_number}`,
+    `CallRail Webhook: text-message-sent to=${req.body.destination_number}`,
   );
 }
 events.on("callrail-text-message-sent", handleTextMessageSent);
 
 function handleTextMessageReceived(req) {
   console.log(
-    `CallRail Webhook: text-message-received from=${req.body.customer_phone_number}`,
+    `CallRail Webhook: text-message-received from=${req.body.source_number}`,
   );
 }
 events.on("callrail-text-message-received", handleTextMessageReceived);

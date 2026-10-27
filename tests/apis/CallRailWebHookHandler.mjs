@@ -474,6 +474,33 @@ describe("CallRailWebHookHandler", () => {
     });
   });
 
+  describe("text messages", () => {
+    test("logs the customer's number from the fields CallRail sends", () => {
+      const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+
+      getHandler("callrail-text-message-received")(
+        makeReq({
+          source_number: "+16162269699",
+          destination_number: "+17705550100",
+        }),
+      );
+      getHandler("callrail-text-message-sent")(
+        makeReq({
+          source_number: "+17705550100",
+          destination_number: "+16162269699",
+        }),
+      );
+
+      expect(logSpy).toHaveBeenCalledWith(
+        "CallRail Webhook: text-message-received from=+16162269699",
+      );
+      expect(logSpy).toHaveBeenCalledWith(
+        "CallRail Webhook: text-message-sent to=+16162269699",
+      );
+      logSpy.mockRestore();
+    });
+  });
+
   describe("stub handlers register", () => {
     test("All 8 webhook types have registered handlers", () => {
       const registeredEvents = eventsOnMock.mock.calls.map(([name]) => name);
