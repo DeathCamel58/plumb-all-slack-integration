@@ -2422,7 +2422,29 @@ async function interactivity(req) {
       break;
   }
 }
-events.on("slack-INTERACTIVITY", interactivity);
+
+/**
+ * Handles Slack interactivity payloads without letting a failed Slack call
+ * go unhandled. A modal Slack expired before it could open (it must open
+ * within 3 seconds of the click) is only logged.
+ * @param {import("express").Request} req
+ * @returns {Promise<void>}
+ */
+export async function handleInteractivity(req) {
+  try {
+    await interactivity(req);
+  } catch (e) {
+    if (e?.data?.error === "expired_trigger_id") {
+      console.warn(
+        "Slack: A modal took more than 3 seconds to open, so Slack expired it",
+      );
+      return;
+    }
+    Sentry.captureException(e);
+    console.error("Slack: Error handling interactivity:", e);
+  }
+}
+events.on("slack-INTERACTIVITY", handleInteractivity);
 
 /**
  * Handles Slack slash command payloads.
