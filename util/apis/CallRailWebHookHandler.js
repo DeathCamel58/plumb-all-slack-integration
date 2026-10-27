@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/node";
 import events from "../events.js";
 import { uploadClickConversion } from "./GoogleAdsConversions.js";
 import { sendAssetCallValue } from "./GoogleAdsAssetCallValues.js";
+import { isExcludedPhone } from "./AdValueAttribution.js";
 import {
   claimClickConversion,
   markClickConversionUploaded,
@@ -200,6 +201,9 @@ async function handlePostCall(req) {
     } else if (sourceName === "Google Ads Assets") {
       skipReason =
         "source is Google Ads Call Asset — GCLID not tied to a website conversion";
+    } else if (await isExcludedPhone(call.customer_phone_number)) {
+      // Contract clients (e.g. Ingles) calling through an ad aren't new leads
+      skipReason = "caller is an excluded (contract) client";
     }
 
     if (skipReason) {

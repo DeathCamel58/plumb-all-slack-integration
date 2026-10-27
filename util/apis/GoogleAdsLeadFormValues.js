@@ -29,10 +29,9 @@ import {
  * contact, no value is sent to Google Ads at all.
  *
  * Each submission is recorded with its click ID and SHA-256 hashes of its
- * phone and email. CallRail's first-invoice handler matches a paying client to
- * their earliest recorded form lead from within Google's 90-day click window,
- * and credits the value to whichever came first: that form or the client's
- * earliest CallRail call. Data Manager dedupes on transactionId (the lead id),
+ * phone and email. AdValueAttribution.js matches a paid invoice's client to
+ * the form leads and CallRail calls from the 30 days before the work started,
+ * and credits the value to whichever came first. Data Manager dedupes on transactionId (the lead id),
  * so a changed value goes through a restatement instead of a second upload.
  */
 
@@ -264,8 +263,8 @@ async function claimAndUpload(lead, value, conversionActionId) {
 
 /**
  * Finds the client's earliest recorded form lead (Google Ads lead form or
- * website form) from within Google's click window, matched by phone or email
- * hash. The earliest one is the client's first contact by form. Never throws.
+ * website form) between `from` and `until`, matched by phone or email hash.
+ * By default that's anything within Google's click window. Never throws.
  *
  * Google Ads lead form leads are skipped when their value action isn't
  * configured, so callers fall back to crediting another source rather than a
@@ -273,9 +272,12 @@ async function claimAndUpload(lead, value, conversionActionId) {
  * no value to send, but they still count as the first contact.
  *
  * @param {object} client - The Jobber client (phones[].number, emails[].address)
+ * @param {object} [window]
+ * @param {Date} [window.from] - Earliest submission to match (default: 90 days ago)
+ * @param {Date} [window.until] - Latest submission to match (default: now)
  * @returns {Promise<object|null>} The GoogleAdsLeadFormLead row, or null
  */
-export async function findFormLead(client) {
+export async function findFormLead(client, { from, until } = {}) {
   if (!client) {
     return null;
   }
@@ -293,7 +295,10 @@ export async function findFormLead(client) {
   try {
     return await prisma.googleAdsLeadFormLead.findFirst({
       where: {
-        createdAt: { gte: new Date(Date.now() - LEAD_MATCH_WINDOW_MS) },
+        createdAt: {
+          gte: from ?? new Date(Date.now() - LEAD_MATCH_WINDOW_MS),
+          ...(until ? { lte: until } : {}),
+        },
         OR: [
           ...(phoneHashes.length ? [{ phoneHash: { in: phoneHashes } }] : []),
           ...(emailHashes.length ? [{ emailHash: { in: emailHashes } }] : []),
@@ -343,7 +348,7 @@ export async function sendFormValue(lead, value) {
   try {
     if (!lead.uploadedAt) {
       console.log(
-        `GoogleAds: Sending form lead ${lead.leadId} first invoice value $${value}`,
+        `GoogleAds: Sending form lead ${lead.leadId} invoice value $${value}`,
       );
       await claimAndUpload(lead, value, conversionActionId);
       return;

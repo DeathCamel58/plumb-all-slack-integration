@@ -191,6 +191,17 @@ describe("findFormLead", () => {
     expect(query.where.source).toBeUndefined();
   });
 
+  test("can be limited to a window", async () => {
+    model.findFirst.mockResolvedValue(null);
+    const from = new Date("2026-09-12T15:00:00Z");
+    const until = new Date("2026-10-12T16:00:00Z");
+
+    await findFormLead(client(), { from, until });
+
+    const { where } = model.findFirst.mock.calls[0][0];
+    expect(where.createdAt).toEqual({ gte: from, lte: until });
+  });
+
   test("matches on email too", async () => {
     model.findFirst.mockResolvedValue(storedLead());
 

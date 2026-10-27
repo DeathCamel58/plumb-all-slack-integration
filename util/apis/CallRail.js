@@ -1,11 +1,7 @@
 import crypto from "crypto";
 import fetch from "node-fetch";
-import events from "../events.js";
-import prisma from "../prismaClient.js";
 import { toE164 } from "../DataUtilities.js";
-import * as PostHog from "./PostHog.js";
 import * as Sentry from "@sentry/node";
-import { findFormLead, sendFormValue } from "./GoogleAdsLeadFormValues.js";
 
 const CALLRAIL_API_KEY = process.env.CALLRAIL_API_KEY;
 const CALLRAIL_ACCOUNT_ID = process.env.CALLRAIL_ACCOUNT_ID;
@@ -46,15 +42,16 @@ export function verifyWebhook(req) {
 }
 
 /**
- * Search CallRail for calls matching the given phone number
+ * Search CallRail for calls matching the given phone number, from any date
+ * (without date_range, CallRail only searches the last 7 days)
  * @param {string} phoneE164 Phone number in E.164 format
  * @returns {Promise<object[]>} All matching calls (empty array if none)
  */
-async function searchCallByPhone(phoneE164) {
+export async function searchCallByPhone(phoneE164) {
   if (isApiDisabled()) return [];
 
   let response = await fetch(
-    `${BASE_URL}/calls.json?search=${encodeURIComponent(phoneE164)}&fields=source,gclid`,
+    `${BASE_URL}/calls.json?search=${encodeURIComponent(phoneE164)}&date_range=all_time&per_page=250&fields=source,source_name,gclid,value,lead_status,tags,note`,
     {
       headers: {
         Authorization: `Token token="${CALLRAIL_API_KEY}"`,
@@ -81,7 +78,10 @@ async function searchCallByPhone(phoneE164) {
  * @param {string} params.note A note to attach
  * @returns {Promise<object>} The updated call
  */
-async function updateCall(callId, { value, note, customer_name, lead_status }) {
+export async function updateCall(
+  callId,
+  { value, note, customer_name, lead_status },
+) {
   if (isApiDisabled()) return null;
 
   const maxRetries = 3;
@@ -134,11 +134,11 @@ async function updateCall(callId, { value, note, customer_name, lead_status }) {
  * @param {string} phoneE164 Phone number in E.164 format
  * @returns {Promise<object[]>} All matching SMS threads (empty array if none)
  */
-async function searchSMSByPhone(phoneE164) {
+export async function searchSMSByPhone(phoneE164) {
   if (isApiDisabled()) return [];
 
   let response = await fetch(
-    `${BASE_URL}/sms-threads.json?search=${encodeURIComponent(phoneE164)}&fields=last_message_at`,
+    `${BASE_URL}/sms-threads.json?search=${encodeURIComponent(phoneE164)}&fields=last_message_at,value,lead_qualification,tags`,
     {
       headers: {
         Authorization: `Token token="${CALLRAIL_API_KEY}"`,
@@ -166,7 +166,10 @@ async function searchSMSByPhone(phoneE164) {
  * @param {string|null} params.lead_qualification "good_lead", "not_a_lead", or null
  * @returns {Promise<object>} The updated SMS thread
  */
-async function updateSMSThread(threadId, { value, notes, lead_qualification }) {
+export async function updateSMSThread(
+  threadId,
+  { value, notes, lead_qualification },
+) {
   if (isApiDisabled()) return null;
 
   const maxRetries = 3;
@@ -211,207 +214,6 @@ async function updateSMSThread(threadId, { value, notes, lead_qualification }) {
     );
   }
 }
-
-/**
- * Handle first invoice payment: report conversion to CallRail
- * @param {object} payment The Jobber payment record (with enriched client)
- * @param {object} invoice The Jobber invoice data
- */
-async function handleFirstInvoicePayment(payment, invoice) {
-  try {
-    if (!invoice) {
-      return;
-    }
-
-    // Check if this is the client's first invoice
-    let invoiceCount = await prisma.invoice.count({
-      where: { clientId: payment.client.id },
-    });
-    if (invoiceCount > 1) {
-      return;
-    }
-
-    // Collect all unique phone numbers from Jobber client + PostHog person
-    let phoneSet = new Set();
-
-    // Add Jobber client phones
-    let phones = payment.client.phones;
-    if (phones && phones.length > 0) {
-      for (let phoneEntry of phones) {
-        let e164 = toE164(phoneEntry.number);
-        if (e164) phoneSet.add(e164);
-      }
-    }
-
-    // Also check PostHog for additional phone numbers (e.g. the calling number
-    // from Twilio that may differ from the Jobber callback number).
-    // Uses the Jobber client ID as the distinct_id for a direct lookup.
-    try {
-      let posthogResult = await PostHog.individualSearch(
-        payment.client.id,
-        "distinct_id",
-      );
-      if (posthogResult?.results?.length > 0) {
-        let props = posthogResult.results[0].properties || {};
-        if (props.phone) {
-          let e164 = toE164(props.phone);
-          if (e164) phoneSet.add(e164);
-        }
-        if (props.alternatePhone) {
-          let e164 = toE164(props.alternatePhone);
-          if (e164) phoneSet.add(e164);
-        }
-        if (Array.isArray(props.phones)) {
-          for (let p of props.phones) {
-            let e164 = toE164(p);
-            if (e164) phoneSet.add(e164);
-          }
-        }
-      }
-    } catch (e) {
-      // PostHog lookup is best-effort; don't block on failure
-      console.warn("CallRail: PostHog phone lookup failed:", e.message);
-    }
-
-    // Credit only the first way the client reached us. A form (Google Ads lead
-    // form, or website form with or without an ad click) submitted before their
-    // earliest call gets the value instead of CallRail; for an organic website
-    // form that means no value goes to Google Ads at all.
-    let lead = await findFormLead(payment.client);
-
-    if (phoneSet.size === 0) {
-      if (lead) {
-        console.log(
-          `CallRail: Client has no phone numbers but matched form lead ${lead.leadId}, crediting the form`,
-        );
-        await sendFormValue(lead, invoice.amounts.total);
-        return;
-      }
-      // Phones are often added in Jobber just after the first payment; the
-      // CLIENT_UPDATE webhook then re-runs this, so this isn't reported.
-      console.warn(
-        "CallRail: Client has no phone numbers, skipping",
-        payment.client.id,
-      );
-      return;
-    }
-
-    // Search CallRail with each phone number, collecting all unqualified calls
-    let unqualifiedCalls = [];
-    let firstCallAt = null;
-    let hasQualifiedCall = false;
-    for (let phoneE164 of phoneSet) {
-      let calls = await searchCallByPhone(phoneE164);
-      for (let candidate of calls) {
-        let startedAt = new Date(candidate.start_time);
-        if (!isNaN(startedAt) && (!firstCallAt || startedAt < firstCallAt)) {
-          firstCallAt = startedAt;
-        }
-        if (candidate.value && parseFloat(candidate.value) > 0) {
-          hasQualifiedCall = true;
-          console.log(
-            `CallRail: Call ${candidate.id} already qualified (value: ${candidate.value}), skipping`,
-          );
-          continue;
-        }
-        unqualifiedCalls.push(candidate);
-      }
-    }
-
-    if (lead && !lead.uploadedAt && hasQualifiedCall) {
-      // A call already carries this client's value; don't credit both
-      console.log(
-        `CallRail: Form lead ${lead.leadId} not credited, a call already carries the value`,
-      );
-    } else if (lead) {
-      if (!firstCallAt || new Date(lead.createdAt) < firstCallAt) {
-        console.log(
-          `CallRail: Form lead ${lead.leadId} came before any call, crediting the form instead of CallRail`,
-        );
-        await sendFormValue(lead, invoice.amounts.total);
-        return;
-      }
-      console.log(
-        `CallRail: Form lead ${lead.leadId} came after the client's first call, crediting CallRail`,
-      );
-    }
-
-    let conversionNote = `Client: ${payment.client.jobberWebUri}\nInvoice: ${invoice.jobberWebUri}`;
-
-    // Try calls first
-    if (unqualifiedCalls.length > 0) {
-      let call = unqualifiedCalls.sort(
-        (a, b) => new Date(b.start_time) - new Date(a.start_time),
-      )[0];
-      console.log(`CallRail: Selected most recent unqualified call ${call.id}`);
-
-      let leadStatus =
-        call.lead_status === "previously_marked_good_lead" ? null : "good_lead";
-      await updateCall(call.id, {
-        value: invoice.amounts.total,
-        note: conversionNote,
-        customer_name: payment.client.name,
-        lead_status: leadStatus,
-      });
-
-      console.log(
-        "CallRail: Reported first invoice conversion for call",
-        call.id,
-      );
-      return;
-    }
-
-    // No unqualified calls — fall back to SMS threads
-    console.log("CallRail: No unqualified calls found, searching SMS threads");
-
-    let unqualifiedSMS = [];
-    for (let phoneE164 of phoneSet) {
-      let threads = await searchSMSByPhone(phoneE164);
-      for (let candidate of threads) {
-        if (candidate.value && parseFloat(candidate.value) > 0) {
-          console.log(
-            `CallRail: SMS thread ${candidate.id} already qualified (value: ${candidate.value}), skipping`,
-          );
-          continue;
-        }
-        unqualifiedSMS.push(candidate);
-      }
-    }
-
-    if (unqualifiedSMS.length === 0) {
-      console.log(
-        "CallRail: No matching unqualified call or SMS found for any phone",
-        [...phoneSet],
-      );
-      return;
-    }
-
-    let sms = unqualifiedSMS.sort(
-      (a, b) => new Date(b.last_message_at) - new Date(a.last_message_at),
-    )[0];
-    console.log(
-      `CallRail: Selected most recent unqualified SMS thread ${sms.id}`,
-    );
-
-    let leadQualification =
-      sms.lead_qualification === "good_lead" ? null : "good_lead";
-    await updateSMSThread(sms.id, {
-      value: invoice.amounts.total,
-      notes: conversionNote,
-      lead_qualification: leadQualification,
-    });
-
-    console.log(
-      "CallRail: Reported first invoice conversion for SMS thread",
-      sms.id,
-    );
-  } catch (e) {
-    Sentry.captureException(e);
-    console.error("CallRail: Error handling first invoice payment:", e);
-  }
-}
-
-events.on("callrail-FIRST_INVOICE_PAYMENT", handleFirstInvoicePayment);
 
 /**
  * Get the marketing source and GCLID of the most recent CallRail call for a phone number
@@ -526,20 +328,25 @@ export async function updateAllTrackerDestinations(newNumber) {
 }
 
 /**
- * Fetches all CallRail calls that have both a value and a GCLID,
+ * Fetches CallRail calls that have both a value and a GCLID,
  * paginating through all results. Used for backfilling Google Ads conversions.
+ * @param {number} [days=55] How many days back to list (Google Ads only takes
+ *   adjustments for 55 days; without a start date CallRail lists only 7)
  * @returns {Promise<Array<{id: string, value: string, gclid: string, start_time: string}>>}
  */
-export async function listCallsWithValueAndGclid() {
+export async function listCallsWithValueAndGclid(days = 55) {
   if (isApiDisabled()) return [];
 
   let allCalls = [];
   let page = 1;
   let totalPages = 1;
+  let startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
 
   while (page <= totalPages) {
     let response = await fetch(
-      `${BASE_URL}/calls.json?fields=value,gclid&per_page=250&page=${page}`,
+      `${BASE_URL}/calls.json?fields=value,gclid&per_page=250&page=${page}&start_date=${startDate}`,
       {
         headers: {
           Authorization: `Token token="${CALLRAIL_API_KEY}"`,

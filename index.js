@@ -9,6 +9,7 @@ import * as Sentry from "@sentry/node";
 const modules = [
   "./util/web.js",
   "./util/apis/86Repairs.js",
+  "./util/apis/AdValueAttribution.js",
   "./util/apis/CloudFlareWorkers.js",
   "./util/apis/CallRail.js",
   "./util/apis/CallRailWebHookHandler.js",

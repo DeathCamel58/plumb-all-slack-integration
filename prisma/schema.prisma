@@ -514,3 +514,22 @@ model GoogleAdsLeadFormLead {
   @@index([phoneHash])
   @@index([emailHash])
 }
+
+// Which contact (CallRail call or SMS thread, or form lead) each paid invoice or
+// deposit was credited to. A contact's value is the sum of its rows, so a
+// diagnostic and the repair that follows add up, and an item is never counted
+// twice. A deposit's row is replaced by the invoice it's applied to.
+model AdValueAttribution {
+  itemId        String    @id // Jobber invoice id, deposit payment id, or "legacy-<contactId>"
+  itemKind      String // invoice | deposit | legacy (a value set before this table existed)
+  quoteId       String? // a deposit's quote, so the invoice it's applied to can replace it
+  clientId      String
+  contactKind   String // call | sms | form
+  contactId     String // CallRail call or SMS thread id, or GoogleAdsLeadFormLead leadId
+  value         Decimal   @db.Decimal(12, 2)
+  workStartedAt DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([contactId])
+  @@index([quoteId])
+}

@@ -4,7 +4,6 @@ import * as PostHog from "./PostHog.js";
 import Contact from "../contact.js";
 import * as APICoordinator from "../APICoordinator.js";
 import events from "../events.js";
-import prisma from "../prismaClient.js";
 import * as Sentry from "@sentry/node";
 
 /**
@@ -57,6 +56,10 @@ async function invoiceHandle(req) {
       events.emit("db-INVOICE_CREATE_UPDATE", invoice);
       events.emit("mailchimp-INVOICE_CREATE_UPDATE", invoice);
       await PostHog.logInvoice(invoice, clientID);
+      // An invoice covered by a deposit can be paid as it's created
+      if (invoice.invoiceStatus === "paid") {
+        events.emit("ad-value-INVOICE", invoice);
+      }
     }
   } catch (e) {
     Sentry.captureException(e);
@@ -85,6 +88,9 @@ async function invoiceUpdateHandle(req) {
       // Status changes (e.g. paid) feed the commission report
       let clientID = await PostHog.logClient(invoice.client);
       await PostHog.logInvoiceUpdate(invoice, clientID);
+      if (invoice.invoiceStatus === "paid") {
+        events.emit("ad-value-INVOICE", invoice);
+      }
     }
   } catch (e) {
     Sentry.captureException(e);
@@ -133,33 +139,8 @@ async function clientHandle(req) {
       events.emit("db-CLIENT_CREATE_UPDATE", client);
       await PostHog.logClient(client);
 
-      // Re-attempt CallRail first-invoice conversion if applicable
-      // (handles case where phones were added after payment)
-      try {
-        let invoiceCount = await prisma.invoice.count({
-          where: { clientId: client.id },
-        });
-        if (invoiceCount >= 1) {
-          let invoice = await prisma.invoice.findFirst({
-            where: { clientId: client.id },
-            orderBy: { createdAt: "asc" },
-          });
-          if (invoice) {
-            let jobberInvoice = await Jobber.getInvoiceData(invoice.id);
-            let payment = { client, invoice: { id: invoice.id } };
-            events.emit(
-              "callrail-FIRST_INVOICE_PAYMENT",
-              payment,
-              jobberInvoice,
-            );
-          }
-        }
-      } catch (e) {
-        console.warn(
-          "Jobber: CallRail re-trigger on CLIENT_UPDATE failed:",
-          e.message,
-        );
-      }
+      // Phones added after the client paid can now match their call
+      events.emit("ad-value-CLIENT", client);
     }
   } catch (e) {
     Sentry.captureException(e);
@@ -365,9 +346,9 @@ async function paymentCreateHandle(req) {
       events.emit("db-PAYMENT_CREATE_UPDATE", payment);
       await PostHog.logPayment(payment, clientID);
 
-      if (payment.invoice) {
-        let invoice = await Jobber.getInvoiceData(payment.invoice.id);
-        events.emit("callrail-FIRST_INVOICE_PAYMENT", payment, invoice);
+      // Paid invoices are credited from their INVOICE_UPDATE
+      if (payment.adjustmentType === "DEPOSIT") {
+        events.emit("ad-value-DEPOSIT", payment);
       }
     }
   } catch (e) {

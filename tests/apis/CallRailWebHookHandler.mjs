@@ -8,6 +8,7 @@ const claimClickConversionMock = jest.fn();
 const markClickConversionUploadedMock = jest.fn();
 const releaseClickConversionMock = jest.fn();
 const sendAssetCallValueMock = jest.fn();
+const isExcludedPhoneMock = jest.fn();
 const sentryMock = { captureException: jest.fn() };
 
 jest.unstable_mockModule("../../util/events.js", () => ({
@@ -32,6 +33,10 @@ jest.unstable_mockModule("../../util/apis/GoogleAdsClickTracking.js", () => ({
 
 jest.unstable_mockModule("../../util/apis/GoogleAdsAssetCallValues.js", () => ({
   sendAssetCallValue: sendAssetCallValueMock,
+}));
+
+jest.unstable_mockModule("../../util/apis/AdValueAttribution.js", () => ({
+  isExcludedPhone: isExcludedPhoneMock,
 }));
 
 await import("../../util/apis/CallRailWebHookHandler.js");
@@ -70,6 +75,8 @@ describe("CallRailWebHookHandler", () => {
     markClickConversionUploadedMock.mockReset();
     releaseClickConversionMock.mockReset();
     sendAssetCallValueMock.mockReset();
+    isExcludedPhoneMock.mockReset();
+    isExcludedPhoneMock.mockResolvedValue(false);
     delete process.env.GOOGLE_ADS_MIN_CALL_DURATION;
     sentryMock.captureException.mockReset();
   });
@@ -309,9 +316,24 @@ describe("CallRailWebHookHandler", () => {
       expect(uploadClickConversionMock).not.toHaveBeenCalled();
     });
 
+    test("Caller is an excluded (contract) client → does not upload", async () => {
+      isExcludedPhoneMock.mockResolvedValue(true);
+
+      await postCallHandler(makeReq({ ...baseCall }));
+
+      expect(isExcludedPhoneMock).toHaveBeenCalledWith("+14045551234");
+      expect(uploadClickConversionMock).not.toHaveBeenCalled();
+      expect(claimClickConversionMock).not.toHaveBeenCalled();
+    });
+
     test("Every inbound call is sent to PostHog with its source, even ones that aren't uploaded", async () => {
       eventsEmitMock.mockReset();
-      const shortOrganic = { ...baseCall, duration: 10, gclid: "", source_name: "Google Organic" };
+      const shortOrganic = {
+        ...baseCall,
+        duration: 10,
+        gclid: "",
+        source_name: "Google Organic",
+      };
 
       await postCallHandler(makeReq(shortOrganic));
 
