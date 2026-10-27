@@ -4,8 +4,9 @@ module.exports = {
   apps: [
     {
       name: "plumb-all-slack-integration",
-      script: `npm`,
-      args: "start",
+      // Run index.js directly: through `npm start`, its shell found `node` on
+      // the PATH PM2 saved at first start, not this interpreter
+      script: "index.js",
       interpreter: `/home/admin/.nvm/versions/node/v${NODE_VERSION}/bin/node`,
       env_production: {
         NODE_ENV: "production",
