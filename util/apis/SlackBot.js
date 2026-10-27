@@ -1487,7 +1487,7 @@ const WEBSITE_FORM_FIELDS = [
 ];
 
 /**
- * Builds the "Send as contact" button value for an unverified website form,
+ * Builds the "Send as contact" button value for a website form,
  * shortening the message to fit Slack's 2000 character limit.
  * @param {object} data - The website contact form body
  * @param {Date} receivedAt - When the form was submitted
@@ -1509,19 +1509,18 @@ export function websiteFormButtonValue(data, receivedAt) {
 }
 
 /**
- * Posts a website contact form that failed reCAPTCHA to the call-logs channel
- * for review, with a "Send as contact" button that forwards it to dispatch.
- * Falls back to the main contact channel if call-logs isn't configured, so a
- * form is never lost.
+ * Posts a website contact form to the call-logs channel for review, with a
+ * "Send as contact" button that forwards it to dispatch. Falls back to the
+ * main contact channel if call-logs isn't configured, so a form is never lost.
  * @param {object} data - The website contact form body
- * @param {string} reason - Why the form failed reCAPTCHA
+ * @param {string} recaptcha - The reCAPTCHA result, shown to the reviewer
  * @param {Date} receivedAt - When the form was submitted
  * @returns {Promise<void>}
  */
-async function sendUnverifiedWebsiteContact(data, reason, receivedAt) {
+async function sendWebsiteFormForReview(data, recaptcha, receivedAt) {
   const channel = process.env.SLACK_CALL_LOGS || slackCallChannelName;
   const lines = [
-    `Unverified website form (${reason}). Review it, and send it as a contact if it's real.`,
+    `Website form (${recaptcha}). Review it, and send it as a contact if it's real.`,
     "",
     `Name: ${data?.name || "-"}`,
     `Phone: ${data?.phone || "-"}`,
@@ -1559,16 +1558,13 @@ async function sendUnverifiedWebsiteContact(data, reason, receivedAt) {
       icon_url:
         "https://plumb-all.com/wp-content/uploads/2018/08/cropped-icon.png",
     });
-    console.info("Slack: Sent unverified website form to call-logs");
+    console.info("Slack: Sent website form to call-logs for review");
   } catch (e) {
-    Sentry.captureException(e, { extra: { reason } });
-    console.error("Slack: Failed to post unverified website form:", e);
+    Sentry.captureException(e, { extra: { recaptcha } });
+    console.error("Slack: Failed to post website form for review:", e);
   }
 }
-events.on(
-  "slackbot-send-unverified-website-contact",
-  sendUnverifiedWebsiteContact,
-);
+events.on("slackbot-send-website-form-review", sendWebsiteFormForReview);
 
 /**
  * Handles Slack event webhooks.
@@ -2001,14 +1997,12 @@ async function interactivity(req) {
 
             break;
           case "send-website-contact-0":
-            console.log(
-              "Slack: User sending unverified website form as contact!",
-            );
+            console.log("Slack: User sending website form as contact!");
 
             try {
               const { form, receivedAt } = JSON.parse(action.value);
 
-              // Same path as a verified form: dispatch, then Google Ads
+              // Dispatch, PostHog, Trello, then Google Ads (as submitted)
               await deliverWebsiteContact(form, new Date(receivedAt));
 
               try {

@@ -23,9 +23,9 @@ export function websiteContact(data) {
 }
 
 /**
- * Sends a verified website contact form to dispatch, and records it for
- * Google Ads (it counts as a lead, and can carry the customer's first invoice
- * value later).
+ * Sends a reviewed website contact form to dispatch, and records it for
+ * Google Ads (it counts as a lead, and can carry the customer's invoice value
+ * later).
  * @param data The website contact form body
  * @param {Date} [receivedAt] - When the form was submitted
  * @returns {Promise<void>}
@@ -38,11 +38,11 @@ export async function deliverWebsiteContact(data, receivedAt = new Date()) {
 /**
  * Processes a website contact form webhook.
  *
- * A form that passes reCAPTCHA goes to dispatch. One that fails (no token, an
- * expired token, a low score) isn't dropped: it's posted to the call-logs
- * channel with a "Send as contact" button, so someone can review it and
- * forward it if it's real. Only a filled-in honeypot field is discarded, since
- * people never see that field.
+ * Every form is posted to the call-logs channel with a "Send as contact"
+ * button, since spam gets past reCAPTCHA too. Only that button sends it to
+ * dispatch and records it in PostHog, Trello and Google Ads. The reCAPTCHA
+ * result is shown on the post to help the review. Only a filled-in honeypot
+ * field is discarded, since people never see that field.
  * @param data The incoming web data
  * @returns {Promise<void>}
  * @constructor
@@ -60,21 +60,14 @@ async function WebsiteContactHandle(data) {
 
   const receivedAt = new Date();
   const verdict = await VerifyRecaptcha(data?.recaptchaToken, "contact_form");
+  const recaptcha = verdict.ok
+    ? `passed reCAPTCHA${verdict.score !== null ? `, score ${verdict.score}` : ""}`
+    : `failed reCAPTCHA: ${verdict.reason}`;
 
-  if (verdict.ok) {
-    await deliverWebsiteContact(data, receivedAt);
-    return;
-  }
-
-  console.error(
-    `WebsiteContact: Failed reCAPTCHA (${verdict.reason}), sending to call-logs for review`,
+  console.log(
+    `WebsiteContact: Form ${recaptcha}, sending to call-logs for review`,
   );
-  events.emit(
-    "slackbot-send-unverified-website-contact",
-    data,
-    verdict.reason,
-    receivedAt,
-  );
+  events.emit("slackbot-send-website-form-review", data, recaptcha, receivedAt);
 }
 events.on("website-contact", WebsiteContactHandle);
 

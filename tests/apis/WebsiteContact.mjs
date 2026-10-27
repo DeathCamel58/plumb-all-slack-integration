@@ -29,7 +29,8 @@ jest.unstable_mockModule("../../util/apis/GoogleAdsLeadFormValues.js", () => ({
   recordWebsiteFormLead: recordWebsiteFormLeadMock,
 }));
 
-await import("../../util/apis/WebsiteContact.js");
+const { deliverWebsiteContact } =
+  await import("../../util/apis/WebsiteContact.js");
 
 // Capture the handlers registered by WebsiteContact.js
 const contactHandler = eventsOnMock.mock.calls.find(
@@ -60,40 +61,34 @@ describe("WebsiteContact", () => {
     ...overrides,
   });
   const passed = { ok: true, reason: null, score: 0.9 };
-  const unverifiedEmits = () =>
+  const reviewEmits = () =>
     eventsEmitMock.mock.calls.filter(
-      ([name]) => name === "slackbot-send-unverified-website-contact",
+      ([name]) => name === "slackbot-send-website-form-review",
     );
 
-  test("Valid reCAPTCHA → contact created", async () => {
+  test("Passing reCAPTCHA → still sent to call-logs for review, not to dispatch or Google Ads", async () => {
     verifyRecaptchaMock.mockResolvedValue(passed);
 
-    await contactHandler(form());
-
-    expect(verifyRecaptchaMock).toHaveBeenCalledWith("valid-token", "contact_form");
-    expect(contactMadeMock).toHaveBeenCalledTimes(1);
-    const [contact] = contactMadeMock.mock.calls[0];
-    expect(contact.name).toBe("Jane Doe");
-    expect(contact.email).toBe("jane@example.com");
-    expect(unverifiedEmits()).toHaveLength(0);
-  });
-
-  test("Valid reCAPTCHA → the form is recorded for Google Ads after dispatch gets it", async () => {
-    verifyRecaptchaMock.mockResolvedValue(passed);
-    const order = [];
-    contactMadeMock.mockImplementation(async () => order.push("dispatch"));
-    recordWebsiteFormLeadMock.mockImplementation(async () =>
-      order.push("google-ads"),
-    );
-
-    const data = form({ gclid: "CjwKCAjwWebsiteGCLID" });
+    const data = form();
     await contactHandler(data);
 
-    expect(recordWebsiteFormLeadMock).toHaveBeenCalledWith(data, expect.any(Date));
-    expect(order).toEqual(["dispatch", "google-ads"]);
+    expect(verifyRecaptchaMock).toHaveBeenCalledWith(
+      "valid-token",
+      "contact_form",
+    );
+    expect(contactMadeMock).not.toHaveBeenCalled();
+    expect(recordWebsiteFormLeadMock).not.toHaveBeenCalled();
+    expect(reviewEmits()).toEqual([
+      [
+        "slackbot-send-website-form-review",
+        data,
+        "passed reCAPTCHA, score 0.9",
+        expect.any(Date),
+      ],
+    ]);
   });
 
-  test("Failed reCAPTCHA → sent to call-logs for review, not to dispatch or Google Ads", async () => {
+  test("Failed reCAPTCHA → sent to call-logs with the reason", async () => {
     verifyRecaptchaMock.mockResolvedValue({
       ok: false,
       reason: "reCAPTCHA token expired or reused",
@@ -105,14 +100,31 @@ describe("WebsiteContact", () => {
 
     expect(contactMadeMock).not.toHaveBeenCalled();
     expect(recordWebsiteFormLeadMock).not.toHaveBeenCalled();
-    expect(unverifiedEmits()).toEqual([
+    expect(reviewEmits()).toEqual([
       [
-        "slackbot-send-unverified-website-contact",
+        "slackbot-send-website-form-review",
         data,
-        "reCAPTCHA token expired or reused",
+        "failed reCAPTCHA: reCAPTCHA token expired or reused",
         expect.any(Date),
       ],
     ]);
+  });
+
+  test("Sending a reviewed form → dispatch first, then Google Ads with the submission time", async () => {
+    const order = [];
+    contactMadeMock.mockImplementation(async () => order.push("dispatch"));
+    recordWebsiteFormLeadMock.mockImplementation(async () =>
+      order.push("google-ads"),
+    );
+    const submittedAt = new Date("2026-10-27T17:08:00Z");
+
+    const data = form({ gclid: "CjwKCAjwWebsiteGCLID" });
+    await deliverWebsiteContact(data, submittedAt);
+
+    const [contact] = contactMadeMock.mock.calls[0];
+    expect(contact.name).toBe("Jane Doe");
+    expect(recordWebsiteFormLeadMock).toHaveBeenCalledWith(data, submittedAt);
+    expect(order).toEqual(["dispatch", "google-ads"]);
   });
 
   test("Missing or empty recaptchaToken → still sent to call-logs (it used to be dropped)", async () => {
@@ -129,7 +141,7 @@ describe("WebsiteContact", () => {
 
     expect(verifyRecaptchaMock).toHaveBeenCalledWith(undefined, "contact_form");
     expect(verifyRecaptchaMock).toHaveBeenCalledWith("", "contact_form");
-    expect(unverifiedEmits()).toHaveLength(2);
+    expect(reviewEmits()).toHaveLength(2);
     expect(contactMadeMock).not.toHaveBeenCalled();
   });
 
@@ -138,7 +150,7 @@ describe("WebsiteContact", () => {
 
     expect(verifyRecaptchaMock).not.toHaveBeenCalled();
     expect(contactMadeMock).not.toHaveBeenCalled();
-    expect(unverifiedEmits()).toHaveLength(0);
+    expect(reviewEmits()).toHaveLength(0);
   });
 
   test("Valid reCAPTCHA for feedback → feedbackMade called", async () => {
@@ -154,7 +166,10 @@ describe("WebsiteContact", () => {
 
     await feedbackHandler(data);
 
-    expect(checkRecaptchaMock).toHaveBeenCalledWith("valid-token", "feedback_form");
+    expect(checkRecaptchaMock).toHaveBeenCalledWith(
+      "valid-token",
+      "feedback_form",
+    );
     expect(feedbackMadeMock).toHaveBeenCalledWith(
       "Unhappy Customer",
       "555-987-6543",

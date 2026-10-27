@@ -2,12 +2,17 @@ import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 
 const sentryMock = { captureException: jest.fn() };
 const profileGetMock = jest.fn();
+const postMessageMock = jest.fn();
+const eventsOnMock = jest.fn();
 
 jest.unstable_mockModule("@slack/bolt", () => ({
   default: {
     App: class {
       constructor() {
-        this.client = { users: { profile: { get: profileGetMock } } };
+        this.client = {
+          users: { profile: { get: profileGetMock } },
+          chat: { postMessage: postMessageMock },
+        };
       }
       async start() {}
     },
@@ -15,7 +20,7 @@ jest.unstable_mockModule("@slack/bolt", () => ({
 }));
 jest.unstable_mockModule("@sentry/node", () => sentryMock);
 jest.unstable_mockModule("../../util/events.js", () => ({
-  default: { emit: jest.fn(), on: jest.fn() },
+  default: { emit: jest.fn(), on: eventsOnMock },
 }));
 jest.unstable_mockModule("../../util/prismaClient.js", () => ({ default: {} }));
 jest.unstable_mockModule("../../util/apis/Jobber.js", () => ({
@@ -46,6 +51,9 @@ jest.unstable_mockModule("../../util/apis/OpenAI.js", () => ({
 }));
 
 const { handleInteractivity } = await import("../../util/apis/SlackBot.js");
+
+// Captured before beforeEach clears the mocks
+const handlers = Object.fromEntries(eventsOnMock.mock.calls);
 
 /** A button click, which first looks up the clicking user's profile */
 const click = () => ({
@@ -88,5 +96,35 @@ describe("Slack interactivity", () => {
     await expect(handleInteractivity(click())).resolves.toBeUndefined();
 
     expect(sentryMock.captureException).toHaveBeenCalled();
+  });
+});
+
+describe("website form review", () => {
+  test("every form is posted to call-logs with the reCAPTCHA result and a send button", async () => {
+    process.env.SLACK_CALL_LOGS = "call-logs";
+    postMessageMock.mockResolvedValue({ ok: true });
+    const receivedAt = new Date("2026-10-27T17:08:00Z");
+
+    await handlers["slackbot-send-website-form-review"](
+      { name: "Jane Doe", phone: "555-123-4567", message: "Leaking pipe" },
+      "passed reCAPTCHA, score 0.9",
+      receivedAt,
+    );
+
+    const post = postMessageMock.mock.calls[0][0];
+    expect(post.channel).toBe("call-logs");
+    expect(post.text).toContain(
+      "Website form (passed reCAPTCHA, score 0.9). Review it, and send it as a contact if it's real.",
+    );
+    const button = post.blocks[1].elements[0];
+    expect(button.action_id).toBe("send-website-contact-0");
+    expect(JSON.parse(button.value)).toEqual({
+      form: {
+        name: "Jane Doe",
+        phone: "555-123-4567",
+        message: "Leaking pipe",
+      },
+      receivedAt: "2026-10-27T17:08:00.000Z",
+    });
   });
 });
