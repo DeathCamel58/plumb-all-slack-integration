@@ -467,7 +467,8 @@ async function getExistingPhones(distinctId) {
  * @returns {Promise<object>} Geo properties object (empty if no address or lookup fails)
  */
 async function resolveGeoData(address) {
-  if (!address || address === "") {
+  // An address with no parts, like ", , " or "N/A, , ", isn't worth a lookup
+  if (!/[a-z0-9]/i.test(String(address ?? "").replace(/\bN\/A\b/gi, ""))) {
     return {};
   }
 

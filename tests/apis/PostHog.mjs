@@ -259,6 +259,24 @@ describe("PostHog", () => {
       expect(getCaptureEvents()).toContain("$identify");
     });
 
+    test.each([", , ", "N/A, , ", "  "])(
+      "Doesn't look up an address with no parts (%j)",
+      async (address) => {
+        const contact = new Contact(
+          "CI",
+          "CI Test User",
+          "234-567-8901",
+          null,
+          null,
+          address,
+          null,
+        );
+
+        await PostHog.sendClientToPostHog(contact);
+        expect(searchPlaceMock).not.toHaveBeenCalled();
+      },
+    );
+
     test("Log Contact", async () => {
       const contact = new Contact(
         "CI",
