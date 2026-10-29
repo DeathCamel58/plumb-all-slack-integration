@@ -56,12 +56,12 @@ const { handleInteractivity } = await import("../../util/apis/SlackBot.js");
 const handlers = Object.fromEntries(eventsOnMock.mock.calls);
 
 /** A button click, which first looks up the clicking user's profile */
-const click = () => ({
+const click = (action_id = "jobs") => ({
   body: {
     payload: {
       type: "block_actions",
       user: { id: "U1" },
-      actions: [{ action_id: "jobs" }],
+      actions: [{ action_id }],
     },
   },
 });
@@ -96,6 +96,15 @@ describe("Slack interactivity", () => {
     await expect(handleInteractivity(click())).resolves.toBeUndefined();
 
     expect(sentryMock.captureException).toHaveBeenCalled();
+  });
+
+  test("a click on a Jobber link button is ignored without a warning", async () => {
+    profileGetMock.mockResolvedValue({ ok: true, profile: {} });
+
+    await handleInteractivity(click("open-jobber-link"));
+
+    expect(console.warn).not.toHaveBeenCalled();
+    expect(sentryMock.captureException).not.toHaveBeenCalled();
   });
 });
 

@@ -1038,6 +1038,7 @@ async function unfurlMessage(event) {
               text: ":globe_with_meridians: View",
             },
             url: needToUnfurl.quotes[i].jobberWebUri,
+            action_id: "open-jobber-link",
           },
         });
       }
@@ -1065,6 +1066,7 @@ async function unfurlMessage(event) {
               text: ":globe_with_meridians: View",
             },
             url: needToUnfurl.jobs[i].jobberWebUri,
+            action_id: "open-jobber-link",
           },
         });
       }
@@ -1092,6 +1094,7 @@ async function unfurlMessage(event) {
               text: ":globe_with_meridians: View",
             },
             url: needToUnfurl.invoices[i].jobberWebUri,
+            action_id: "open-jobber-link",
           },
         });
       }
@@ -2124,6 +2127,9 @@ async function interactivity(req) {
 
             await publishHome(event.user.id);
 
+            break;
+          case "open-jobber-link":
+            // Slack reports link button clicks too; the browser opens the link
             break;
           default:
             console.warn(
