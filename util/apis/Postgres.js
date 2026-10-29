@@ -529,10 +529,9 @@ async function jobCreateUpdate(data) {
       create: { ...row },
     });
   } catch (e) {
-    // `jobs_pk` is the index name behind @unique(map:) on jobNumber. The pg
-    // adapter always reports columns rather than the index for a 23505, so it
-    // is only matched in case we ever move back to the query engine, which
-    // reports constraint names instead.
+    // Since Prisma 7.10 the pg adapter reports a 23505's constraint name
+    // (`jobs_pk` is the index behind @unique(map:) on jobNumber) rather than its
+    // columns, so both are matched.
     if (isUniqueConstraintOn(e, "jobNumber", "jobs_pk")) {
       // Another row already owns this job number. That is either a concurrent
       // insert of this same job, or a job Jobber recreated under a new id —
@@ -545,7 +544,7 @@ async function jobCreateUpdate(data) {
         where: { jobNumber: data.jobNumber },
         data: { ...updateData, id: data.id },
       });
-    } else if (isUniqueConstraintOn(e, "id")) {
+    } else if (isUniqueConstraintOn(e, "id", "Job_pkey")) {
       // Prisma's upsert isn't atomic, so a concurrent webhook for this same job
       // can insert the row between our update and our create.
       console.log(
@@ -691,7 +690,7 @@ async function quoteCreateUpdate(data) {
     // Nested writes (the `connect`s above) force Prisma to emulate the upsert
     // as an update-then-create, which isn't atomic: QUOTE_CREATE and
     // QUOTE_UPDATE arriving together both miss the update and race the create.
-    if (!isUniqueConstraintOn(e, "id")) {
+    if (!isUniqueConstraintOn(e, "id", "Quote_pkey")) {
       throw e;
     }
     console.log(
@@ -967,7 +966,7 @@ async function upsertTimesheet(data) {
   } catch (e) {
     // The connects above make Prisma emulate the upsert as update-then-create,
     // so TIMESHEET_CREATE and TIMESHEET_UPDATE arriving together race the create.
-    if (!isUniqueConstraintOn(e, "id")) {
+    if (!isUniqueConstraintOn(e, "id", "TimeSheetEntry_pkey")) {
       throw e;
     }
     console.log(

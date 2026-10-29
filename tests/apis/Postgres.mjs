@@ -95,6 +95,21 @@ function uniqueViolation(...fields) {
   return error;
 }
 
+/**
+ * Builds a P2002 in the shape @prisma/adapter-pg 7.10+ produces, which names
+ * the violated constraint instead of its columns.
+ */
+function uniqueIndexViolation(index) {
+  const error = new Error("Unique constraint failed");
+  error.code = "P2002";
+  error.meta = {
+    driverAdapterError: {
+      cause: { kind: "UniqueConstraintViolation", constraint: { index } },
+    },
+  };
+  return error;
+}
+
 const mockClient = {
   companyName: "Test Co",
   createdAt: "2026-01-01T00:00:00Z",
@@ -194,7 +209,7 @@ describe("jobCreateUpdate", () => {
   });
 
   test("recovers when the conflict names the index instead of the column", async () => {
-    prismaMock.job.upsert.mockRejectedValue(uniqueViolation("jobs_pk"));
+    prismaMock.job.upsert.mockRejectedValue(uniqueIndexViolation("jobs_pk"));
 
     await jobCreateUpdate(mockJob);
 
@@ -205,6 +220,16 @@ describe("jobCreateUpdate", () => {
 
   test("recovers from a concurrent insert of the same job", async () => {
     prismaMock.job.upsert.mockRejectedValue(uniqueViolation("id"));
+
+    await jobCreateUpdate(mockJob);
+
+    const args = prismaMock.job.update.mock.calls[0][0];
+    expect(args.where).toEqual({ id: "job-1" });
+    expect(args.data.id).toBeUndefined();
+  });
+
+  test("recovers when a concurrent insert names the primary key", async () => {
+    prismaMock.job.upsert.mockRejectedValue(uniqueIndexViolation("Job_pkey"));
 
     await jobCreateUpdate(mockJob);
 
@@ -246,6 +271,17 @@ describe("quoteCreateUpdate", () => {
     const args = prismaMock.quote.update.mock.calls[0][0];
     expect(args.where).toEqual({ id: "quote-1" });
     expect(args.data.id).toBeUndefined();
+  });
+
+  test("recovers when a concurrent insert names the primary key", async () => {
+    prismaMock.quote.upsert.mockRejectedValue(
+      uniqueIndexViolation("Quote_pkey"),
+    );
+
+    await quoteCreateUpdate(mockQuote);
+
+    const args = prismaMock.quote.update.mock.calls[0][0];
+    expect(args.where).toEqual({ id: "quote-1" });
   });
 
   test("rethrows a conflict on any other field", async () => {
@@ -301,6 +337,18 @@ describe("timesheetCreateUpdate", () => {
     const { create } = prismaMock.timeSheetEntry.upsert.mock.calls[0][0];
     expect(create.endAt).toBeNull();
     expect(create.startAt).toEqual(new Date("2026-10-08T12:00:00Z"));
+  });
+
+  test("updates instead when TIMESHEET_CREATE and TIMESHEET_UPDATE race", async () => {
+    prismaMock.timeSheetEntry.upsert.mockRejectedValue(
+      uniqueIndexViolation("TimeSheetEntry_pkey"),
+    );
+
+    await timesheetCreateUpdate(mockTimesheet);
+
+    const args = prismaMock.timeSheetEntry.update.mock.calls[0][0];
+    expect(args.where).toEqual({ id: "timesheet-1" });
+    expect(args.data.id).toBeUndefined();
   });
 
   test("catches a failed upsert instead of rejecting", async () => {

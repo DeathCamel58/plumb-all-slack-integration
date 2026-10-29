@@ -24,8 +24,9 @@ export function uniqueConstraintFields(error) {
 
 /**
  * Checks whether an error is a unique constraint violation on any of the given
- * fields. Index names are accepted too, since Postgres reports the index rather
- * than the columns for some violations.
+ * fields. Pass the constraint's name too: since Prisma 7.10 the pg adapter
+ * reports the constraint (e.g. `Job_pkey`) rather than its columns whenever
+ * Postgres names one, which is every time for a 23505.
  *
  * @param {*} error The error thrown by a Prisma call
  * @param {...string} fields Field or index names to match against
