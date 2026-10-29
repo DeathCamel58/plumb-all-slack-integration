@@ -52,30 +52,34 @@ export function saveNewToken(refresh_token) {
   // Save the refresh token to file
   let file =
     process.env.ENV_LOCATION || "/root/plumb-all-slack-integration/.env";
-  fs.readFile(file, "utf8", function (err, data) {
-    if (err) {
-      Sentry.captureException(err);
-      return console.error(err);
-    }
+  // Jobber invalidates the old refresh token, so switch to the new one right
+  // away, and read the file synchronously so two saves can't interleave
+  const oldToken = process.env.JOBBER_REFRESH_TOKEN;
+  process.env.JOBBER_REFRESH_TOKEN = refresh_token;
+  let data;
+  try {
+    data = fs.readFileSync(file, "utf8");
+  } catch (err) {
+    Sentry.captureException(err);
+    return console.error(err);
+  }
 
-    let result = data.replace(process.env.JOBBER_REFRESH_TOKEN, refresh_token);
-    process.env.JOBBER_REFRESH_TOKEN = refresh_token;
+  let result = data.replace(oldToken, refresh_token);
 
-    // Write data into a new file
-    fs.writeFileSync(`${file}2`, result, "utf8");
+  // Write data into a new file
+  fs.writeFileSync(`${file}2`, result, "utf8");
 
-    // Ensure the new file isn't empty, then delete the original, and move new into the original's place
-    if (fs.statSync(`${file}2`)["size"] > 0) {
-      fs.unlinkSync(file);
-      fs.renameSync(`${file}2`, file);
-    } else {
-      console.error(
-        "Jobber: ERROR: New file is empty. Dumping variables and arguments to assist with debugging.",
-      );
-      console.info(`\trefresh_token:\t${refresh_token}`);
-      console.info(`\tdata:\t${data}`);
-    }
-  });
+  // Ensure the new file isn't empty, then delete the original, and move new into the original's place
+  if (fs.statSync(`${file}2`)["size"] > 0) {
+    fs.unlinkSync(file);
+    fs.renameSync(`${file}2`, file);
+  } else {
+    console.error(
+      "Jobber: ERROR: New file is empty. Dumping variables and arguments to assist with debugging.",
+    );
+    console.info(`\trefresh_token:\t${refresh_token}`);
+    console.info(`\tdata:\t${data}`);
+  }
 }
 
 /**
@@ -264,11 +268,22 @@ export async function getRefreshToken() {
   }
 }
 
+let refreshInFlight = null;
+
 /**
- * Updates the access token when it's found to be invalid.
+ * Updates the access token when it's found to be invalid. Requests that fail
+ * together share one refresh: each refresh uses up the refresh token, so a
+ * second one sent alongside it would be rejected.
  * @returns {Promise<void>}
  */
-export async function refreshAccessToken() {
+export function refreshAccessToken() {
+  refreshInFlight ??= refreshAccessTokenOnce().finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
+}
+
+async function refreshAccessTokenOnce() {
   let success = false;
   let data;
   let retries = 0;
@@ -336,12 +351,13 @@ export async function makeRequest(query) {
   const MAX_RETRIES = 5;
   while (!success && retries < MAX_RETRIES) {
     retries++;
+    const accessToken = JOBBER_ACCESS_TOKEN;
     try {
       response = await fetch(JOBBER_BASE_URL, {
         method: "post",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${JOBBER_ACCESS_TOKEN}`,
+          Authorization: `Bearer ${accessToken}`,
           "X-JOBBER-GRAPHQL-VERSION": "2026-09-25",
         },
         body: `{"query":${JSON.stringify(query)}}`,
@@ -357,7 +373,10 @@ export async function makeRequest(query) {
           console.error(
             `Jobber: Got ${response.status} from the Jobber API. Refreshing access token and trying again!`,
           );
-          await refreshAccessToken();
+          // Another request may have refreshed it while this one was out
+          if (accessToken === JOBBER_ACCESS_TOKEN) {
+            await refreshAccessToken();
+          }
           break;
         // HTTP: All Others
         default:
