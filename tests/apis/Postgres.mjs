@@ -57,6 +57,11 @@ jest.unstable_mockModule("../../util/apis/Jobber.js", () => ({
   getJobData: jest.fn(),
   getInvoiceData: jest.fn(),
   getClientData: jest.fn(),
+  getQuoteData: jest.fn(),
+  getPaymentData: jest.fn(),
+  getVisitData: jest.fn(),
+  getRequestData: jest.fn(),
+  getTimesheetData: jest.fn(),
 }));
 
 const { customFieldsJson, USER_REFRESH_MS } =
@@ -400,6 +405,31 @@ describe("clientDestroy", () => {
     prismaMock.invoice.findMany.mockResolvedValue([{ id: "invoice-1" }]);
   });
 
+  test("saves again the work a merge moved to another client before deleting", async () => {
+    // What jobCreateUpdate looks up already exists
+    for (const model of ["client", "property", "user"]) {
+      prismaMock[model].findMany.mockResolvedValue([{ id: "exists" }]);
+    }
+    Jobber.getJobData.mockReset().mockResolvedValueOnce(mockJob);
+
+    await clientDestroy("client-1");
+
+    expect(Jobber.getJobData).toHaveBeenCalledWith("job-1");
+    const [saved] = prismaMock.job.upsert.mock.invocationCallOrder;
+    const [deleted] = prismaMock.job.deleteMany.mock.invocationCallOrder;
+    expect(saved).toBeLessThan(deleted);
+  });
+
+  test("deletes nothing when Jobber can't say what still exists", async () => {
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    Jobber.getQuoteData.mockReset().mockRejectedValueOnce(new Error("down"));
+
+    await clientDestroy("client-1");
+
+    expect(calls).toEqual([]);
+    errorSpy.mockRestore();
+  });
+
   test("deletes link rows and payments before the quotes, jobs and invoices they point at", async () => {
     await clientDestroy("client-1");
 
@@ -515,6 +545,19 @@ describe("propertyDestroy", () => {
     expect(prismaMock.property.deleteMany).toHaveBeenCalledWith({
       where: { id: "property-1" },
     });
+  });
+
+  test("saves again the jobs a merge moved to another property first", async () => {
+    Jobber.getJobData.mockReset().mockResolvedValueOnce(mockJob);
+
+    await propertyDestroy("property-1");
+
+    expect(prismaMock.job.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { property: "property-1" } }),
+    );
+    const [saved] = prismaMock.job.upsert.mock.invocationCallOrder;
+    const [deleted] = prismaMock.property.deleteMany.mock.invocationCallOrder;
+    expect(saved).toBeLessThan(deleted);
   });
 
   test("EXPENSE_DESTROY only deletes the expense", async () => {

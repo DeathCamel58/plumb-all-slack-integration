@@ -413,7 +413,7 @@ export async function makeRequest(query) {
 /**
  * Runs Jobber Invoice query for given itemID, and returns the data
  * @param itemID The itemID in the webhook
- * @returns {Promise<*>} The data for the invoice
+ * @returns {Promise<*>} The data for the invoice, or null if Jobber no longer has it
  */
 export async function getInvoiceData(itemID) {
   let query = `
@@ -514,6 +514,10 @@ query InvoiceQuery {
         `;
 
   let invoiceResponse = await makeRequest(query);
+  // Jobber returns null for one that's been deleted (or merged away)
+  if (!invoiceResponse["invoice"]) {
+    return null;
+  }
 
   invoiceResponse["invoice"].client = await getClientData(
     invoiceResponse["invoice"].client.id,
@@ -586,7 +590,7 @@ query InvoiceQuery {
 /**
  * Runs Jobber Quote query for given itemID, and returns the data
  * @param itemID The itemID in the webhook
- * @returns {Promise<*>} The data for the quote
+ * @returns {Promise<*>} The data for the quote, or null if Jobber no longer has it
  */
 export async function getQuoteData(itemID) {
   let query = `
@@ -659,6 +663,10 @@ query QuoteQuery {
         `;
 
   let quoteResponse = await makeRequest(query);
+  // Jobber returns null for one that's been deleted (or merged away)
+  if (!quoteResponse["quote"]) {
+    return null;
+  }
 
   quoteResponse["quote"].client = await getClientData(
     quoteResponse["quote"].client.id,
@@ -901,7 +909,7 @@ query ClientQuery {
 /**
  * Runs Jobber payment query for given itemID, and returns the data
  * @param itemID The itemID in the webhook
- * @returns {Promise<*>} The data for the payment
+ * @returns {Promise<*>} The data for the payment, or null if Jobber no longer has it
  */
 export async function getPaymentData(itemID) {
   let query = `
@@ -939,6 +947,10 @@ query PaymentQuery {
         `;
 
   let paymentResponse = await makeRequest(query);
+  // Jobber returns null for one that's been deleted (or merged away)
+  if (!paymentResponse["paymentRecord"]) {
+    return null;
+  }
 
   paymentResponse["paymentRecord"].client = await getClientData(
     paymentResponse["paymentRecord"].client.id,
@@ -980,7 +992,7 @@ query PayoutQuery {
 /**
  * Runs Jobber property query for given itemID, and returns the data
  * @param itemID The itemID in the webhook
- * @returns {Promise<*>} The data for the property
+ * @returns {Promise<*>} The data for the property, or null if Jobber no longer has it
  */
 export async function getPropertyData(itemID) {
   let query = `
@@ -1018,6 +1030,10 @@ query PropertyQuery {
         `;
 
   let propertyResponse = await makeRequest(query);
+  // Jobber returns null for one that's been deleted (or merged away)
+  if (!propertyResponse["property"]) {
+    return null;
+  }
 
   propertyResponse["property"].client = await getClientData(
     propertyResponse["property"].client.id,
@@ -1029,7 +1045,7 @@ query PropertyQuery {
 /**
  * Runs Jobber visit query for given itemID, and returns the data
  * @param itemID The itemID in the webhook
- * @returns {Promise<*>} The data for the visit
+ * @returns {Promise<*>} The data for the visit, or null if Jobber no longer has it
  */
 export async function getVisitData(itemID) {
   let query = `
@@ -1084,6 +1100,10 @@ query VisitQuery {
         `;
 
   let visitResponse = await makeRequest(query);
+  // Jobber returns null for one that's been deleted (or merged away)
+  if (!visitResponse["visit"]) {
+    return null;
+  }
 
   visitResponse["visit"].client = await getClientData(
     visitResponse["visit"].client.id,
@@ -1095,7 +1115,7 @@ query VisitQuery {
 /**
  * Runs Jobber request query for given itemID, and returns the data
  * @param itemID The itemID in the webhook
- * @returns {Promise<*>} The data for the request
+ * @returns {Promise<*>} The data for the request, or null if Jobber no longer has it
  */
 export async function getRequestData(itemID) {
   let query = `
@@ -1141,6 +1161,10 @@ query RequestQuery {
         `;
 
   let requestResponse = await makeRequest(query);
+  // Jobber returns null for one that's been deleted (or merged away)
+  if (!requestResponse["request"]) {
+    return null;
+  }
 
   requestResponse["request"].client = await getClientData(
     requestResponse["request"].client.id,

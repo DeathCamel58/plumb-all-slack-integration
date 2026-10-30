@@ -8,6 +8,11 @@ import {
   getJobData,
   getInvoiceData,
   getClientData,
+  getQuoteData,
+  getPaymentData,
+  getVisitData,
+  getRequestData,
+  getTimesheetData,
 } from "./Jobber.js";
 import {
   uniqueConstraintFields,
@@ -255,13 +260,96 @@ async function clientCreateUpdate(data) {
 events.on("db-CLIENT_CREATE_UPDATE", clientCreateUpdate);
 
 /**
- * Removes a client and everything of theirs. Link rows and payments are
- * deleted before the rows they point at, and timesheets and expenses (which
- * belong to employees) are kept with their client and job references cleared.
+ * Saves again the stored records Jobber still has. Jobber merges clients and
+ * properties by moving their work to the one it keeps, then sends only a
+ * destroy for the other one, with no updates for what moved.
+ * @param {string} kind - What the records are, for the log
+ * @param {string[]} ids - Stored record IDs
+ * @param {(id: string) => Promise<object|null>} fetchRecord - Jobber getter
+ * @param {(data: object) => Promise<void>} save - Saves the fetched record
+ * @returns {Promise<void>}
+ */
+async function resaveFromJobber(kind, ids, fetchRecord, save) {
+  let resaved = 0;
+  for (const id of ids) {
+    const data = await fetchRecord(id);
+    if (data) {
+      await save(data);
+      resaved++;
+    }
+  }
+  if (resaved > 0) {
+    console.log(`Postgres: Re-saved ${resaved} ${kind} Jobber still has`);
+  }
+}
+
+/** IDs of the stored rows of a model matching a filter */
+async function storedIds(model, where) {
+  const rows = await prisma[model].findMany({ where, select: { id: true } });
+  return rows.map((row) => row.id);
+}
+
+/**
+ * Removes a client and everything of theirs. Work Jobber still has (moved to
+ * another client by a merge) is saved again first, so only what Jobber
+ * deleted goes. Link rows and payments are deleted before the rows they point
+ * at, and timesheets and expenses (which belong to employees) are kept with
+ * their client and job references cleared.
  * @param {string} id - Jobber client ID
  */
 async function clientDestroy(id) {
   try {
+    const where = { client: id };
+    const whereClientId = { clientId: id };
+    await resaveFromJobber(
+      "properties",
+      await storedIds("property", where),
+      getPropertyData,
+      propertyCreateUpdate,
+    );
+    await resaveFromJobber(
+      "quotes",
+      await storedIds("quote", whereClientId),
+      getQuoteData,
+      quoteCreateUpdate,
+    );
+    await resaveFromJobber(
+      "jobs",
+      await storedIds("job", whereClientId),
+      getJobData,
+      jobCreateUpdate,
+    );
+    await resaveFromJobber(
+      "invoices",
+      await storedIds("invoice", whereClientId),
+      getInvoiceData,
+      invoiceCreateUpdate,
+    );
+    await resaveFromJobber(
+      "payments",
+      await storedIds("payment", where),
+      getPaymentData,
+      paymentCreateUpdate,
+    );
+    await resaveFromJobber(
+      "visits",
+      await storedIds("visit", whereClientId),
+      getVisitData,
+      visitCreateUpdate,
+    );
+    await resaveFromJobber(
+      "requests",
+      await storedIds("request", whereClientId),
+      getRequestData,
+      requestCreateUpdate,
+    );
+    await resaveFromJobber(
+      "timesheets",
+      await storedIds("timeSheetEntry", where),
+      getTimesheetData,
+      upsertTimesheet,
+    );
+
     await prisma.$transaction(async (tx) => {
       const ids = async (model, where) =>
         (await tx[model].findMany({ where, select: { id: true } })).map(
@@ -832,12 +920,26 @@ events.on("db-PROPERTY_CREATE_UPDATE", propertyCreateUpdate);
 
 async function propertyDestroy(id) {
   try {
+    // A merge moves the property's jobs and quotes to the one Jobber keeps,
+    // and their updates can arrive after this destroy
+    await resaveFromJobber(
+      "jobs",
+      await storedIds("job", { property: id }),
+      getJobData,
+      jobCreateUpdate,
+    );
+    await resaveFromJobber(
+      "quotes",
+      await storedIds("quote", { propertyId: id }),
+      getQuoteData,
+      quoteCreateUpdate,
+    );
     await prisma.property.deleteMany({
       where: { id: id },
     });
     console.log("Postgres: Destroyed property");
   } catch (e) {
-    // Fails if quotes or jobs still reference the property
+    // Fails if quotes or jobs Jobber still has reference the property
     Sentry.captureException(e, { extra: { propertyId: id } });
     console.error(`Postgres: Error destroying property ${id}:`, e);
   }
