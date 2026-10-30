@@ -207,6 +207,13 @@ export async function restateClickConversion({
     });
   }
 
+  if (row.retractRequestedAt) {
+    console.log(
+      `GoogleAds: gclid=${gclid} was flagged a bad lead in Slack and its conversion retracted — not restating $${value} from call ${callId || "unknown"}`,
+    );
+    return false;
+  }
+
   // Keyed by normalized start_time: webhook payloads and CallRail API results
   // both carry it in the same form, unlike their call id field names.
   const callKey = toEventTimestamp(startTime);

@@ -129,6 +129,13 @@ export async function sendAssetCallValue({ gclid, callId, startTime, value }) {
       return;
     }
 
+    if (row.retractRequestedAt) {
+      console.log(
+        `GoogleAds: Asset call ${callId} was flagged a bad lead in Slack and its value retracted — not sending $${value}`,
+      );
+      return;
+    }
+
     if (!row.uploadedAt) {
       if (Date.now() - new Date(row.createdAt).getTime() <= STALE_CLAIM_MS) {
         console.log(

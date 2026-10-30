@@ -22,6 +22,10 @@ import fetch from "node-fetch";
 import { hostFile } from "../mediaStore.js";
 import { transcribeDualChannel } from "./Deepgram.js";
 import { analyzeConversation } from "./OpenAI.js";
+import {
+  callIdFromCallRailMessage,
+  markCallBadLead,
+} from "./CallRailBadLead.js";
 
 const slackCallChannelName = process.env.SLACK_CHANNEL || "calls";
 
@@ -1476,6 +1480,91 @@ async function handleCallRailLogMessage(event) {
   }
 }
 
+/**
+ * Marks the call behind a CallRail "New Call" post in call-logs as a bad lead,
+ * then says what happened (in the post's thread, or the channel if the post
+ * was deleted).
+ *
+ * Retractions can't be undone, so only workspace admins can flag a call. A
+ * reaction is checked here; Slack itself only lets admins delete a bot's post.
+ * @param {string} channel Channel id the post is in
+ * @param {{text?: string, ts?: string, thread_ts?: string}|undefined} message The post
+ * @param {string} trigger What flagged it, e.g. "X reaction by <@U123>"
+ * @param {boolean} postDeleted Whether the post is gone (no thread to reply in)
+ * @param {string|null} [userId] Who reacted; must be an admin
+ * @returns {Promise<void>}
+ */
+async function markCallRailPostBadLead(
+  channel,
+  message,
+  trigger,
+  postDeleted,
+  userId = null,
+) {
+  if (!process.env.SLACK_CALL_LOGS || !message) return;
+  // Thread replies aren't CallRail posts
+  if (message.thread_ts && message.thread_ts !== message.ts) return;
+
+  const callId = callIdFromCallRailMessage(message.text);
+  if (!callId) return;
+  if (channel !== (await resolveChannelId(process.env.SLACK_CALL_LOGS))) return;
+
+  if (userId && !(await isUserAdmin(userId))) {
+    console.info(
+      `Slack: Ignoring X on call ${callId} from non-admin ${userId}`,
+    );
+    try {
+      await app.client.chat.postEphemeral({
+        channel,
+        user: userId,
+        text: "Only Slack admins can mark a call as a bad lead with :x:. Ask an admin if this call was spam or not a real lead.",
+      });
+    } catch (e) {
+      console.warn("Slack: Failed to tell a non-admin about :x:", e.message);
+    }
+    return;
+  }
+
+  const result = await markCallBadLead({ callId, trigger });
+  if (result.duplicate) return;
+
+  const callRailText = {
+    marked: "marked *not a lead* in CallRail",
+    disabled: "not marked in CallRail (CallRail API is disabled)",
+    failed: "*could not* be marked in CallRail (add the X again to retry)",
+  }[result.callRail];
+  const conversionTexts = result.conversions.map(({ label, status }) => {
+    const statusText = {
+      retracted: "retracted",
+      validated: "checked by Google but *not* retracted (dry run)",
+      pending: "not retracted yet; retrying hourly",
+      "already retracted": "already retracted",
+      failed: "*could not* be retracted",
+    }[status];
+    return `Google Ads ${label} ${statusText}`;
+  });
+  if (conversionTexts.length === 0) {
+    conversionTexts.push("no Google Ads conversion to retract");
+  }
+
+  const text = `:x: ${postDeleted ? `Deleted call post (${callId})` : "Call"} ${callRailText}. ${conversionTexts.join("; ")}. (${trigger})`;
+
+  try {
+    await app.client.chat.postMessage({
+      channel,
+      thread_ts: postDeleted ? undefined : message.ts,
+      text,
+      unfurl_links: false,
+      username: "Call Bot",
+      icon_url:
+        "https://plumb-all.com/wp-content/uploads/2018/08/cropped-icon.png",
+    });
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Slack: Failed to post bad lead result:", e.message);
+  }
+}
+
 /** Fields of a website form kept on the "Send as contact" button */
 const WEBSITE_FORM_FIELDS = [
   "name",
@@ -1613,6 +1702,19 @@ export async function event(req) {
           process.env.TRELLO_LIST_NAME_NO_GO,
         );
       }
+
+      // An X on a CallRail call post marks the call a bad lead. fetchMessage
+      // returns the newest top-level message at or before ts, so make sure it
+      // is the post that was reacted to.
+      if (event.reaction === "x" && message?.ts === event.item.ts) {
+        await markCallRailPostBadLead(
+          event.item.channel,
+          message,
+          `X reaction by <@${event.user}>`,
+          false,
+          event.user,
+        );
+      }
       break;
     case "message":
       // Handle CallRail messages in the call-logs channel
@@ -1634,6 +1736,12 @@ export async function event(req) {
         // If this was a message deletion
         case "message_deleted":
           console.info(`Slack: Message deleted!`);
+          await markCallRailPostBadLead(
+            event.channel,
+            event.previous_message,
+            "call post deleted",
+            true,
+          );
           break;
         // If this was a message created
         case "bot_message":

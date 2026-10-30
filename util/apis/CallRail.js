@@ -130,6 +130,56 @@ export async function updateCall(
 }
 
 /**
+ * Marks a CallRail call as not a lead (CallRail's "bad lead"), tagging it so
+ * the reason shows in CallRail. Reversible in CallRail, unlike spam.
+ * @param {string} callId The CallRail call ID (CAL…)
+ * @param {string} note A note to attach
+ * @returns {Promise<object|null>} The updated call
+ */
+export async function markCallNotALead(callId, note) {
+  if (isApiDisabled()) return null;
+
+  const maxRetries = 3;
+
+  let payload = {
+    lead_status: "not_a_lead",
+    note: note,
+    tags: ["slack-bad-lead"],
+    append_tags: true,
+  };
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    let response = await fetch(`${BASE_URL}/calls/${callId}.json`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Token token="${CALLRAIL_API_KEY}"`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (response.ok) {
+      return await response.json();
+    }
+
+    let body = await response.text().catch(() => "");
+
+    if (response.status >= 500 && attempt < maxRetries) {
+      let delay = 1000 * Math.pow(2, attempt - 1);
+      console.warn(
+        `CallRail: Mark not-a-lead failed with ${response.status} (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms: ${body}`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      continue;
+    }
+
+    throw new Error(
+      `CallRail mark not-a-lead failed: ${response.status} ${response.statusText}: ${body}`,
+    );
+  }
+}
+
+/**
  * Search CallRail for SMS threads matching the given phone number
  * @param {string} phoneE164 Phone number in E.164 format
  * @returns {Promise<object[]>} All matching SMS threads (empty array if none)

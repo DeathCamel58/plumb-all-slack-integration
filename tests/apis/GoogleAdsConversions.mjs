@@ -437,5 +437,37 @@ describe("GoogleAdsConversions", () => {
       expect(adjustment.adjustmentType).toBe("RESTATEMENT");
       expect(adjustment.restatementValue).toEqual({ adjustedValue: 0 });
     });
+
+    test("RETRACTION matches by orderId and sends no value", async () => {
+      mockApi(jsonResponse({ results: [{}] }));
+
+      const result = await uploadConversionAdjustment({
+        gclid: "abc123",
+        conversionDateTime: "2026-09-23T13:42:24.157-04:00",
+        orderId: "CALbad",
+        adjustmentType: "RETRACTION",
+      });
+
+      expect(result).toBe(true);
+      const { body } = apiCall();
+      const adjustment = body.conversionAdjustments[0];
+      expect(adjustment.adjustmentType).toBe("RETRACTION");
+      expect(adjustment.orderId).toBe("CALbad");
+      expect(adjustment).not.toHaveProperty("restatementValue");
+      expect(body).not.toHaveProperty("validateOnly");
+    });
+
+    test("validateOnly is sent when asked for", async () => {
+      mockApi(jsonResponse({ results: [{}] }));
+
+      await uploadConversionAdjustment({
+        orderId: "CALbad",
+        conversionDateTime: "2026-09-23T13:42:24.157-04:00",
+        adjustmentType: "RETRACTION",
+        validateOnly: true,
+      });
+
+      expect(apiCall().body.validateOnly).toBe(true);
+    });
   });
 });

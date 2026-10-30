@@ -388,6 +388,23 @@ describe("GoogleAdsClickTracking", () => {
   });
 
   describe("restateClickConversion", () => {
+    test("A click flagged a bad lead is not restated", async () => {
+      model.findUnique.mockResolvedValue(
+        uploadedRow({ retractRequestedAt: new Date() }),
+      );
+
+      const result = await restateClickConversion({
+        gclid: GCLID,
+        startTime: THIRD_CALL_START,
+        value: 745,
+        callId: "CALthird",
+      });
+
+      expect(result).toBe(false);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(model.update).not.toHaveBeenCalled();
+    });
+
     test("Value on call #3 → restates the first call's conversion", async () => {
       model.findUnique.mockResolvedValue(uploadedRow());
       model.update.mockResolvedValue({});

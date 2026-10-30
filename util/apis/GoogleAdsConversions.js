@@ -49,7 +49,9 @@ async function getAccessToken() {
  * @param {number} params.adjustedValue - The new dollar value to set
  * @param {string} [params.orderId] - transactionId the conversion was uploaded with (CallRail call id)
  * @param {string} [params.conversionActionId] - Conversion action resource name (defaults to GOOGLE_ADS_CONVERSION_ACTION_ID)
- * @returns {Promise<boolean>} true if successful
+ * @param {"RESTATEMENT"|"RETRACTION"} [params.adjustmentType] - RETRACTION removes the conversion (adjustedValue is ignored)
+ * @param {boolean} [params.validateOnly] - Dry run: Google checks the adjustment but records nothing
+ * @returns {Promise<boolean|string>} true if successful, "CONVERSION_NOT_FOUND" if Google has no such conversion
  */
 export async function uploadConversionAdjustment({
   gclid,
@@ -57,6 +59,8 @@ export async function uploadConversionAdjustment({
   adjustedValue,
   orderId,
   conversionActionId = process.env.GOOGLE_ADS_CONVERSION_ACTION_ID,
+  adjustmentType = "RESTATEMENT",
+  validateOnly = false,
 }) {
   if (!process.env.GOOGLE_ADS_CUSTOMER_ID || !conversionActionId) {
     console.warn(
@@ -80,8 +84,11 @@ export async function uploadConversionAdjustment({
       new Date().toISOString(),
     );
 
+    const isRetraction = adjustmentType === "RETRACTION";
+    const label = isRetraction ? "retraction" : `value=$${adjustedValue}`;
+
     console.log(
-      `GoogleAds: Uploading conversion adjustment — gclid=${gclid} value=$${adjustedValue} ${orderId ? `orderId=${orderId}` : `datetime=${formattedDateTime}`}`,
+      `GoogleAds: Uploading conversion adjustment — gclid=${gclid} ${label} ${orderId ? `orderId=${orderId}` : `datetime=${formattedDateTime}`}${validateOnly ? " (validateOnly)" : ""}`,
     );
 
     const url = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${customerId}:uploadConversionAdjustments`;
@@ -100,7 +107,7 @@ export async function uploadConversionAdjustment({
         conversionAdjustments: [
           {
             conversionAction: conversionActionId,
-            adjustmentType: "RESTATEMENT",
+            adjustmentType,
             ...(orderId
               ? { orderId }
               : {
@@ -110,12 +117,17 @@ export async function uploadConversionAdjustment({
                   },
                 }),
             adjustmentDateTime: adjustmentDateTime,
-            restatementValue: {
-              adjustedValue: adjustedValue,
-            },
+            ...(isRetraction
+              ? {}
+              : {
+                  restatementValue: {
+                    adjustedValue: adjustedValue,
+                  },
+                }),
           },
         ],
         partialFailure: true,
+        ...(validateOnly ? { validateOnly: true } : {}),
       }),
     });
 
@@ -133,6 +145,7 @@ export async function uploadConversionAdjustment({
           orderId,
           conversionDateTime: formattedDateTime,
           adjustedValue,
+          adjustmentType,
           result,
         },
       });
@@ -161,6 +174,7 @@ export async function uploadConversionAdjustment({
               orderId,
               conversionDateTime: formattedDateTime,
               adjustedValue,
+              adjustmentType,
               error: result.partialFailureError,
             },
           },
@@ -170,7 +184,7 @@ export async function uploadConversionAdjustment({
     }
 
     console.log(
-      `GoogleAds: Successfully uploaded conversion adjustment for gclid=${gclid} value=$${adjustedValue}`,
+      `GoogleAds: Successfully uploaded conversion adjustment for gclid=${gclid} ${label}${validateOnly ? " (validateOnly — not applied)" : ""}`,
     );
     return true;
   } catch (e) {

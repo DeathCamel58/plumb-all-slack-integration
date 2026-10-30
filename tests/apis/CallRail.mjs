@@ -12,6 +12,7 @@ process.env.CALLRAIL_ACCOUNT_ID = "test-account-id";
 const {
   getCallDetails,
   listCallsWithValueAndGclid,
+  markCallNotALead,
   searchCallByPhone,
   searchSMSByPhone,
   updateCall,
@@ -92,6 +93,22 @@ describe("CallRail", () => {
       tags: ["invoice-paid"],
       append_tags: true,
       lead_status: "good_lead",
+    });
+  });
+
+  test("markCallNotALead sets not_a_lead and adds the slack-bad-lead tag", async () => {
+    fetchMock.mockResolvedValueOnce(mockFetchResponse({ id: "CAL42" }));
+
+    await markCallNotALead("CAL42", "Marked not a lead from Slack (X)");
+
+    expect(fetchMock.mock.calls[0][0]).toContain("/calls/CAL42.json");
+    expect(fetchMock.mock.calls[0][1].method).toBe("PUT");
+    // Never touches the value, and never marks spam (spam can't be undone)
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      lead_status: "not_a_lead",
+      note: "Marked not a lead from Slack (X)",
+      tags: ["slack-bad-lead"],
+      append_tags: true,
     });
   });
 

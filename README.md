@@ -7,7 +7,7 @@ Internal integration hub for [Plumb-All](https://plumb-all.com). Connects Jobber
 - **[Jobber](https://getjobber.com)** -- Webhooks for clients, requests, quotes, jobs, invoices, payments, expenses, visits, and timesheets. Events are forwarded to PostHog, Slack, and Trello.
 - **[Twilio](https://twilio.com)** -- Inbound/outbound call routing, recording, voicemail, phone number management, and SMS.
 - **[CallRail](https://callrail.com)** -- Call tracking, lead qualification, first-invoice conversion attribution. Webhooks trigger Google Ads conversion adjustments when calls have value and a GCLID.
-- **[Slack](https://slack.com)** -- Contact cards in `#calls`, interactive actions (outbound calls, send-to-contact, reactions update Trello), slash commands.
+- **[Slack](https://slack.com)** -- Contact cards in `#calls`, interactive actions (outbound calls, send-to-contact, reactions update Trello), slash commands. An :x: reaction on (or deletion of) a CallRail call post in call-logs marks the call not a lead in CallRail and retracts its Google Ads conversion.
 - **[Google Ads](https://ads.google.com)** -- Conversion value adjustments via the REST API, lead form webhooks.
 - **[PostHog](https://posthog.com)** -- Contact and event analytics. Tracks clients, requests, quotes, jobs, invoices, expenses, and visits. Merges identities across Twilio, Jobber, and CallRail.
 - **[Mailchimp](https://mailchimp.com)** -- Marketing events on invoice create/update.
@@ -68,6 +68,9 @@ GOOGLE_ADS_CONVERSION_ACTION_ID=customers/1234567890/conversionActions/123456789
 # Secondary click-conversion action that carries invoice values for calls from
 # the call button on an ad (CallRail source "Google Ads Assets"). Unset = skipped
 GOOGLE_ADS_ASSET_VALUE_CONVERSION_ACTION_ID=customers/1234567890/conversionActions/1234567890
+# TRUE = an X reaction or deleted call post in call-logs only validates the
+# Google Ads retraction (nothing is retracted); CallRail is still marked
+GOOGLE_ADS_RETRACTION_VALIDATE_ONLY=FALSE
 # Data Manager API (click conversion creation)
 # TRUE = send validateOnly (dry run, nothing is recorded)
 GOOGLE_DATA_MANAGER_VALIDATE_ONLY=FALSE
