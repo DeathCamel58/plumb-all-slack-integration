@@ -166,6 +166,13 @@ async function updateTwilioNumberSlackDetails(employeePhoneNumber) {
  */
 export async function getOrAssignEmployeeNumber(employeePhoneNumber) {
   const employeeE164 = toE164(employeePhoneNumber);
+  // Without a number, step 1 would match an unassigned row and hand it out
+  // without assigning it
+  if (!employeeE164) {
+    throw new Error(
+      "Can't assign a Twilio number to an employee without a phone number",
+    );
+  }
 
   const result = await prisma.$transaction(
     async (tx) => {

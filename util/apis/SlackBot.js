@@ -160,6 +160,34 @@ export async function resolveUserByPhoneNumber(phoneNumber) {
 }
 
 /**
+ * Tells someone with no phone on their Slack profile that they can't call or
+ * text customers until they add one. Used where there's no channel to post an
+ * ephemeral message in, like the App Home buttons.
+ * @param {string} triggerId - From the interaction
+ * @param {string} action - What was blocked, e.g. "start the call"
+ * @returns {Promise<void>}
+ */
+async function openPhoneRequiredModal(triggerId, action) {
+  await app.client.views.open({
+    trigger_id: triggerId,
+    view: {
+      type: "modal",
+      title: { type: "plain_text", text: "Phone number needed" },
+      close: { type: "plain_text", text: "OK" },
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `I couldn't ${action} because your Slack profile doesn't have a valid phone number. Add one in Slack profile settings and try again.`,
+          },
+        },
+      ],
+    },
+  });
+}
+
+/**
  * Publishes the app home view for a user.
  * @param {string} user_id
  * @returns {Promise<void>}
@@ -1908,6 +1936,17 @@ async function interactivity(req) {
           case "outbound-text-0":
             console.log("Slack: User wants an outbound text!");
 
+            // Texts go out from the employee's assigned number, found by
+            // their phone number, so check it before opening the modal
+            if (!employeePhoneNumber) {
+              await app.client.chat.postEphemeral({
+                channel: event.channel?.id,
+                user: event.user.id,
+                text: "I couldn't send the SMS because your Slack profile doesn't have a valid phone number. Add one in Slack profile settings and try again.",
+              });
+              break;
+            }
+
             const outboundTextThreadTs =
               event?.container?.thread_ts ||
               event?.container?.message_ts ||
@@ -1987,6 +2026,11 @@ async function interactivity(req) {
           case "new-outbound-call-0":
             console.log("Slack: User wants an outbound call!");
 
+            if (!employeePhoneNumber) {
+              await openPhoneRequiredModal(event.trigger_id, "start the call");
+              break;
+            }
+
             await app.client.views.open({
               trigger_id: event.trigger_id,
               view: {
@@ -2030,6 +2074,11 @@ async function interactivity(req) {
             break;
           case "new-outbound-sms-0":
             console.log("Slack: User wants to send an outbound SMS!");
+
+            if (!employeePhoneNumber) {
+              await openPhoneRequiredModal(event.trigger_id, "send the SMS");
+              break;
+            }
 
             await app.client.views.open({
               trigger_id: event.trigger_id,
@@ -2265,6 +2314,16 @@ async function interactivity(req) {
       switch (event.view.callback_id) {
         case "send_text_modal":
           console.log("Slack: User submitted a send text modal!");
+
+          // The button checks this too, but the phone could have been removed
+          // from their profile since the modal opened
+          if (!employeePhoneNumber) {
+            await app.client.chat.postMessage({
+              channel: event.user.id,
+              text: "I couldn't send the SMS because your Slack profile doesn't have a valid phone number. Add one in Slack profile settings and try again.",
+            });
+            break;
+          }
 
           let privateMetadata = {};
           try {

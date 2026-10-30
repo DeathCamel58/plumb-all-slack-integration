@@ -275,6 +275,16 @@ describe("Twilio", () => {
     });
   });
 
+  test("getOrAssignEmployeeNumber refuses an employee without a phone number", async () => {
+    await expect(Twilio.getOrAssignEmployeeNumber(undefined)).rejects.toThrow(
+      "without a phone number",
+    );
+
+    expect(txFindFirstMock).not.toHaveBeenCalled();
+    expect(txUpdateManyMock).not.toHaveBeenCalled();
+    expect(eventsEmitMock).not.toHaveBeenCalled();
+  });
+
   test("getOrAssignEmployeeNumber throws when no Twilio numbers are available", async () => {
     txFindFirstMock.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
 

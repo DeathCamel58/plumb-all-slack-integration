@@ -9,6 +9,8 @@ const listChannelsMock = jest.fn();
 const markCallBadLeadMock = jest.fn();
 const usersInfoMock = jest.fn();
 const postEphemeralMock = jest.fn();
+const viewsOpenMock = jest.fn();
+const textCustomerMock = jest.fn();
 
 jest.unstable_mockModule("@slack/bolt", () => ({
   default: {
@@ -21,6 +23,7 @@ jest.unstable_mockModule("@slack/bolt", () => ({
             postEphemeral: postEphemeralMock,
           },
           conversations: { history: historyMock, list: listChannelsMock },
+          views: { open: viewsOpenMock },
         };
       }
       async start() {}
@@ -44,7 +47,7 @@ jest.unstable_mockModule("../../util/apis/Twilio.js", () => ({
   callEmployeeThenCustomer: jest.fn(),
   getOrAssignEmployeeNumber: jest.fn(),
   returnAssignedPhoneNumbers: jest.fn(),
-  textCustomer: jest.fn(),
+  textCustomer: textCustomerMock,
   unassignNumber: jest.fn(),
   updateTwilioContact: jest.fn(),
   updateTwilioContactTs: jest.fn(),
@@ -111,6 +114,73 @@ describe("Slack interactivity", () => {
     await expect(handleInteractivity(click())).resolves.toBeUndefined();
 
     expect(sentryMock.captureException).toHaveBeenCalled();
+  });
+
+  test("a text button from someone without a phone in Slack says to add one", async () => {
+    profileGetMock.mockResolvedValue({ ok: true, profile: {} });
+    const event = click("outbound-text-0");
+    event.body.payload.channel = { id: "C1" };
+
+    await handleInteractivity(event);
+
+    expect(viewsOpenMock).not.toHaveBeenCalled();
+    expect(postEphemeralMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: "C1",
+        user: "U1",
+        text: expect.stringContaining(
+          "Slack profile doesn't have a valid phone number",
+        ),
+      }),
+    );
+    expect(sentryMock.captureException).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ["new-outbound-call-0", "start the call"],
+    ["new-outbound-sms-0", "send the SMS"],
+  ])(
+    "%s from someone without a phone in Slack opens a notice instead of the form",
+    async (actionId, blocked) => {
+      profileGetMock.mockResolvedValue({ ok: true, profile: {} });
+
+      await handleInteractivity(click(actionId));
+
+      expect(viewsOpenMock).toHaveBeenCalledTimes(1);
+      const { view } = viewsOpenMock.mock.calls[0][0];
+      expect(view.callback_id).toBeUndefined();
+      expect(view.blocks[0].text.text).toContain(`I couldn't ${blocked}`);
+    },
+  );
+
+  test("submitting the text modal without a phone in Slack sends nothing", async () => {
+    profileGetMock.mockResolvedValue({ ok: true, profile: {} });
+
+    await handleInteractivity({
+      body: {
+        payload: {
+          type: "view_submission",
+          user: { id: "U1" },
+          view: {
+            callback_id: "send_text_modal",
+            private_metadata: JSON.stringify({
+              customerPhoneNumber: "+15555550123",
+            }),
+            state: { values: {} },
+          },
+        },
+      },
+    });
+
+    expect(textCustomerMock).not.toHaveBeenCalled();
+    expect(postMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: "U1",
+        text: expect.stringContaining(
+          "Slack profile doesn't have a valid phone number",
+        ),
+      }),
+    );
   });
 
   test("a click on a Jobber link button is ignored without a warning", async () => {
