@@ -1,6 +1,11 @@
 import * as DataUtilities from "./DataUtilities.js";
 
 /**
+ * The type of contact for leads from Jobber's Yelp integration
+ */
+export const YELP_LEAD_TYPE = "Yelp Lead";
+
+/**
  * A contact from a client
  */
 export default class Contact {
@@ -61,6 +66,11 @@ export default class Contact {
     this.contactMessage = message ? message.replace(/^\s+|\s+$/g, "") : message;
 
     this.contactSource = source ?? null;
+
+    /**
+     * The Jobber client, when the contact came from Jobber
+     */
+    this.contactJobberClient = null;
   }
 
   get type() {
@@ -125,6 +135,14 @@ export default class Contact {
 
   set source(source) {
     this.contactSource = source;
+  }
+
+  get jobberClient() {
+    return this.contactJobberClient;
+  }
+
+  set jobberClient(jobberClient) {
+    this.contactJobberClient = jobberClient;
   }
 
   /**

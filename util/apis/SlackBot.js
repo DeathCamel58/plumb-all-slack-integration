@@ -1,12 +1,12 @@
 import Slack from "@slack/bolt";
 import * as crypto from "crypto";
 import * as Jobber from "./Jobber.js";
-import { interleave, toE164 } from "../DataUtilities.js";
+import { interleave, normalizePhoneNumber, toE164 } from "../DataUtilities.js";
 import events from "../events.js";
 import * as Sentry from "@sentry/node";
 import { findUserInvoices, findUserJobs } from "./Jobber.js";
 import prisma from "../prismaClient.js";
-import Contact from "../contact.js";
+import Contact, { YELP_LEAD_TYPE } from "../contact.js";
 import * as CallRail from "./CallRail.js";
 import { deliverWebsiteContact } from "./WebsiteContact.js";
 import {
@@ -534,6 +534,38 @@ export async function uploadFile(
 events.on("slackbot-upload-file", uploadFile);
 
 /**
+ * Builds the Call and Text buttons for a customer's phone number.
+ * @param {string} phone
+ * @returns {object} An actions block
+ */
+function callTextButtons(phone) {
+  return {
+    type: "actions",
+    elements: [
+      {
+        type: "button",
+        text: {
+          type: "plain_text",
+          text: "Call",
+        },
+        style: "primary",
+        value: phone,
+        action_id: "outbound-call-0",
+      },
+      {
+        type: "button",
+        text: {
+          type: "plain_text",
+          text: "Text",
+        },
+        value: phone,
+        action_id: "outbound-text-0",
+      },
+    ],
+  };
+}
+
+/**
  * Sends a contact message with call/text actions to Slack.
  * @param {{messageToSend: () => string, phone: string}} contact
  * @param {string} username
@@ -565,30 +597,7 @@ async function sendContactMessage(
         {
           type: "divider",
         },
-        {
-          type: "actions",
-          elements: [
-            {
-              type: "button",
-              text: {
-                type: "plain_text",
-                text: "Call",
-              },
-              style: "primary",
-              value: contact.phone,
-              action_id: "outbound-call-0",
-            },
-            {
-              type: "button",
-              text: {
-                type: "plain_text",
-                text: "Text",
-              },
-              value: contact.phone,
-              action_id: "outbound-text-0",
-            },
-          ],
-        },
+        callTextButtons(contact.phone),
       );
     }
     await app.client.chat.postMessage({
@@ -920,6 +929,66 @@ async function fetchMessage(id, ts) {
   } catch (error) {
     Sentry.captureException(error);
     console.error(error);
+  }
+}
+
+/**
+ * Adds Call and Text buttons when someone posts a phone number in a Yelp
+ * lead's thread. Yelp leads often come in without one, and it's shared in the
+ * thread once the customer gives it.
+ * @param {{text?: string, ts: string, thread_ts?: string, channel: string, bot_id?: string}} event
+ * @returns {Promise<void>}
+ */
+async function offerYelpLeadPhone(event) {
+  if (!event.thread_ts || event.thread_ts === event.ts || event.bot_id) {
+    return;
+  }
+
+  const match = event.text?.match(
+    /(?<!\d)(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}(?!\d)/,
+  );
+  const phone = toE164(match?.[0]);
+  if (!phone) {
+    return;
+  }
+
+  try {
+    const lead = await fetchMessage(event.channel, event.thread_ts);
+    if (
+      lead?.ts !== event.thread_ts ||
+      !lead.text?.startsWith(`=== New ${YELP_LEAD_TYPE} ===`)
+    ) {
+      return;
+    }
+
+    // The lead came in with this phone, so it already has the buttons
+    const leadPhones = (lead.blocks ?? [])
+      .flatMap((block) => block.elements ?? [])
+      .map((element) => toE164(element.value));
+    if (leadPhones.includes(phone)) {
+      return;
+    }
+
+    const text = `Phone number for this lead: ${normalizePhoneNumber(phone)}`;
+    await sendMessageBlocks(
+      text,
+      [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: text,
+          },
+        },
+        callTextButtons(phone),
+      ],
+      `${YELP_LEAD_TYPE} Contact`,
+      event.thread_ts,
+      event.channel,
+    );
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error("Slack: Couldn't add buttons for a Yelp lead's phone", error);
   }
 }
 
@@ -1775,6 +1844,7 @@ export async function event(req) {
         case "bot_message":
         case undefined:
           await unfurlMessage(event);
+          await offerYelpLeadPhone(event);
           break;
       }
       break;
@@ -1885,10 +1955,11 @@ async function interactivity(req) {
             const customerPhoneRaw = action.value;
             const customerPhoneNumber = customerPhoneRaw;
 
+            // Buttons posted in a thread log the call to that thread
             const slackTs =
+              event?.container?.thread_ts ||
               event?.container?.message_ts ||
               event?.message?.ts ||
-              event?.container?.thread_ts ||
               null;
 
             if (!customerPhoneNumber) {

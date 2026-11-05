@@ -581,4 +581,71 @@ describe("PostHog", () => {
       expect(bodies[0].$set).not.toHaveProperty("phones");
     });
   });
+
+  describe("Jobber leads", () => {
+    const personQueryKeys = () =>
+      fetchMock.mock.calls
+        .filter(([url]) => String(url).includes("/persons/"))
+        .map(([url]) => getQuery(String(url))?.[0]?.key)
+        .filter(Boolean);
+
+    test("names like Yelp's \"Mike R.\" aren't used to merge people", async () => {
+      await PostHog.logClient(buildClient({ name: "Mike R." }));
+      PostHog.clearLoggedClients();
+      await PostHog.logClient(buildClient({ id: "other", name: "Mike" }));
+
+      expect(personQueryKeys()).not.toContain("name");
+    });
+
+    test("full names are still used to merge people", async () => {
+      await PostHog.logClient(buildClient({ name: "Dylan Corrales" }));
+
+      expect(personQueryKeys()).toContain("name");
+    });
+
+    test("the client's lead source is saved without Jobber's trailing space", async () => {
+      await PostHog.logClient(buildClient({ leadSource: "Yelp Leads " }));
+
+      expect(getIdentifyBodies()[0].$set.leadSource).toBe("Yelp Leads");
+    });
+
+    test("a lead source missing from the query isn't cleared", async () => {
+      await PostHog.logClient(buildClient());
+
+      expect(getIdentifyBodies()[0].$set).not.toHaveProperty("leadSource");
+    });
+
+    test("a Jobber request is logged under its client, noting it has no phone", async () => {
+      const client = buildClient({ name: "Mike R.", phones: [] });
+      const contact = new Contact(
+        "Yelp Lead",
+        "Mike R.",
+        null,
+        null,
+        "abc@messaging.yelp.com",
+        null,
+        "Request link",
+        "Yelp",
+      );
+      contact.jobberClient = client;
+
+      await PostHog.logContact(contact, "{}");
+
+      const contactMade = fetchMock.mock.calls
+        .filter(([url]) => String(url).includes("/capture/"))
+        .map(([, options]) => JSON.parse(options.body))
+        .find((body) => body.event === "contact made");
+      expect(contactMade.properties).toMatchObject({
+        distinct_id: client.id,
+        source: "Yelp",
+        type: "Yelp Lead",
+        hasPhone: false,
+        $set: { latestContactSource: "Yelp Lead" },
+      });
+      expect(getIdentifyBodies().map((body) => body.distinct_id)).toEqual([
+        client.id,
+      ]);
+      expect(personQueryKeys()).not.toContain("name");
+    });
+  });
 });

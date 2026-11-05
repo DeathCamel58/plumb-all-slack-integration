@@ -678,7 +678,11 @@ export async function sendClientToPostHog(contact) {
  * @param originalMessage The message that was parsed into a contact.
  */
 export async function logContact(contact, originalMessage) {
-  let id = await sendClientToPostHog(contact);
+  // Jobber requests come with their client, so log them under its Jobber ID
+  // rather than matching people by name, email or phone
+  let id = contact.jobberClient
+    ? await logClient(contact.jobberClient)
+    : await sendClientToPostHog(contact);
 
   // Create an event for the person in PostHog
   let captureData = {
@@ -690,6 +694,8 @@ export async function logContact(contact, originalMessage) {
       message: contact.message,
       originalMessage: originalMessage,
       source: contact.source,
+      hasPhone: Boolean(contact.phone || contact.alternatePhone),
+      $set: { latestContactSource: contact.type },
     },
   };
   await useAPI("capture/", "post", captureData);
@@ -795,6 +801,7 @@ export async function logClient(jobberClient) {
     jobberClient.jobberWebUri,
     jobberClient.isCompany,
     jobberClient.companyName,
+    jobberClient.leadSource,
   ]);
 
   // Reuse a recent or in-flight log of the same details
@@ -833,6 +840,17 @@ export async function logClient(jobberClient) {
   );
   loggedClients.set(id, entry);
   return entry.pending;
+}
+
+/**
+ * Whether a name is specific enough to merge people by. Yelp leads come in as
+ * "Mike R." or just "Mike", which many different customers share.
+ * @param {string | null | undefined} name
+ * @returns {boolean}
+ */
+function isDistinctiveName(name) {
+  let words = name?.trim().split(/\s+/) ?? [];
+  return words.length >= 2 && words.at(-1).replace(/\.$/, "").length > 1;
 }
 
 /**
@@ -908,6 +926,11 @@ async function sendJobberClient(jobberClient) {
   clientData.jobberWebUri = jobberClient.jobberWebUri || null;
   clientData.isCompany = jobberClient.isCompany || false;
   clientData.companyName = jobberClient.companyName || null;
+  // Only some queries ask Jobber for the lead source, so don't clear it when missing
+  if ("leadSource" in jobberClient) {
+    // Jobber's Yelp integration sends "Yelp Leads " with a trailing space
+    clientData.leadSource = jobberClient.leadSource?.trim() || null;
+  }
 
   // Merge Jobber phone numbers with any existing phones in PostHog
   // (e.g. a Twilio caller ID that Jobber doesn't know about)
@@ -931,7 +954,7 @@ async function sendJobberClient(jobberClient) {
     let duplicateIds = new Set();
 
     let searchFields = [
-      ["name", jobberClient.name],
+      ["name", isDistinctiveName(jobberClient.name) ? jobberClient.name : null],
       ["email", defaultEmail],
       ["phone", defaultPhone],
     ];

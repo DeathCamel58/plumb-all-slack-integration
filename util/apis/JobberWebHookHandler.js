@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import * as Jobber from "./Jobber.js";
 import * as PostHog from "./PostHog.js";
-import Contact from "../contact.js";
+import Contact, { YELP_LEAD_TYPE } from "../contact.js";
 import * as APICoordinator from "../APICoordinator.js";
 import events from "../events.js";
 import * as Sentry from "@sentry/node";
@@ -599,17 +599,25 @@ async function requestCreateHandle(req) {
     let address = addressSource
       ? `${addressSource.street}, ${addressSource.city} ${addressSource.province}, ${addressSource.postalCode}`
       : null;
+    let phone = request.client.phones?.[0]?.number ?? null;
+    let message = `<${request.jobberWebUri}> (You may have to hold on that link, copy it, and paste it into your web browser to access it)`;
+    // Jobber's Yelp integration sets the source to "Yelp Leads "
+    let fromYelp = /yelp/i.test(request.source ?? "");
+    if (fromYelp && !phone) {
+      message = `:hourglass: No phone number yet, waiting on the customer to share one through Yelp.\n${message}`;
+    }
     // Send the request to Slack
     let contact = new Contact(
-      "Jobber Request",
+      fromYelp ? YELP_LEAD_TYPE : "Jobber Request",
       request.client.name,
-      request.client.phones?.[0]?.number ?? null,
+      phone,
       null,
       request.client.emails[0] ? request.client.emails[0].address : null,
       address,
-      `<${request.jobberWebUri}> (You may have to hold on that link, copy it, and paste it into your web browser to access it)`,
-      "Jobber",
+      message,
+      fromYelp ? "Yelp" : "Jobber",
     );
+    contact.jobberClient = request.client;
     events.emit("db-REQUEST_CREATE_UPDATE", request);
     await APICoordinator.contactMade(contact, JSON.stringify(body));
   }

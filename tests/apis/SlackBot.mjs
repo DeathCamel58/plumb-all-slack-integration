@@ -353,3 +353,103 @@ describe("bad lead flags on CallRail call posts", () => {
     expect(postMessageMock).not.toHaveBeenCalled();
   });
 });
+
+describe("phone numbers posted in a Yelp lead's thread", () => {
+  const CALLS = "C0CALLS";
+  const LEAD_TS = "1793400000.000100";
+  const yelpLead = {
+    ts: LEAD_TS,
+    text: "=== New Yelp Lead ===\nCaller: Mike R. ( abc@messaging.yelp.com )",
+    blocks: [{ type: "section", text: { type: "mrkdwn", text: "..." } }],
+  };
+  const reply = (text, extra = {}) => ({
+    body: {
+      event: {
+        type: "message",
+        channel: CALLS,
+        user: "U1",
+        ts: "1793400100.000200",
+        thread_ts: LEAD_TS,
+        text,
+        ...extra,
+      },
+    },
+  });
+
+  beforeEach(() => {
+    delete process.env.SLACK_CALL_LOGS;
+    postMessageMock.mockResolvedValue({ ok: true });
+    historyMock.mockResolvedValue({ messages: [yelpLead] });
+  });
+
+  test("replies in the thread with Call and Text buttons for the number", async () => {
+    await handleEvent(reply("Customer sent their number: (404) 555-0123"));
+
+    expect(postMessageMock).toHaveBeenCalledTimes(1);
+    const post = postMessageMock.mock.calls[0][0];
+    expect(post.channel).toBe(CALLS);
+    expect(post.thread_ts).toBe(LEAD_TS);
+    expect(post.text).toContain("(404) 555-0123");
+    const buttons = post.blocks.find((b) => b.type === "actions").elements;
+    expect(buttons.map((b) => [b.action_id, b.value])).toEqual([
+      ["outbound-call-0", "+14045550123"],
+      ["outbound-text-0", "+14045550123"],
+    ]);
+  });
+
+  test("reads a number Slack turned into a tel link", async () => {
+    await handleEvent(reply("<tel:4045550123|404-555-0123>"));
+
+    expect(postMessageMock.mock.calls[0][0].text).toContain("(404) 555-0123");
+  });
+
+  test("ignores numbers in threads that aren't Yelp leads", async () => {
+    historyMock.mockResolvedValue({
+      messages: [{ ts: LEAD_TS, text: "=== New Jobber Request ===" }],
+    });
+
+    await handleEvent(reply("404-555-0123"));
+
+    expect(postMessageMock).not.toHaveBeenCalled();
+  });
+
+  test("ignores the bot's own posts, so it doesn't answer itself", async () => {
+    await handleEvent(
+      reply("Phone number for this lead: (404) 555-0123", {
+        subtype: "bot_message",
+        bot_id: "B1",
+      }),
+    );
+
+    expect(historyMock).not.toHaveBeenCalled();
+    expect(postMessageMock).not.toHaveBeenCalled();
+  });
+
+  test("skips a number the lead already has buttons for", async () => {
+    historyMock.mockResolvedValue({
+      messages: [
+        {
+          ...yelpLead,
+          blocks: [
+            {
+              type: "actions",
+              elements: [
+                { action_id: "outbound-call-0", value: "(404) 555-0123" },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    await handleEvent(reply("404.555.0123"));
+
+    expect(postMessageMock).not.toHaveBeenCalled();
+  });
+
+  test("messages without a phone number don't look up the thread", async () => {
+    await handleEvent(reply("Asked them for a number on Yelp, job #12345"));
+
+    expect(historyMock).not.toHaveBeenCalled();
+  });
+});
