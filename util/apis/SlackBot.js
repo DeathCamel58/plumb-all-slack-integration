@@ -436,7 +436,7 @@ export async function sendMessageBlocks(
       blocks: blocks,
       unfurl_links: false,
       username: username,
-      thread_ts: threadTs,
+      thread_ts: threadTs ?? undefined,
       icon_url:
         "https://plumb-all.com/wp-content/uploads/2018/08/cropped-icon.png",
     });
