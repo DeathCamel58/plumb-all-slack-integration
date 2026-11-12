@@ -36,6 +36,10 @@
                 "service_category": "plumbing",
                 "service": "water_heater",
                 "description": "The water heater in the garage is leaking from the bottom and the water is cold.",
+                "additional_context": "Started two days ago. Pilot light stays lit but there is no hot water. The customer already checked the breaker and the gas valve; both are fine.",
+                "image_urls": [
+                  "https://example.com/photos/water-heater-leak.jpg"
+                ],
                 "preferred_window": {
                   "date": "2026-11-20",
                   "period": "morning"
@@ -167,6 +171,21 @@
             "maxLength": 2000,
             "description": "What the customer needs done, in the customer's terms."
           },
+          "additional_context": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Optional but very helpful. Anything else you know that could help our technician prepare: symptoms, when it started, what has been tried, and any diagnostics or troubleshooting that have already been done (by you or the customer) with the results. Send what you already have. Please do not ask the customer to run diagnostics just to fill this in."
+          },
+          "image_urls": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "type": "string",
+              "format": "uri",
+              "maxLength": 2000
+            },
+            "description": "Optional. Public https links to photos the customer has already taken of the issue, if you have them (up to 5, JPEG, PNG, WebP, GIF or HEIC, 8 MB each). We download each photo and attach it to the request, and also keep the link in the request notes. A link we can't download is skipped, and the request is still created. Please do not ask the customer to take photos just to fill this in; send only what you already have."
+          },
           "preferred_window": {
             "type": "object",
             "additionalProperties": false,
@@ -243,6 +262,10 @@
           "urgent": {
             "type": "boolean",
             "description": "Present and true when the request was flagged urgent. Tell the customer to call now."
+          },
+          "images_attached": {
+            "type": "integer",
+            "description": "Present when image_urls was sent. How many photos were attached to the request. Photos that could not be downloaded are not counted; their links are still in the notes."
           }
         }
       },

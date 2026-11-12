@@ -4,6 +4,7 @@ import Contact, { AI_AGENT_REQUEST_TITLE } from "../contact.js";
 import * as APICoordinator from "../APICoordinator.js";
 import { toE164 } from "../DataUtilities.js";
 import { createServiceRequest } from "./Jobber.js";
+import { hostBookingImages } from "./BookingImages.js";
 
 /**
  * Service requests from AI agents and other API clients (POST
@@ -40,6 +41,8 @@ const ALLOWED_FIELDS = [
   "service_category",
   "service",
   "description",
+  "additional_context",
+  "image_urls",
   "preferred_window",
   "is_emergency",
   "sms_consent",
@@ -76,6 +79,32 @@ export function agentLabel(source) {
 }
 
 const MAX_DESCRIPTION = 2000;
+const MAX_IMAGES = 5;
+const MAX_IMAGE_URL = 2000;
+
+/**
+ * Whether a string is a public https link. Private hosts are refused so a
+ * link in a staff note can't point at our own network.
+ * @param {string} value
+ * @returns {boolean}
+ */
+function isPublicHttpsUrl(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:" || url.username || url.password) return false;
+  const host = url.hostname.toLowerCase();
+  if (host === "localhost" || host.endsWith(".local") || !host.includes(".")) {
+    return false;
+  }
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(host) || host.startsWith("[")) {
+    return false;
+  }
+  return true;
+}
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 const IP_LIMIT_PER_HOUR = 5;
@@ -256,6 +285,28 @@ export function validateBooking(body) {
     errors.description = "Describe what the customer needs done.";
   }
 
+  const additionalContext = text("additional_context", {
+    required: false,
+    max: MAX_DESCRIPTION,
+  });
+
+  let imageUrls = [];
+  if (body.image_urls !== undefined && body.image_urls !== null) {
+    const urls = body.image_urls;
+    if (!Array.isArray(urls) || urls.length > MAX_IMAGES) {
+      errors.image_urls = `Must be a list of at most ${MAX_IMAGES} https links.`;
+    } else if (
+      !urls.every(
+        (u) => isString(u) && u.length <= MAX_IMAGE_URL && isPublicHttpsUrl(u),
+      )
+    ) {
+      errors.image_urls =
+        "Every item must be a public https link to a photo the customer already took.";
+    } else {
+      imageUrls = urls.map((u) => u.trim());
+    }
+  }
+
   let preferredWindow = null;
   if (body.preferred_window !== undefined && body.preferred_window !== null) {
     const w = body.preferred_window;
@@ -316,6 +367,8 @@ export function validateBooking(body) {
       category,
       service,
       description,
+      additionalContext,
+      imageUrls,
       preferredWindow,
       isEmergency: body.is_emergency === true,
       smsConsent: body.sms_consent,
@@ -402,6 +455,12 @@ function describeRequest(v, { urgent, jobberUrl, includeAgent = false }) {
     urgent ? "URGENT: customer reports an emergency." : null,
     `Service category: ${v.category}${v.service ? ` (${v.service})` : ""}`,
     `Description: ${v.description}`,
+    v.additionalContext
+      ? `Additional context from the AI agent: ${v.additionalContext}`
+      : null,
+    v.imageUrls.length
+      ? `Photos the customer already took:\n${v.imageUrls.join("\n")}`
+      : null,
     v.preferredWindow
       ? `Preferred window (a preference, not a booking): ${v.preferredWindow.date}, ${v.preferredWindow.period}`
       : null,
@@ -440,9 +499,15 @@ async function submitRequest(v) {
   const label = agentLabel(v.source);
   const title = `${urgent ? "URGENT: " : ""}${AI_AGENT_REQUEST_TITLE} (${label}): ${v.category}${v.service ? ` - ${v.service.replace(/_/g, " ")}` : ""}`;
 
+  // Best effort: a photo that can't be fetched stays a link in the note
+  const photos = v.imageUrls.length
+    ? await hostBookingImages(v.imageUrls)
+    : { urls: [], failed: 0 };
+
   let created;
   try {
     created = await createServiceRequest({
+      attachmentUrls: photos.urls,
       name: v.name,
       phone: v.phone,
       email: v.email,
@@ -455,6 +520,33 @@ async function submitRequest(v) {
         includeAgent: true,
       }),
       sourceText: `AI agent: ${label}`,
+      details: [
+        {
+          label: "Please provide as much information as you can",
+          answerText: v.description,
+        },
+        ...(v.additionalContext
+          ? [
+              {
+                label:
+                  "Additional context from the AI agent (symptoms, diagnostics already done)",
+                answerText: v.additionalContext,
+              },
+            ]
+          : []),
+        ...(v.imageUrls.length
+          ? [
+              {
+                label: "Share images of the work to be done",
+                answerText: v.imageUrls.join("\n"),
+              },
+            ]
+          : []),
+        {
+          label: "How did you hear about us?",
+          answerText: `AI agent: ${label}`,
+        },
+      ],
     });
   } catch (e) {
     Sentry.captureException(e);
@@ -488,6 +580,9 @@ async function submitRequest(v) {
       : "Same business day during office hours (Mon-Fri 8am-4pm)",
     emergency_phone: EMERGENCY_PHONE,
     ...(urgent ? { urgent: true } : {}),
+    ...(v.imageUrls.length
+      ? { images_attached: created.attached ? photos.urls.length : 0 }
+      : {}),
   });
 }
 

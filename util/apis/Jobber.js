@@ -1725,7 +1725,9 @@ query ClientByEmail {
  * @param {string} params.title The request title
  * @param {string} params.note The request note (details, source and flags)
  * @param {string|null} [params.sourceText] Where the customer came from, recorded on a new client
- * @returns {Promise<{requestId: string, clientId: string, url: string|null}>}
+ * @param {Array<{label: string, answerText: string}>} [params.details] Answers for the request's "Service details" form
+ * @param {string[]} [params.attachmentUrls] Public links to photos for Jobber to fetch and attach to the note
+ * @returns {Promise<{requestId: string, clientId: string, url: string|null, attached: boolean}>}
  */
 export async function createServiceRequest({
   name,
@@ -1736,6 +1738,8 @@ export async function createServiceRequest({
   title,
   note,
   sourceText = null,
+  details = [],
+  attachmentUrls = [],
 }) {
   let client = await findClientByPhoneOrEmail(phone, email);
 
@@ -1793,28 +1797,69 @@ mutation CreateBookingProperty {
     propertyId = data.propertyCreate.properties[0].id;
   }
 
-  const created = await makeRequest(`
+  const createRequest = async (withDetails) => {
+    const requestDetails =
+      withDetails && details.length
+        ? `requestDetails: { form: { sections: [{ label: "Service details", items: [${details
+            .map(
+              (d) =>
+                `{ label: ${gqlString(d.label)}, answerText: ${gqlString(d.answerText)} }`,
+            )
+            .join(", ")}] }] } }`
+        : "";
+    const created = await makeRequest(`
 mutation CreateBookingRequest {
   requestCreate(input: {
     clientId: ${gqlString(client.id)}
     propertyId: ${gqlString(propertyId)}
     title: ${gqlString(title)}
+    ${requestDetails}
   }) {
     request { id jobberWebUri }
     userErrors { message }
   }
 }`);
-  assertNoUserErrors("requestCreate", created.requestCreate);
+    assertNoUserErrors("requestCreate", created.requestCreate);
+    return created;
+  };
+
+  let created;
+  try {
+    created = await createRequest(true);
+  } catch (e) {
+    if (!details.length) throw e;
+    // The customer matters more than the form: the note still has everything
+    Sentry.captureException(e);
+    console.error("Jobber: Retrying the booking request without the form", e);
+    created = await createRequest(false);
+  }
   const request = created.requestCreate.request;
 
-  try {
+  const addNote = async (withAttachments) => {
+    const attachments = withAttachments
+      ? `attachments: [${attachmentUrls.map((u) => `{ url: ${gqlString(u)} }`).join(", ")}]`
+      : "";
     const noted = await makeRequest(`
 mutation CreateBookingRequestNote {
-  requestCreateNote(requestId: ${gqlString(request.id)}, input: { message: ${gqlString(note)} }) {
+  requestCreateNote(requestId: ${gqlString(request.id)}, input: { message: ${gqlString(note)} ${attachments} }) {
     userErrors { message }
   }
 }`);
     assertNoUserErrors("requestCreateNote", noted.requestCreateNote);
+  };
+
+  let attached = false;
+  try {
+    try {
+      await addNote(attachmentUrls.length > 0);
+      attached = attachmentUrls.length > 0;
+    } catch (e) {
+      if (!attachmentUrls.length) throw e;
+      // The photos are linked in the note text too
+      Sentry.captureException(e);
+      console.error("Jobber: Retrying the booking note without photos", e);
+      await addNote(false);
+    }
   } catch (e) {
     // The request exists; staff are told the details in Slack too
     Sentry.captureException(e);
@@ -1825,5 +1870,6 @@ mutation CreateBookingRequestNote {
     requestId: request.id,
     clientId: client.id,
     url: request.jobberWebUri ?? null,
+    attached,
   };
 }

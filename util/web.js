@@ -10,7 +10,7 @@ import * as Slack from "./apis/SlackBot.js";
 import * as Sentry from "@sentry/node";
 import cors from "cors";
 import { fileURLToPath } from "url";
-import { getFile } from "./mediaStore.js";
+import { getFile, peekReusableFile } from "./mediaStore.js";
 import {
   listTrackers,
   updateAllTrackerDestinations,
@@ -598,6 +598,16 @@ app.post("/website/negativeFeedback", cors(corsOptions), (req, res) => {
  */
 app.get("/media/:token", (req, res) => {
   const entry = getFile(req.params.token);
+  if (!entry) return res.status(404).send("Not found");
+  res.type(entry.contentType).send(entry.buffer);
+});
+
+/**
+ * Booking photos for Jobber to fetch. The file name only gives the link an
+ * extension; the token is what finds the file.
+ */
+app.get("/media/:token/:filename", (req, res) => {
+  const entry = peekReusableFile(req.params.token);
   if (!entry) return res.status(404).send("Not found");
   res.type(entry.contentType).send(entry.buffer);
 });

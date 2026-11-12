@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 const eventsEmitMock = jest.fn();
 const createServiceRequestMock = jest.fn();
 const contactMadeMock = jest.fn();
+const hostBookingImagesMock = jest.fn();
 
 jest.unstable_mockModule("../../util/events.js", () => ({
   default: { emit: eventsEmitMock, on: jest.fn() },
@@ -10,6 +11,10 @@ jest.unstable_mockModule("../../util/events.js", () => ({
 
 jest.unstable_mockModule("../../util/APICoordinator.js", () => ({
   contactMade: contactMadeMock,
+}));
+
+jest.unstable_mockModule("../../util/apis/BookingImages.js", () => ({
+  hostBookingImages: hostBookingImagesMock,
 }));
 
 jest.unstable_mockModule("../../util/apis/Jobber.js", () => ({
@@ -57,7 +62,14 @@ beforeEach(() => {
     requestId: "REQ123",
     clientId: "CLI123",
     url: "https://secure.getjobber.com/requests/1",
+    attached: true,
   });
+  hostBookingImagesMock.mockImplementation(async (links) => ({
+    urls: links.map(
+      (l, i) => `https://hosted.example/media/t${i}/photo-${i + 1}.jpg`,
+    ),
+    failed: 0,
+  }));
 });
 
 describe("handleBookingRequest", () => {
@@ -96,6 +108,114 @@ describe("handleBookingRequest", () => {
       "AI agent request (TestAgent): plumbing - water heater",
     );
     expect(args.sourceText).toBe("AI agent: TestAgent");
+  });
+
+  test("fills the Jobber service details form and carries the extra context", async () => {
+    const body = validBody({
+      additional_context:
+        "No hot water since Monday. Breaker and gas valve already checked.",
+    });
+    await handleBookingRequest(body, freshIp());
+
+    const args = createServiceRequestMock.mock.calls[0][0];
+    expect(args.details).toEqual([
+      {
+        label: "Please provide as much information as you can",
+        answerText: body.description,
+      },
+      {
+        label:
+          "Additional context from the AI agent (symptoms, diagnostics already done)",
+        answerText: body.additional_context,
+      },
+      {
+        label: "How did you hear about us?",
+        answerText: "AI agent: TestAgent",
+      },
+    ]);
+    expect(args.note).toContain("Breaker and gas valve already checked");
+    expect(contactMadeMock.mock.calls[0][0].message).toContain(
+      "Breaker and gas valve already checked",
+    );
+  });
+
+  test("without extra context the form has just the description and source", async () => {
+    await handleBookingRequest(validBody(), freshIp());
+
+    const { details } = createServiceRequestMock.mock.calls[0][0];
+    expect(details.map((d) => d.label)).toEqual([
+      "Please provide as much information as you can",
+      "How did you hear about us?",
+    ]);
+  });
+
+  test("photo links go to the form item, the note and Slack", async () => {
+    const urls = ["https://example.com/a.jpg", "https://cdn.example.org/b.png"];
+    await handleBookingRequest(validBody({ image_urls: urls }), freshIp());
+
+    const args = createServiceRequestMock.mock.calls[0][0];
+    expect(
+      args.details.find(
+        (d) => d.label === "Share images of the work to be done",
+      ).answerText,
+    ).toBe(urls.join("\n"));
+    expect(args.note).toContain(urls[1]);
+    expect(hostBookingImagesMock).toHaveBeenCalledWith(urls);
+    expect(args.attachmentUrls).toEqual([
+      "https://hosted.example/media/t0/photo-1.jpg",
+      "https://hosted.example/media/t1/photo-2.jpg",
+    ]);
+    expect(contactMadeMock.mock.calls[0][0].message).toContain(urls[0]);
+  });
+
+  test.each([
+    ["http link", ["http://example.com/a.jpg"]],
+    ["not a link", ["a photo"]],
+    ["localhost", ["https://localhost/a.jpg"]],
+    ["IP address", ["https://10.0.0.5/a.jpg"]],
+    ["credentials", ["https://user:pw@example.com/a.jpg"]],
+    ["not a list", "https://example.com/a.jpg"],
+    [
+      "too many",
+      Array.from({ length: 6 }, (_, i) => `https://example.com/${i}.jpg`),
+    ],
+  ])("image_urls with %s is rejected", async (_label, image_urls) => {
+    const { httpStatus, body } = await handleBookingRequest(
+      validBody({ image_urls }),
+      freshIp(),
+    );
+    expect(httpStatus).toBe(422);
+    expect(body.errors.image_urls).toBeDefined();
+  });
+
+  test("reports how many photos were attached", async () => {
+    const { body } = await handleBookingRequest(
+      validBody({ image_urls: ["https://example.com/a.jpg"] }),
+      freshIp(),
+    );
+    expect(body.images_attached).toBe(1);
+  });
+
+  test("a request without photos has no images_attached and downloads nothing", async () => {
+    const { body } = await handleBookingRequest(validBody(), freshIp());
+    expect(body.images_attached).toBeUndefined();
+    expect(hostBookingImagesMock).not.toHaveBeenCalled();
+  });
+
+  test("photos that could not be attached report zero but the request succeeds", async () => {
+    hostBookingImagesMock.mockResolvedValue({ urls: [], failed: 1 });
+    createServiceRequestMock.mockResolvedValue({
+      requestId: "REQ123",
+      clientId: "CLI123",
+      url: null,
+      attached: false,
+    });
+    const { httpStatus, body } = await handleBookingRequest(
+      validBody({ image_urls: ["https://example.com/a.jpg"] }),
+      freshIp(),
+    );
+    expect(httpStatus).toBe(201);
+    expect(body.images_attached).toBe(0);
   });
 
   test("normalizes the phone to E.164", async () => {

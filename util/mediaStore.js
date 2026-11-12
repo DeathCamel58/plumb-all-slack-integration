@@ -29,3 +29,31 @@ export function getFile(token) {
   store.delete(token);
   return entry;
 }
+
+const BOOKING_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+/**
+ * Stores a file that can be fetched more than once until it expires, for a
+ * service that may check the link before downloading it.
+ * @param {Buffer} buffer The raw file bytes
+ * @param {string} contentType The MIME type
+ * @param {number} [ttlMs] How long it stays available
+ * @returns {string} A random hex token used to retrieve the file
+ */
+export function hostReusableFile(buffer, contentType, ttlMs = BOOKING_TTL_MS) {
+  const token = crypto.randomBytes(16).toString("hex");
+  reusable.set(token, { buffer, contentType });
+  setTimeout(() => reusable.delete(token), ttlMs).unref();
+  return token;
+}
+
+const reusable = new Map();
+
+/**
+ * Retrieves a reusable file without removing it.
+ * @param {string} token The token returned by hostReusableFile
+ * @returns {{ buffer: Buffer, contentType: string } | null}
+ */
+export function peekReusableFile(token) {
+  return reusable.get(token) ?? null;
+}
