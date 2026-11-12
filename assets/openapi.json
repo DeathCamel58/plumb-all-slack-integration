@@ -107,6 +107,101 @@
           }
         }
       }
+    },
+    "/website/bookingRequest/{request_id}/additions": {
+      "post": {
+        "operationId": "addToRequest",
+        "summary": "Add photos or more context to a request you already made",
+        "description": "Use this after a 201 from the booking endpoint when you learn more or have photos the customer already took. Send the request_id in the path and the update_token from the original response. This only adds a note (and photo attachments) for our team; it never changes anything already on the request, and it works only while the request is still new. If the request is no longer editable, ask the customer to tell our team directly or call (770) 914-3877.\n\nWhat to tell the customer for each status:\n- `updated` (200): the update was added; the team will see it with the original request.\n- `invalid_request` (422): nothing was added; fix the fields in `errors`.\n- `not_found` (404): the request_id or update_token is wrong; check both from the original response.\n- `no_longer_editable` (409): our team is already working on it; the customer should tell them directly or call the office.\n- `rate_limited` (429): too many updates; try later or call the office.\n- `error` (500/503): the update may not have been recorded; ask the customer to call the office.",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The request_id from the 201 response."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdditionRequest"
+              },
+              "example": {
+                "update_token": "<token from the 201>",
+                "additional_context": "The customer also noticed the water meter dial moving with everything off.",
+                "image_urls": ["https://example.com/photos/meter.jpg"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Update added.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Updated"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Wrong request_id or update_token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdditionProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request is no longer editable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdditionProblem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The body was not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdditionProblem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many updates.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdditionProblem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The update may not have been recorded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdditionProblem"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -266,6 +361,19 @@
           "images_attached": {
             "type": "integer",
             "description": "Present when image_urls was sent. How many photos were attached to the request. Photos that could not be downloaded are not counted; their links are still in the notes."
+          },
+          "update_token": {
+            "type": "string",
+            "description": "Secret for adding to this request later. Keep it with the request_id."
+          },
+          "update_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Where to POST additions (photos, more context) for this request."
+          },
+          "update_note": {
+            "type": "string",
+            "description": "A reminder that photos and extra context can be added after the request is created."
           }
         }
       },
@@ -317,6 +425,83 @@
           },
           "emergency_phone": {
             "type": "string"
+          }
+        }
+      },
+      "AdditionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["update_token"],
+        "description": "Send additional_context, image_urls, or both.",
+        "properties": {
+          "update_token": {
+            "type": "string",
+            "description": "The update_token from the 201 response for this request."
+          },
+          "additional_context": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "More that you learned after submitting: symptoms, what was tried, diagnostics already done. Added as a new note; nothing already on the request is changed."
+          },
+          "image_urls": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "type": "string",
+              "format": "uri",
+              "maxLength": 2000
+            },
+            "description": "Public https links to photos the customer already took (JPEG, PNG, WebP, GIF or HEIC, 8 MB each). Please do not ask the customer to take photos just to send them."
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 128,
+            "description": "Optional. Repeating the same key for this request returns the original result."
+          }
+        }
+      },
+      "Updated": {
+        "type": "object",
+        "required": ["status", "request_id", "message"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["updated"]
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "images_attached": {
+            "type": "integer",
+            "description": "Present when image_urls was sent. How many photos were attached."
+          }
+        }
+      },
+      "AdditionProblem": {
+        "type": "object",
+        "required": ["status", "message"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "invalid_request",
+              "not_found",
+              "no_longer_editable",
+              "rate_limited",
+              "error"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         }
       }

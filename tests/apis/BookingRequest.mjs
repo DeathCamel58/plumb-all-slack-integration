@@ -4,6 +4,8 @@ const eventsEmitMock = jest.fn();
 const createServiceRequestMock = jest.fn();
 const contactMadeMock = jest.fn();
 const hostBookingImagesMock = jest.fn();
+const addRequestNoteMock = jest.fn();
+const getRequestForUpdateMock = jest.fn();
 
 jest.unstable_mockModule("../../util/events.js", () => ({
   default: { emit: eventsEmitMock, on: jest.fn() },
@@ -19,11 +21,15 @@ jest.unstable_mockModule("../../util/apis/BookingImages.js", () => ({
 
 jest.unstable_mockModule("../../util/apis/Jobber.js", () => ({
   createServiceRequest: createServiceRequestMock,
+  addRequestNote: addRequestNoteMock,
+  getRequestForUpdate: getRequestForUpdateMock,
 }));
 
 const {
   agentLabel,
+  handleBookingAddition,
   handleBookingRequest,
+  issueUpdateToken,
   isNotServiceRequest,
   looksLikeEmergency,
   parseAddress,
@@ -58,6 +64,17 @@ const freshIp = () => `10.0.0.${++ipCounter}`;
 beforeEach(() => {
   jest.clearAllMocks();
   resetBookingState();
+  process.env.BOOKING_UPDATE_SECRET = "test-secret";
+  process.env.WEB_URL = "https://integration.example";
+  addRequestNoteMock.mockResolvedValue({ attached: true });
+  getRequestForUpdateMock.mockResolvedValue({
+    title: "AI agent request (Claude): plumbing",
+    status: "NEW",
+    url: "https://secure.getjobber.com/requests/1",
+    name: "Jane Smith",
+    phone: "(770) 234-5678",
+    address: "1 Main St, Stockbridge, GA 30281",
+  });
   createServiceRequestMock.mockResolvedValue({
     requestId: "REQ123",
     clientId: "CLI123",
@@ -473,5 +490,165 @@ describe("parseAddress", () => {
 
   test("returns null for an address without city, state and ZIP", () => {
     expect(parseAddress("218 N McDonough St")).toBeNull();
+  });
+});
+
+describe("201 response carries what is needed to add to the request", () => {
+  test("update_token, update_url and a note about photos", async () => {
+    const { body } = await handleBookingRequest(validBody(), freshIp());
+    expect(body.update_token).toBe(issueUpdateToken("REQ123"));
+    expect(body.update_url).toBe(
+      "https://integration.example/website/bookingRequest/REQ123/additions",
+    );
+    expect(body.update_note).toContain("photos");
+  });
+
+  test("no secret means no token is issued", async () => {
+    delete process.env.BOOKING_UPDATE_SECRET;
+    delete process.env.JOBBER_APP_SECRET;
+    const { body } = await handleBookingRequest(validBody(), freshIp());
+    expect(body.update_token).toBeUndefined();
+  });
+});
+
+describe("handleBookingAddition", () => {
+  const token = () => issueUpdateToken("REQ123");
+
+  test("adds a note with the photos and tells staff in Slack only", async () => {
+    const { httpStatus, body } = await handleBookingAddition(
+      "REQ123",
+      {
+        update_token: token(),
+        additional_context: "Water meter dial moves with everything off.",
+        image_urls: ["https://example.com/meter.jpg"],
+      },
+      freshIp(),
+    );
+
+    expect(httpStatus).toBe(200);
+    expect(body).toMatchObject({ status: "updated", images_attached: 1 });
+    const note = addRequestNoteMock.mock.calls[0][0];
+    expect(note.requestId).toBe("REQ123");
+    expect(note.note).toContain("Water meter dial moves");
+    expect(note.note).toContain("https://example.com/meter.jpg");
+    expect(note.attachmentUrls).toHaveLength(1);
+    expect(eventsEmitMock).toHaveBeenCalledWith(
+      "slackbot-send-contact",
+      expect.objectContaining({ type: "AI Agent Booking Update" }),
+      "AI Agent Booking Update",
+    );
+    // Not a new contact: no Trello card or PostHog event
+    expect(contactMadeMock).not.toHaveBeenCalled();
+  });
+
+  test("a wrong token and an unknown request look the same", async () => {
+    const wrong = await handleBookingAddition(
+      "REQ123",
+      { update_token: "nope", additional_context: "x" },
+      freshIp(),
+    );
+    const otherRequest = await handleBookingAddition(
+      "REQ999",
+      { update_token: token(), additional_context: "x" },
+      freshIp(),
+    );
+
+    expect(wrong.httpStatus).toBe(404);
+    expect(otherRequest).toEqual(wrong);
+    expect(addRequestNoteMock).not.toHaveBeenCalled();
+    expect(getRequestForUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test("a request the booking API didn't make is not found", async () => {
+    getRequestForUpdateMock.mockResolvedValue({
+      title: "Kitchen remodel",
+      status: "new",
+    });
+    const { httpStatus } = await handleBookingAddition(
+      "REQ123",
+      { update_token: token(), additional_context: "x" },
+      freshIp(),
+    );
+    expect(httpStatus).toBe(404);
+    expect(addRequestNoteMock).not.toHaveBeenCalled();
+  });
+
+  test("a request staff already moved on is no longer editable", async () => {
+    getRequestForUpdateMock.mockResolvedValue({
+      title: "AI agent request (Claude): plumbing",
+      status: "ASSESSMENT_SCHEDULED",
+    });
+    const { httpStatus, body } = await handleBookingAddition(
+      "REQ123",
+      { update_token: token(), additional_context: "x" },
+      freshIp(),
+    );
+    expect(httpStatus).toBe(409);
+    expect(body.status).toBe("no_longer_editable");
+    expect(addRequestNoteMock).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ["nothing to add", {}],
+    ["unknown field", { additional_context: "x", status: "closed" }],
+    ["bad photo link", { image_urls: ["http://example.com/a.jpg"] }],
+  ])("%s is a 422", async (_label, extra) => {
+    const { httpStatus } = await handleBookingAddition(
+      "REQ123",
+      { update_token: token(), ...extra },
+      freshIp(),
+    );
+    expect(httpStatus).toBe(422);
+  });
+
+  test("a missing token is a 422", async () => {
+    const { httpStatus, body } = await handleBookingAddition(
+      "REQ123",
+      { additional_context: "x" },
+      freshIp(),
+    );
+    expect(httpStatus).toBe(422);
+    expect(body.errors.update_token).toBeDefined();
+  });
+
+  test("the same idempotency key adds only once", async () => {
+    const input = {
+      update_token: token(),
+      additional_context: "x",
+      idempotency_key: "k1",
+    };
+    const first = await handleBookingAddition("REQ123", input, freshIp());
+    const second = await handleBookingAddition("REQ123", input, freshIp());
+    expect(second).toEqual(first);
+    expect(addRequestNoteMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("an eleventh update in a day is rate limited", async () => {
+    for (let i = 0; i < 10; i++) {
+      const { httpStatus } = await handleBookingAddition(
+        "REQ123",
+        { update_token: token(), additional_context: `n${i}` },
+        freshIp(),
+      );
+      expect(httpStatus).toBe(200);
+    }
+    const { httpStatus } = await handleBookingAddition(
+      "REQ123",
+      { update_token: token(), additional_context: "one more" },
+      freshIp(),
+    );
+    expect(httpStatus).toBe(429);
+  });
+
+  test("without a secret updates are unavailable", async () => {
+    const t = token();
+    delete process.env.BOOKING_UPDATE_SECRET;
+    delete process.env.JOBBER_APP_SECRET;
+    const { httpStatus } = await handleBookingAddition(
+      "REQ123",
+      { update_token: t, additional_context: "x" },
+      freshIp(),
+    );
+    expect(httpStatus).toBe(503);
   });
 });

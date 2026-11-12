@@ -1835,31 +1835,13 @@ mutation CreateBookingRequest {
   }
   const request = created.requestCreate.request;
 
-  const addNote = async (withAttachments) => {
-    const attachments = withAttachments
-      ? `attachments: [${attachmentUrls.map((u) => `{ url: ${gqlString(u)} }`).join(", ")}]`
-      : "";
-    const noted = await makeRequest(`
-mutation CreateBookingRequestNote {
-  requestCreateNote(requestId: ${gqlString(request.id)}, input: { message: ${gqlString(note)} ${attachments} }) {
-    userErrors { message }
-  }
-}`);
-    assertNoUserErrors("requestCreateNote", noted.requestCreateNote);
-  };
-
   let attached = false;
   try {
-    try {
-      await addNote(attachmentUrls.length > 0);
-      attached = attachmentUrls.length > 0;
-    } catch (e) {
-      if (!attachmentUrls.length) throw e;
-      // The photos are linked in the note text too
-      Sentry.captureException(e);
-      console.error("Jobber: Retrying the booking note without photos", e);
-      await addNote(false);
-    }
+    ({ attached } = await addRequestNote({
+      requestId: request.id,
+      note,
+      attachmentUrls,
+    }));
   } catch (e) {
     // The request exists; staff are told the details in Slack too
     Sentry.captureException(e);
@@ -1871,5 +1853,71 @@ mutation CreateBookingRequestNote {
     clientId: client.id,
     url: request.jobberWebUri ?? null,
     attached,
+  };
+}
+
+/**
+ * Adds a note to a Jobber request, with photos for Jobber to fetch and attach.
+ * If Jobber rejects the photos, the note is added without them.
+ * @param {object} params
+ * @param {string} params.requestId The Jobber request id
+ * @param {string} params.note The note text
+ * @param {string[]} [params.attachmentUrls] Public links to photos
+ * @returns {Promise<{attached: boolean}>} Whether Jobber accepted the photos
+ */
+export async function addRequestNote({ requestId, note, attachmentUrls = [] }) {
+  const addNote = async (withAttachments) => {
+    const attachments = withAttachments
+      ? `attachments: [${attachmentUrls.map((u) => `{ url: ${gqlString(u)} }`).join(", ")}]`
+      : "";
+    const noted = await makeRequest(`
+mutation CreateRequestNote {
+  requestCreateNote(requestId: ${gqlString(requestId)}, input: { message: ${gqlString(note)} ${attachments} }) {
+    userErrors { message }
+  }
+}`);
+    assertNoUserErrors("requestCreateNote", noted.requestCreateNote);
+  };
+
+  try {
+    await addNote(attachmentUrls.length > 0);
+    return { attached: attachmentUrls.length > 0 };
+  } catch (e) {
+    if (!attachmentUrls.length) throw e;
+    // The photos are linked in the note text too
+    Sentry.captureException(e);
+    console.error("Jobber: Retrying the note without photos", e);
+    await addNote(false);
+    return { attached: false };
+  }
+}
+
+/**
+ * Reads what the booking API needs to know about a request before adding to it
+ * @param {string} requestId The Jobber request id
+ * @returns {Promise<{title: string, status: string, url: string|null, name: string|null, phone: string|null, address: string|null}|null>}
+ *   null when the request doesn't exist
+ */
+export async function getRequestForUpdate(requestId) {
+  const data = await makeRequest(`
+query RequestForUpdate {
+  request(id: ${gqlString(requestId)}) {
+    title
+    requestStatus
+    jobberWebUri
+    client { name phones { number } }
+    property { address { street city province postalCode } }
+  }
+}`);
+  const request = data?.request;
+  if (!request) return null;
+  const a = request.property?.address;
+  return {
+    title: request.title ?? "",
+    status: String(request.requestStatus ?? ""),
+    url: request.jobberWebUri ?? null,
+    name: request.client?.name ?? null,
+    phone: request.client?.phones?.[0]?.number ?? null,
+    address: a ? `${a.street}, ${a.city}, ${a.province} ${a.postalCode}` : null,
   };
 }

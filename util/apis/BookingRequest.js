@@ -1,9 +1,14 @@
+import crypto from "crypto";
 import * as Sentry from "@sentry/node";
 import events from "../events.js";
 import Contact, { AI_AGENT_REQUEST_TITLE } from "../contact.js";
 import * as APICoordinator from "../APICoordinator.js";
 import { toE164 } from "../DataUtilities.js";
-import { createServiceRequest } from "./Jobber.js";
+import {
+  addRequestNote,
+  createServiceRequest,
+  getRequestForUpdate,
+} from "./Jobber.js";
 import { hostBookingImages } from "./BookingImages.js";
 
 /**
@@ -131,6 +136,7 @@ export function resetBookingState() {
   phoneHits.clear();
   recentPhones.clear();
   recentAddresses.clear();
+  additionHits.clear();
   rejectedCount = 0;
 }
 
@@ -587,9 +593,18 @@ async function submitRequest(v) {
   recentPhones.set(v.phone, now);
   recentAddresses.set(addressKey(v.address), now);
 
+  const updateToken = issueUpdateToken(created.requestId);
   return respond(201, {
     status: "received",
     request_id: created.requestId,
+    ...(updateToken
+      ? {
+          update_token: updateToken,
+          update_url: `${process.env.WEB_URL}/website/bookingRequest/${encodeURIComponent(created.requestId)}/additions`,
+          update_note:
+            "If the customer has photos of the issue (as public https links) or more details, POST them to update_url as JSON with update_token and image_urls and/or additional_context. Only send photos the customer already has.",
+        }
+      : {}),
     message: urgent
       ? `Request received and flagged urgent. For the fastest dispatch, please have the customer call ${OFFICE_PHONE_DISPLAY} now. A Plumb-All team member will also contact the customer to confirm.`
       : "Request received. A Plumb-All team member will contact the customer to confirm a time and the service area.",
@@ -661,6 +676,288 @@ export async function handleBookingRequest(body, ip) {
     idempotent.set(v.idempotencyKey, entry);
     pending.then((r) => {
       if (r.httpStatus >= 500) idempotent.delete(v.idempotencyKey);
+    });
+  }
+  return pending;
+}
+
+/**
+ * The secret a caller needs to add to a request it made. Derived from the
+ * request id, so it survives restarts and nothing is stored.
+ * @returns {string|null} null when no secret is configured
+ */
+function updateKey() {
+  return (
+    process.env.BOOKING_UPDATE_SECRET || process.env.JOBBER_APP_SECRET || null
+  );
+}
+
+/**
+ * @param {string} requestId The Jobber request id
+ * @returns {string|null} The token returned with the 201, or null when no secret is configured
+ */
+export function issueUpdateToken(requestId) {
+  const key = updateKey();
+  if (!key) return null;
+  return crypto
+    .createHmac("sha256", key)
+    .update(`booking-update:${requestId}`)
+    .digest("base64url");
+}
+
+function tokenMatches(requestId, token) {
+  const expected = issueUpdateToken(requestId);
+  if (!expected || !isString(token)) return false;
+  const a = Buffer.from(expected);
+  const b = Buffer.from(token);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+const ADDITION_FIELDS = [
+  "update_token",
+  "additional_context",
+  "image_urls",
+  "idempotency_key",
+];
+const ADDITIONS_PER_REQUEST_PER_DAY = 10;
+const ADDITIONS_PER_IP_PER_HOUR = 20;
+const additionHits = new Map();
+
+/**
+ * Checks the body of an addition
+ * @param {unknown} body
+ * @returns {{errors: Record<string, string>, value: object|null}}
+ */
+export function validateAddition(body) {
+  const errors = {};
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    return { errors: { body: "Send a JSON object." }, value: null };
+  }
+  for (const key of Object.keys(body)) {
+    if (!ADDITION_FIELDS.includes(key)) errors[key] = "Unknown field.";
+  }
+  if (!isString(body.update_token) || !body.update_token) {
+    errors.update_token = "Required. Use the update_token from the 201.";
+  }
+
+  let additionalContext = null;
+  if (
+    body.additional_context !== undefined &&
+    body.additional_context !== null
+  ) {
+    if (
+      !isString(body.additional_context) ||
+      body.additional_context.trim().length > MAX_DESCRIPTION
+    ) {
+      errors.additional_context = `Must be a string of at most ${MAX_DESCRIPTION} characters.`;
+    } else {
+      additionalContext = body.additional_context.trim() || null;
+    }
+  }
+
+  let imageUrls = [];
+  if (body.image_urls !== undefined && body.image_urls !== null) {
+    const urls = body.image_urls;
+    if (
+      !Array.isArray(urls) ||
+      urls.length > MAX_IMAGES ||
+      !urls.every(
+        (u) => isString(u) && u.length <= MAX_IMAGE_URL && isPublicHttpsUrl(u),
+      )
+    ) {
+      errors.image_urls = `Must be a list of at most ${MAX_IMAGES} public https links to photos.`;
+    } else {
+      imageUrls = urls.map((u) => u.trim());
+    }
+  }
+
+  if (
+    !additionalContext &&
+    !imageUrls.length &&
+    !errors.additional_context &&
+    !errors.image_urls
+  ) {
+    errors.additional_context = "Send additional_context, image_urls, or both.";
+  }
+
+  let idempotencyKey = null;
+  if (body.idempotency_key !== undefined && body.idempotency_key !== null) {
+    if (!isString(body.idempotency_key) || body.idempotency_key.length > 128) {
+      errors.idempotency_key = "Must be a string of at most 128 characters.";
+    } else {
+      idempotencyKey = body.idempotency_key.trim() || null;
+    }
+  }
+
+  if (Object.keys(errors).length) return { errors, value: null };
+  return {
+    errors,
+    value: {
+      token: body.update_token,
+      additionalContext,
+      imageUrls,
+      idempotencyKey,
+    },
+  };
+}
+
+/**
+ * Adds information the caller learned later (more context, photos) to a
+ * request it made. Only a note is added: nothing already on the request is
+ * changed, and only while the request is still new.
+ * @param {string} requestId The Jobber request id from the 201
+ * @param {unknown} body The parsed JSON body
+ * @param {string} ip The caller's IP address
+ * @returns {Promise<{httpStatus: number, body: object}>}
+ */
+export async function handleBookingAddition(requestId, body, ip) {
+  const { errors, value: v } = validateAddition(body);
+  if (!v) {
+    return respond(422, {
+      status: "invalid_request",
+      message: "The request was not valid. Fix the fields below and try again.",
+      errors,
+    });
+  }
+
+  if (!updateKey()) {
+    return respond(503, {
+      status: "error",
+      message: `Updates are unavailable right now. Please ask the customer to call the office at ${OFFICE_PHONE_DISPLAY}.`,
+    });
+  }
+
+  const now = Date.now();
+  prune(now);
+  // The same answer for a wrong token and a wrong id, so ids can't be probed
+  const notFound = respond(404, {
+    status: "not_found",
+    message: `We could not find that request. Check the request_id and update_token from the original response, or ask the customer to call the office at ${OFFICE_PHONE_DISPLAY}.`,
+  });
+  if (
+    hitLimit(additionHits, `ip:${ip}`, ADDITIONS_PER_IP_PER_HOUR, HOUR_MS, now)
+  ) {
+    return respond(429, {
+      status: "rate_limited",
+      message: `Too many requests. Please try again later, or ask the customer to call the office at ${OFFICE_PHONE_DISPLAY}.`,
+    });
+  }
+  if (!tokenMatches(requestId, v.token)) return notFound;
+
+  if (v.idempotencyKey) {
+    const earlier = idempotent.get(`add:${requestId}:${v.idempotencyKey}`);
+    if (earlier) return earlier.result;
+  }
+  if (
+    hitLimit(
+      additionHits,
+      `req:${requestId}`,
+      ADDITIONS_PER_REQUEST_PER_DAY,
+      DAY_MS,
+      now,
+    )
+  ) {
+    return respond(429, {
+      status: "rate_limited",
+      message: `This request has had too many updates today. Please ask the customer to call the office at ${OFFICE_PHONE_DISPLAY}.`,
+    });
+  }
+
+  const run = async () => {
+    let request;
+    try {
+      request = await getRequestForUpdate(requestId);
+    } catch (e) {
+      Sentry.captureException(e);
+      console.error("BookingRequest: Failed to read the request to update:", e);
+      return respond(500, {
+        status: "error",
+        message: `We could not record this update. Please ask the customer to call the office at ${OFFICE_PHONE_DISPLAY}.`,
+      });
+    }
+    if (!request || !request.title.includes(AI_AGENT_REQUEST_TITLE)) {
+      return notFound;
+    }
+    if (request.status.toLowerCase() !== "new") {
+      return respond(409, {
+        status: "no_longer_editable",
+        message: `A team member is already working on this request, so it can't be changed here. Please ask the customer to tell them directly, or call the office at ${OFFICE_PHONE_DISPLAY}.`,
+      });
+    }
+
+    const photos = v.imageUrls.length
+      ? await hostBookingImages(v.imageUrls)
+      : { urls: [], images: [], failedLinks: [] };
+    const note = [
+      "Update from the AI agent:",
+      v.additionalContext ? `Additional context: ${v.additionalContext}` : null,
+      v.imageUrls.length
+        ? `Photos the customer already took:\n${v.imageUrls.join("\n")}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    let attached = false;
+    try {
+      ({ attached } = await addRequestNote({
+        requestId,
+        note,
+        attachmentUrls: photos.urls,
+      }));
+    } catch (e) {
+      Sentry.captureException(e);
+      console.error("BookingRequest: Failed to add the update note:", e);
+      return respond(500, {
+        status: "error",
+        message: `We could not record this update. Please ask the customer to call the office at ${OFFICE_PHONE_DISPLAY}.`,
+      });
+    }
+
+    // Slack only: this isn't a new contact, so no new Trello card or PostHog event
+    const contact = new Contact(
+      "AI Agent Booking Update",
+      request.name ?? "Unknown",
+      request.phone ?? undefined,
+      undefined,
+      undefined,
+      request.address ?? undefined,
+      [
+        v.additionalContext
+          ? `Additional context: ${v.additionalContext}`
+          : null,
+        photos.failedLinks.length
+          ? `Photos that couldn't be attached:\n${photos.failedLinks.join("\n")}`
+          : null,
+        request.url ? `Jobber: ${request.url}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      "AI Agent",
+    );
+    contact.images = photos.images;
+    events.emit("slackbot-send-contact", contact, "AI Agent Booking Update");
+
+    console.log(
+      `BookingRequest: Added an update to Jobber request ${requestId}`,
+    );
+    return respond(200, {
+      status: "updated",
+      request_id: requestId,
+      message:
+        "Update added. The Plumb-All team will see it with the original request.",
+      ...(v.imageUrls.length
+        ? { images_attached: attached ? photos.urls.length : 0 }
+        : {}),
+    });
+  };
+
+  const pending = run();
+  if (v.idempotencyKey) {
+    const key = `add:${requestId}:${v.idempotencyKey}`;
+    idempotent.set(key, { at: now, result: pending });
+    pending.then((r) => {
+      if (r.httpStatus >= 500) idempotent.delete(key);
     });
   }
   return pending;
