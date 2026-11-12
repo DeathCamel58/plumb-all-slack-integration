@@ -319,6 +319,26 @@ describe("booking updates", () => {
     });
   });
 
+  test("an urgent request's post is found too", async () => {
+    historyMock.mockResolvedValue({
+      messages: [
+        {
+          ts: "555.666",
+          text: `=== New URGENT AI Agent Booking Request ===\nJobber: ${jobberUrl}`,
+        },
+      ],
+    });
+
+    await sendUpdate({
+      jobberUrl,
+      text: "More context",
+      images: [],
+      fallbackContact: fallback(),
+    });
+
+    expect(postMessageMock.mock.calls[0][0].thread_ts).toBe("555.666");
+  });
+
   test("a photo-only update posts no text, just the photo in the thread", async () => {
     await sendUpdate({
       jobberUrl,

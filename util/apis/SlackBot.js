@@ -657,7 +657,8 @@ async function findBookingPost(channelId, jobberUrl) {
     const post = (result.messages ?? []).find(
       (m) =>
         m.text?.includes(jobberUrl) &&
-        m.text.includes("New AI Agent Booking Request"),
+        // The original post, urgent or not, and not an earlier update
+        /New (URGENT )?AI Agent Booking Request/.test(m.text),
     );
     if (post) return post.ts;
     cursor = result.response_metadata?.next_cursor;
