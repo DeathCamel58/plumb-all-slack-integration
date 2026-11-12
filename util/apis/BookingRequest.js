@@ -394,9 +394,10 @@ function notService() {
 }
 
 /**
- * Builds the Jobber request note and the Slack text
+ * Builds the Jobber request note and the Slack text. Only the Jobber note
+ * names the AI service.
  */
-function describeRequest(v, { urgent, jobberUrl }) {
+function describeRequest(v, { urgent, jobberUrl, includeAgent = false }) {
   const lines = [
     urgent ? "URGENT: customer reports an emergency." : null,
     `Service category: ${v.category}${v.service ? ` (${v.service})` : ""}`,
@@ -405,8 +406,9 @@ function describeRequest(v, { urgent, jobberUrl }) {
       ? `Preferred window (a preference, not a booking): ${v.preferredWindow.date}, ${v.preferredWindow.period}`
       : null,
     `Texts allowed: ${v.smsConsent ? "yes" : "no"}`,
-    `Submitted by an AI agent / API client: ${agentLabel(v.source)}${v.source && agentLabel(v.source) !== v.source ? ` (reported as "${v.source}")` : ""}`,
-    "Caller confirmed the address is within about 30 miles of Jonesboro and that this is a real customer's request. Please confirm the service area and the time with the customer.",
+    includeAgent
+      ? `Submitted by an AI agent / API client: ${agentLabel(v.source)}${v.source && agentLabel(v.source) !== v.source ? ` (reported as "${v.source}")` : ""}`
+      : null,
     jobberUrl ? `Jobber: ${jobberUrl}` : null,
   ];
   return lines.filter(Boolean).join("\n");
@@ -427,7 +429,7 @@ async function notifyStaff(v, { urgent, jobberUrl, jobberFailed }) {
       (jobberFailed
         ? "\nThe Jobber request could NOT be created. Please enter it by hand."
         : ""),
-    `ai_agent:${agentLabel(v.source)}`,
+    "AI Agent",
   );
   // The Jobber webhook skips these requests, so this is staff's only notice
   APICoordinator.contactMade(contact, JSON.stringify({ source: v.source }));
@@ -447,7 +449,11 @@ async function submitRequest(v) {
       address: v.address,
       smsAllowed: v.smsConsent,
       title,
-      note: describeRequest(v, { urgent, jobberUrl: null }),
+      note: describeRequest(v, {
+        urgent,
+        jobberUrl: null,
+        includeAgent: true,
+      }),
       sourceText: `AI agent: ${label}`,
     });
   } catch (e) {

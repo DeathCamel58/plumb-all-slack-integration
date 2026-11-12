@@ -83,6 +83,11 @@ describe("handleBookingRequest", () => {
       postalCode: "30281",
     });
     expect(args.note).toContain("TestAgent");
+    expect(args.note).not.toContain("30 miles");
+    const [contact] = contactMadeMock.mock.calls[0];
+    expect(contact.message).not.toContain("TestAgent");
+    expect(contact.message).not.toContain("30 miles");
+    expect(contact.source).toBe("AI Agent");
     expect(contactMadeMock).toHaveBeenCalledWith(
       expect.objectContaining({ type: "AI Agent Booking Request" }),
       expect.any(String),
