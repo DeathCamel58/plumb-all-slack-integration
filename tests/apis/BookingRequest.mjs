@@ -6,6 +6,9 @@ const contactMadeMock = jest.fn();
 const hostBookingImagesMock = jest.fn();
 const addRequestNoteMock = jest.fn();
 const getRequestForUpdateMock = jest.fn();
+const getRequestAttachmentNamesMock = jest.fn();
+const deleteReusableFileMock = jest.fn();
+const hostPhotoMock = jest.fn();
 
 jest.unstable_mockModule("../../util/events.js", () => ({
   default: { emit: eventsEmitMock, on: jest.fn() },
@@ -17,17 +20,26 @@ jest.unstable_mockModule("../../util/APICoordinator.js", () => ({
 
 jest.unstable_mockModule("../../util/apis/BookingImages.js", () => ({
   hostBookingImages: hostBookingImagesMock,
+  hostPhoto: hostPhotoMock,
+  MAX_IMAGE_BYTES: 8 * 1024 * 1024,
+  sniffImageType: (b) => (b[0] === 0xff && b[1] === 0xd8 ? "image/jpeg" : null),
+}));
+
+jest.unstable_mockModule("../../util/mediaStore.js", () => ({
+  deleteReusableFile: deleteReusableFileMock,
 }));
 
 jest.unstable_mockModule("../../util/apis/Jobber.js", () => ({
   createServiceRequest: createServiceRequestMock,
   addRequestNote: addRequestNoteMock,
   getRequestForUpdate: getRequestForUpdateMock,
+  getRequestAttachmentNames: getRequestAttachmentNamesMock,
 }));
 
 const {
   agentLabel,
   handleBookingAddition,
+  handleBookingPhoto,
   handleBookingRequest,
   issueUpdateToken,
   isNotServiceRequest,
@@ -67,6 +79,13 @@ beforeEach(() => {
   process.env.BOOKING_UPDATE_SECRET = "test-secret";
   process.env.WEB_URL = "https://integration.example";
   addRequestNoteMock.mockResolvedValue({ attached: true });
+  getRequestAttachmentNamesMock.mockResolvedValue(["photo-1-abc123.jpg"]);
+  hostPhotoMock.mockReturnValue({
+    url: "https://integration.example/media/tok1/photo-1-abc123.jpg",
+    token: "tok1",
+    filename: "photo-1-abc123.jpg",
+    image: { buffer: Buffer.from("img"), filename: "photo-1-abc123.jpg" },
+  });
   getRequestForUpdateMock.mockResolvedValue({
     title: "AI agent request (Claude): plumbing",
     status: "NEW",
@@ -82,6 +101,8 @@ beforeEach(() => {
     attached: true,
   });
   hostBookingImagesMock.mockImplementation(async (links) => ({
+    tokens: links.map((l, i) => `tok${i}`),
+    filenames: links.map((l, i) => `photo-${i + 1}-abc123.jpg`),
     images: links.map((l, i) => ({
       buffer: Buffer.from("img"),
       filename: `photo-${i + 1}.jpg`,
@@ -338,7 +359,8 @@ describe("handleBookingRequest", () => {
 
     expect(httpStatus).toBe(201);
     expect(body.urgent).toBe(true);
-    expect(body.message).toContain("call");
+    expect(body.message).toContain("straight to Plumb-All dispatch");
+    expect(body.message).not.toMatch(/call now|fastest/i);
     expect(body.emergency_phone).toBe("+1-770-914-3877");
     expect(createServiceRequestMock.mock.calls[0][0].title).toMatch(/^URGENT/);
     expect(contactMadeMock.mock.calls[0][0].type).toMatch(/^URGENT/);
@@ -650,5 +672,149 @@ describe("handleBookingAddition", () => {
       freshIp(),
     );
     expect(httpStatus).toBe(503);
+  });
+});
+
+const flush = () => new Promise((resolve) => setImmediate(resolve));
+const JPEG_BYTES = Buffer.concat([
+  Buffer.from([0xff, 0xd8, 0xff]),
+  Buffer.alloc(32),
+]);
+
+describe("temporary photo copies are dropped once Jobber has them", () => {
+  test("a photo link on a new request is released after Jobber attaches it", async () => {
+    getRequestAttachmentNamesMock.mockResolvedValue(["photo-1-abc123.jpg"]);
+    await handleBookingRequest(
+      validBody({ image_urls: ["https://example.com/a.jpg"] }),
+      freshIp(),
+    );
+    await flush();
+    expect(deleteReusableFileMock).toHaveBeenCalledWith("tok0");
+  });
+
+  test("copies are dropped at once when Jobber would not take the photos", async () => {
+    createServiceRequestMock.mockResolvedValue({
+      requestId: "REQ123",
+      clientId: "CLI123",
+      url: null,
+      attached: false,
+    });
+    await handleBookingRequest(
+      validBody({ image_urls: ["https://example.com/a.jpg"] }),
+      freshIp(),
+    );
+    expect(deleteReusableFileMock).toHaveBeenCalledWith("tok0");
+    expect(getRequestAttachmentNamesMock).not.toHaveBeenCalled();
+  });
+
+  test("copies are dropped when the request can't be created", async () => {
+    createServiceRequestMock.mockRejectedValue(new Error("Jobber down"));
+    await handleBookingRequest(
+      validBody({ image_urls: ["https://example.com/a.jpg"] }),
+      freshIp(),
+    );
+    expect(deleteReusableFileMock).toHaveBeenCalledWith("tok0");
+  });
+});
+
+describe("handleBookingPhoto", () => {
+  const token = () => issueUpdateToken("REQ123");
+
+  test("attaches the uploaded photo, posts it to Slack, then drops it from memory", async () => {
+    const { httpStatus, body } = await handleBookingPhoto(
+      "REQ123",
+      token(),
+      JPEG_BYTES,
+      freshIp(),
+    );
+
+    expect(httpStatus).toBe(200);
+    expect(body).toMatchObject({ status: "updated", images_attached: 1 });
+    expect(addRequestNoteMock.mock.calls[0][0]).toMatchObject({
+      requestId: "REQ123",
+      attachmentUrls: [
+        "https://integration.example/media/tok1/photo-1-abc123.jpg",
+      ],
+    });
+    const [, contact] = eventsEmitMock.mock.calls[0];
+    expect(contact.type).toBe("AI Agent Booking Update");
+    expect(contact.images).toHaveLength(1);
+    expect(contactMadeMock).not.toHaveBeenCalled();
+
+    await flush();
+    expect(deleteReusableFileMock).toHaveBeenCalledWith("tok1");
+  });
+
+  test("the copy is dropped at once if Jobber won't take it", async () => {
+    addRequestNoteMock.mockResolvedValue({ attached: false });
+    const { body } = await handleBookingPhoto(
+      "REQ123",
+      token(),
+      JPEG_BYTES,
+      freshIp(),
+    );
+    expect(body.images_attached).toBe(0);
+    expect(deleteReusableFileMock).toHaveBeenCalledWith("tok1");
+  });
+
+  test("a wrong token is a 404 and nothing is read from Jobber", async () => {
+    const { httpStatus } = await handleBookingPhoto(
+      "REQ123",
+      "nope",
+      JPEG_BYTES,
+      freshIp(),
+    );
+    expect(httpStatus).toBe(404);
+    expect(getRequestForUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ["an empty body", Buffer.alloc(0), 422],
+    ["something that isn't a photo", Buffer.from("<html>hi</html>"), 422],
+    ["a photo over the limit", Buffer.alloc(8 * 1024 * 1024 + 1, 0xff), 413],
+  ])("%s is refused with %i", async (_label, bytes, status) => {
+    const { httpStatus } = await handleBookingPhoto(
+      "REQ123",
+      token(),
+      bytes,
+      freshIp(),
+    );
+    expect(httpStatus).toBe(status);
+    expect(addRequestNoteMock).not.toHaveBeenCalled();
+    expect(hostPhotoMock).not.toHaveBeenCalled();
+  });
+
+  test("a request staff already started on is no longer editable", async () => {
+    getRequestForUpdateMock.mockResolvedValue({
+      title: "AI agent request (Claude): plumbing",
+      status: "ASSESSMENT_SCHEDULED",
+    });
+    const { httpStatus } = await handleBookingPhoto(
+      "REQ123",
+      token(),
+      JPEG_BYTES,
+      freshIp(),
+    );
+    expect(httpStatus).toBe(409);
+    expect(hostPhotoMock).not.toHaveBeenCalled();
+  });
+
+  test("a sixth photo in a day is rate limited", async () => {
+    for (let i = 0; i < 5; i++) {
+      const { httpStatus } = await handleBookingPhoto(
+        "REQ123",
+        token(),
+        JPEG_BYTES,
+        freshIp(),
+      );
+      expect(httpStatus).toBe(200);
+    }
+    const { httpStatus } = await handleBookingPhoto(
+      "REQ123",
+      token(),
+      JPEG_BYTES,
+      freshIp(),
+    );
+    expect(httpStatus).toBe(429);
   });
 });

@@ -30,7 +30,7 @@ export function getFile(token) {
   return entry;
 }
 
-const BOOKING_TTL_MS = 30 * 60 * 1000; // 30 minutes
+const BOOKING_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 /**
  * Stores a file that can be fetched more than once until it expires, for a
@@ -56,4 +56,12 @@ const reusable = new Map();
  */
 export function peekReusableFile(token) {
   return reusable.get(token) ?? null;
+}
+
+/**
+ * Forgets a reusable file now, instead of waiting for it to expire.
+ * @param {string} token The token returned by hostReusableFile
+ */
+export function deleteReusableFile(token) {
+  reusable.delete(token);
 }

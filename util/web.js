@@ -24,7 +24,9 @@ import Contact from "./contact.js";
 import * as APICoordinator from "./APICoordinator.js";
 import {
   handleBookingAddition,
+  handleBookingPhoto,
   handleBookingRequest,
+  isValidUpdateToken,
 } from "./apis/BookingRequest.js";
 import {
   handleBridge,
@@ -52,6 +54,8 @@ app.use(bodyParser.text({ type: "application/json" }));
 // This saves the raw body data to `rawBody` in the req
 app.use((req, res, next) => {
   req.rawBody = "";
+  // Photo uploads are binary and large; the route reads them itself
+  if (req.path.endsWith("/photos")) return next();
 
   req.on("data", function (chunk) {
     req.rawBody += chunk;
@@ -526,6 +530,68 @@ app.post("/website/bookingRequest/:requestId/additions", async (req, res) => {
         "Something went wrong. Please ask the customer to call the office at (770) 914-3877.",
     });
   }
+});
+
+/**
+ * A photo, as the raw request body, for a request the caller already made.
+ * The update_token (X-Update-Token header, or Authorization: Bearer) is checked
+ * before the body is read, so a stranger can't make the server hold a file.
+ */
+function bookingPhotoGate(req, res, next) {
+  const bearer = String(req.headers.authorization ?? "").match(
+    /^Bearer\s+(\S+)$/i,
+  )?.[1];
+  const token = req.headers["x-update-token"] ?? bearer;
+  if (!isValidUpdateToken(req.params.requestId, token)) {
+    return res.status(404).json({
+      status: "not_found",
+      message:
+        "We could not find that request. Check the request_id and update_token from the original response, or ask the customer to call the office at (770) 914-3877.",
+    });
+  }
+  req.updateToken = token;
+  next();
+}
+
+app.post(
+  "/website/bookingRequest/:requestId/photos",
+  bookingPhotoGate,
+  express.raw({ type: () => true, limit: "8mb" }),
+  async (req, res) => {
+    try {
+      const { httpStatus, body: result } = await handleBookingPhoto(
+        req.params.requestId,
+        req.updateToken,
+        req.body,
+        clientIp(req),
+      );
+      res.status(httpStatus).json(result);
+    } catch (e) {
+      Sentry.captureException(e);
+      console.error("Web: Booking photo failed", e);
+      res.status(500).json({
+        status: "error",
+        message:
+          "Something went wrong. Please ask the customer to call the office at (770) 914-3877.",
+      });
+    }
+  },
+);
+
+/** JSON errors for the booking routes, such as a body over the size limit */
+app.use("/website/bookingRequest", (err, req, res, next) => {
+  if (err?.type === "entity.too.large") {
+    return res.status(413).json({
+      status: "invalid_request",
+      message: "The body is too large. Photos are limited to 8 MB.",
+    });
+  }
+  if (res.headersSent) return next(err);
+  Sentry.captureException(err);
+  return res.status(400).json({
+    status: "invalid_request",
+    message: "The request could not be read.",
+  });
 });
 
 /**

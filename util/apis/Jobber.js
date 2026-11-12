@@ -1921,3 +1921,18 @@ query RequestForUpdate {
     address: a ? `${a.street}, ${a.city}, ${a.province} ${a.postalCode}` : null,
   };
 }
+
+/**
+ * The file names attached to a request's notes
+ * @param {string} requestId The Jobber request id
+ * @returns {Promise<string[]>}
+ */
+export async function getRequestAttachmentNames(requestId) {
+  const data = await makeRequest(`
+query RequestAttachments {
+  request(id: ${gqlString(requestId)}) {
+    noteAttachments(first: 50) { nodes { fileName } }
+  }
+}`);
+  return (data?.request?.noteAttachments?.nodes ?? []).map((n) => n.fileName);
+}

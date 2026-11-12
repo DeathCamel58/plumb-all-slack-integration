@@ -7,9 +7,16 @@ import { toE164 } from "../DataUtilities.js";
 import {
   addRequestNote,
   createServiceRequest,
+  getRequestAttachmentNames,
   getRequestForUpdate,
 } from "./Jobber.js";
-import { hostBookingImages } from "./BookingImages.js";
+import {
+  hostBookingImages,
+  hostPhoto,
+  MAX_IMAGE_BYTES,
+  sniffImageType,
+} from "./BookingImages.js";
+import { deleteReusableFile } from "../mediaStore.js";
 
 /**
  * Service requests from AI agents and other API clients (POST
@@ -571,6 +578,7 @@ async function submitRequest(v) {
     Sentry.captureException(e);
     console.error("BookingRequest: Failed to create the Jobber request:", e);
     // The customer's details are not lost: staff get them in Slack
+    discardHosted(photos.tokens ?? []);
     await notifyStaff(v, {
       urgent,
       jobberUrl: null,
@@ -585,6 +593,16 @@ async function submitRequest(v) {
   }
 
   await notifyStaff(v, { urgent, jobberUrl: created.url, photos });
+  if (created.attached) {
+    // In the background: the caller shouldn't wait for this
+    releaseWhenAttached({
+      requestId: created.requestId,
+      tokens: photos.tokens ?? [],
+      filenames: photos.filenames ?? [],
+    });
+  } else {
+    discardHosted(photos.tokens ?? []);
+  }
   console.log(
     `BookingRequest: Created Jobber request ${created.requestId}${urgent ? " (urgent)" : ""} from ${v.source ?? "unknown source"}`,
   );
@@ -602,14 +620,14 @@ async function submitRequest(v) {
           update_token: updateToken,
           update_url: `${process.env.WEB_URL}/website/bookingRequest/${encodeURIComponent(created.requestId)}/additions`,
           update_note:
-            "If the customer has photos of the issue (as public https links) or more details, POST them to update_url as JSON with update_token and image_urls and/or additional_context. Only send photos the customer already has.",
+            "If the customer has photos of the issue or more details, add them: POST JSON with update_token and image_urls (public https links) and/or additional_context to update_url, or, if you have the photo file itself, POST its raw bytes (Content-Type: image/jpeg, image/png, etc., 8 MB max) to update_url with /additions replaced by /photos and the update_token in an X-Update-Token header. Only send photos the customer already has.",
         }
       : {}),
     message: urgent
-      ? `Request received and flagged urgent. For the fastest dispatch, please have the customer call ${OFFICE_PHONE_DISPLAY} now. A Plumb-All team member will also contact the customer to confirm.`
-      : "Request received. A Plumb-All team member will contact the customer to confirm a time and the service area.",
+      ? "Request received and flagged urgent. Like every request here, it went straight to Plumb-All dispatch to be assigned to a technician, and a team member will contact the customer to confirm the time and the service area. Calling the office is not faster."
+      : "Request received. It went straight to Plumb-All dispatch to be assigned to a technician, and a team member will contact the customer to confirm the time and the service area. Calling the office is not faster.",
     expected_followup: urgent
-      ? "As soon as possible; call now for fastest dispatch"
+      ? "As soon as dispatch can assign a technician"
       : "Same business day during office hours (Mon-Fri 8am-4pm)",
     emergency_phone: EMERGENCY_PHONE,
     ...(urgent ? { urgent: true } : {}),
@@ -617,6 +635,38 @@ async function submitRequest(v) {
       ? { images_attached: created.attached ? photos.urls.length : 0 }
       : {}),
   });
+}
+
+/**
+ * Deletes the temporary copies of photos from memory once Jobber has fetched
+ * them. Jobber attaches them while the note is created, but this checks for
+ * the files rather than assuming, and the copies expire on their own if it
+ * never sees them. Never throws.
+ * @param {object} params
+ * @param {string} params.requestId The Jobber request id
+ * @param {string[]} params.tokens The hosted file tokens
+ * @param {string[]} params.filenames The names those files were given
+ */
+export async function releaseWhenAttached({ requestId, tokens, filenames }) {
+  if (!tokens.length) return;
+  try {
+    for (let attempt = 0; attempt < 15; attempt++) {
+      if (attempt) await new Promise((r) => setTimeout(r, 1000));
+      const names = await getRequestAttachmentNames(requestId);
+      if (filenames.every((f) => names.includes(f))) {
+        tokens.forEach((t) => deleteReusableFile(t));
+        return;
+      }
+    }
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("BookingRequest: Failed to confirm photos attached:", e);
+  }
+}
+
+/** Forgets the temporary copies without waiting, when Jobber won't take them */
+function discardHosted(tokens) {
+  tokens.forEach((t) => deleteReusableFile(t));
 }
 
 /**
@@ -711,6 +761,41 @@ function tokenMatches(requestId, token) {
   const a = Buffer.from(expected);
   const b = Buffer.from(token);
   return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+/**
+ * Loads a request for an addition, checking it is one the booking API made and
+ * that staff haven't started on it.
+ * @param {string} requestId
+ * @param {{httpStatus: number, body: object}} notFound The response for a missing or foreign request
+ * @returns {Promise<{request?: object, response?: {httpStatus: number, body: object}}>}
+ */
+async function loadEditableRequest(requestId, notFound) {
+  let request;
+  try {
+    request = await getRequestForUpdate(requestId);
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("BookingRequest: Failed to read the request to update:", e);
+    return {
+      response: respond(500, {
+        status: "error",
+        message: `We could not record this update. Please ask the customer to call the office at ${OFFICE_PHONE_DISPLAY}.`,
+      }),
+    };
+  }
+  if (!request || !request.title.includes(AI_AGENT_REQUEST_TITLE)) {
+    return { response: notFound };
+  }
+  if (request.status.toLowerCase() !== "new") {
+    return {
+      response: respond(409, {
+        status: "no_longer_editable",
+        message: `A team member is already working on this request, so it can't be changed here. Please ask the customer to tell them directly, or call the office at ${OFFICE_PHONE_DISPLAY}.`,
+      }),
+    };
+  }
+  return { request };
 }
 
 const ADDITION_FIELDS = [
@@ -864,26 +949,9 @@ export async function handleBookingAddition(requestId, body, ip) {
   }
 
   const run = async () => {
-    let request;
-    try {
-      request = await getRequestForUpdate(requestId);
-    } catch (e) {
-      Sentry.captureException(e);
-      console.error("BookingRequest: Failed to read the request to update:", e);
-      return respond(500, {
-        status: "error",
-        message: `We could not record this update. Please ask the customer to call the office at ${OFFICE_PHONE_DISPLAY}.`,
-      });
-    }
-    if (!request || !request.title.includes(AI_AGENT_REQUEST_TITLE)) {
-      return notFound;
-    }
-    if (request.status.toLowerCase() !== "new") {
-      return respond(409, {
-        status: "no_longer_editable",
-        message: `A team member is already working on this request, so it can't be changed here. Please ask the customer to tell them directly, or call the office at ${OFFICE_PHONE_DISPLAY}.`,
-      });
-    }
+    const loaded = await loadEditableRequest(requestId, notFound);
+    if (loaded.response) return loaded.response;
+    const { request } = loaded;
 
     const photos = v.imageUrls.length
       ? await hostBookingImages(v.imageUrls)
@@ -905,7 +973,17 @@ export async function handleBookingAddition(requestId, body, ip) {
         note,
         attachmentUrls: photos.urls,
       }));
+      if (attached) {
+        releaseWhenAttached({
+          requestId,
+          tokens: photos.tokens ?? [],
+          filenames: photos.filenames ?? [],
+        });
+      } else {
+        discardHosted(photos.tokens ?? []);
+      }
     } catch (e) {
+      discardHosted(photos.tokens ?? []);
       Sentry.captureException(e);
       console.error("BookingRequest: Failed to add the update note:", e);
       return respond(500, {
@@ -961,4 +1039,148 @@ export async function handleBookingAddition(requestId, body, ip) {
     });
   }
   return pending;
+}
+
+const PHOTOS_PER_REQUEST_PER_DAY = 5;
+
+/**
+ * Whether a token is the right one for a request, so the web layer can refuse
+ * an upload before reading its body
+ * @param {string} requestId
+ * @param {unknown} token
+ * @returns {boolean}
+ */
+export function isValidUpdateToken(requestId, token) {
+  return tokenMatches(requestId, token);
+}
+
+/**
+ * Adds one photo, uploaded as the raw request body, to a request the caller
+ * made. The photo is sniffed (it must really be an image), attached to the
+ * Jobber note and posted in the Slack thread, then dropped from memory.
+ * @param {string} requestId The Jobber request id from the 201
+ * @param {string} token The update_token from the 201
+ * @param {Buffer} bytes The photo
+ * @param {string} ip The caller's IP address
+ * @returns {Promise<{httpStatus: number, body: object}>}
+ */
+export async function handleBookingPhoto(requestId, token, bytes, ip) {
+  if (!updateKey()) {
+    return respond(503, {
+      status: "error",
+      message: `Uploads are unavailable right now. Please ask the customer to call the office at ${OFFICE_PHONE_DISPLAY}.`,
+    });
+  }
+
+  const now = Date.now();
+  prune(now);
+  const notFound = respond(404, {
+    status: "not_found",
+    message: `We could not find that request. Check the request_id and update_token from the original response, or ask the customer to call the office at ${OFFICE_PHONE_DISPLAY}.`,
+  });
+  if (
+    hitLimit(additionHits, `ip:${ip}`, ADDITIONS_PER_IP_PER_HOUR, HOUR_MS, now)
+  ) {
+    return respond(429, {
+      status: "rate_limited",
+      message: `Too many requests. Please try again later, or ask the customer to call the office at ${OFFICE_PHONE_DISPLAY}.`,
+    });
+  }
+  if (!tokenMatches(requestId, token)) return notFound;
+
+  if (!Buffer.isBuffer(bytes) || !bytes.length) {
+    return respond(422, {
+      status: "invalid_request",
+      message:
+        "Send the photo itself as the request body (raw bytes, not JSON or a form).",
+      errors: { photo: "The body was empty." },
+    });
+  }
+  if (bytes.length > MAX_IMAGE_BYTES) {
+    return respond(413, {
+      status: "invalid_request",
+      message: `The photo is too large. The limit is ${MAX_IMAGE_BYTES / (1024 * 1024)} MB.`,
+      errors: { photo: "Too large." },
+    });
+  }
+  const contentType = sniffImageType(bytes);
+  if (!contentType) {
+    return respond(422, {
+      status: "invalid_request",
+      message:
+        "The body is not a supported photo (JPEG, PNG, WebP, GIF or HEIC).",
+      errors: { photo: "Not a supported photo." },
+    });
+  }
+
+  if (
+    hitLimit(
+      additionHits,
+      `photos:${requestId}`,
+      PHOTOS_PER_REQUEST_PER_DAY,
+      DAY_MS,
+      now,
+    )
+  ) {
+    return respond(429, {
+      status: "rate_limited",
+      message: `This request has had too many photos today. Please ask the customer to call the office at ${OFFICE_PHONE_DISPLAY}.`,
+    });
+  }
+
+  const loaded = await loadEditableRequest(requestId, notFound);
+  if (loaded.response) return loaded.response;
+  const { request } = loaded;
+
+  const hosted = hostPhoto(bytes, contentType, 1);
+  let attached = false;
+  try {
+    ({ attached } = await addRequestNote({
+      requestId,
+      note: "Photo uploaded by the AI agent (the customer already had it).",
+      attachmentUrls: [hosted.url],
+    }));
+  } catch (e) {
+    discardHosted([hosted.token]);
+    Sentry.captureException(e);
+    console.error("BookingRequest: Failed to add the photo note:", e);
+    return respond(500, {
+      status: "error",
+      message: `We could not record this photo. Please ask the customer to call the office at ${OFFICE_PHONE_DISPLAY}.`,
+    });
+  }
+  if (attached) {
+    releaseWhenAttached({
+      requestId,
+      tokens: [hosted.token],
+      filenames: [hosted.filename],
+    });
+  } else {
+    discardHosted([hosted.token]);
+  }
+
+  // Slack only, with the photo in the thread; Slack's upload is the last holder of the bytes
+  const contact = new Contact(
+    "AI Agent Booking Update",
+    request.name ?? "Unknown",
+    request.phone ?? undefined,
+    undefined,
+    undefined,
+    request.address ?? undefined,
+    ["Photo added", request.url ? `Jobber: ${request.url}` : null]
+      .filter(Boolean)
+      .join("\n"),
+    "AI Agent",
+  );
+  contact.images = [hosted.image];
+  events.emit("slackbot-send-contact", contact, "AI Agent Booking Update");
+
+  console.log(`BookingRequest: Added an uploaded photo to ${requestId}`);
+  return respond(200, {
+    status: "updated",
+    request_id: requestId,
+    message:
+      "Photo added. The Plumb-All team will see it with the original request.",
+    images_attached: attached ? 1 : 0,
+  });
 }

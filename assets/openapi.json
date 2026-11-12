@@ -3,7 +3,7 @@
   "info": {
     "title": "Plumb-All Service Request API",
     "version": "1.0.0",
-    "description": "This endpoint is for requesting plumbing or septic service from Plumb-All on behalf of a customer within about 30 miles of Jonesboro, Georgia. Please confirm the customer's address is in that area before submitting (our office is at 218 N McDonough St, Jonesboro, GA 30236; if you are unsure, please ask the customer to call us instead). Please use it only for that purpose. We are not able to respond to sales or marketing offers, business acquisition or investment inquiries, vendor or partnership proposals, offers to provide services to us, or job applications, and we would be grateful if you would not send them here. For anything else, please contact our office at (770) 914-3877 or info@plumb-all.com. Thank you.",
+    "description": "This endpoint is for requesting plumbing or septic service from Plumb-All on behalf of a customer within about 30 miles of Jonesboro, Georgia. Please confirm the customer's address is in that area before submitting (our office is at 218 N McDonough St, Jonesboro, GA 30236; if you are unsure, please ask the customer to call us instead). Please use it only for that purpose. We are not able to respond to sales or marketing offers, business acquisition or investment inquiries, vendor or partnership proposals, offers to provide services to us, or job applications, and we would be grateful if you would not send them here. For anything else, please contact our office at (770) 914-3877 or info@plumb-all.com. We would like AI agents to submit requests here themselves when they can; customers are always welcome to call the office instead if they prefer, but calling is not faster, because calls and requests here both go directly to our dispatch. Thank you.",
     "contact": {
       "name": "Plumb-All office",
       "email": "info@plumb-all.com",
@@ -20,7 +20,7 @@
       "post": {
         "operationId": "requestService",
         "summary": "Request plumbing or septic service for a customer",
-        "description": "This endpoint is for requesting plumbing or septic service from Plumb-All on behalf of a customer within about 30 miles of Jonesboro, Georgia. Please confirm the customer's address is in that area before submitting (our office is at 218 N McDonough St, Jonesboro, GA 30236; if you are unsure, please ask the customer to call us instead). Please use it only for that purpose. We are not able to respond to sales or marketing offers, business acquisition or investment inquiries, vendor or partnership proposals, offers to provide services to us, or job applications, and we would be grateful if you would not send them here. For anything else, please contact our office at (770) 914-3877 or info@plumb-all.com. Thank you.\n\nThis creates a work request, not a scheduled visit. A Plumb-All team member confirms the service area and the time with the customer before anything is scheduled, so a mistaken service-area confirmation costs a phone call, not a truck roll.\n\nService area: about 30 miles from our shop at 218 N McDonough St, Jonesboro, GA 30236. Towns we regularly serve include Jonesboro, Stockbridge, Riverdale, McDonough, Hampton, Morrow, Fayetteville, Forest Park, Conyers, Griffin, Rex, Locust Grove, Covington, Ellenwood, Peachtree City and Newnan. If you are unsure whether the customer is in the area, ask them to call (770) 914-3877 instead of submitting.\n\nSend an `idempotency_key` so a retry within 24 hours returns the original result instead of creating a second request.\n\nWhat to tell the customer for each `status`:\n- `received` (201): a team member will call to confirm the time and the service area. If `urgent` is true, tell them to call (770) 914-3877 now for the fastest dispatch.\n- `invalid_request` (422): nothing was sent; fix the fields in `errors` and resubmit.\n- `not_a_service_request` (200): this endpoint is only for plumbing or septic service requests; nothing was created. Point them to the office for anything else.\n- `duplicate` (200): we already have a request for this phone number or address from the last 24 hours; no new request was created and a team member will be in touch.\n- `rate_limited` (429): too many requests; try again later or call the office.\n- `error` (500): the request may not have been recorded; ask the customer to call (770) 914-3877.",
+        "description": "This endpoint is for requesting plumbing or septic service from Plumb-All on behalf of a customer within about 30 miles of Jonesboro, Georgia. Please confirm the customer's address is in that area before submitting (our office is at 218 N McDonough St, Jonesboro, GA 30236; if you are unsure, please ask the customer to call us instead). Please use it only for that purpose. We are not able to respond to sales or marketing offers, business acquisition or investment inquiries, vendor or partnership proposals, offers to provide services to us, or job applications, and we would be grateful if you would not send them here. For anything else, please contact our office at (770) 914-3877 or info@plumb-all.com. Thank you.\n\nThis creates a work request, not a scheduled visit. A Plumb-All team member confirms the service area and the time with the customer before anything is scheduled, so a mistaken service-area confirmation costs a phone call, not a truck roll.\n\nService area: about 30 miles from our shop at 218 N McDonough St, Jonesboro, GA 30236. Towns we regularly serve include Jonesboro, Stockbridge, Riverdale, McDonough, Hampton, Morrow, Fayetteville, Forest Park, Conyers, Griffin, Rex, Locust Grove, Covington, Ellenwood, Peachtree City and Newnan. If you are unsure whether the customer is in the area, ask them to call (770) 914-3877 instead of submitting.\n\nSend an `idempotency_key` so a retry within 24 hours returns the original result instead of creating a second request.\n\nWhat to tell the customer for each `status`:\n- `received` (201): the request went straight to dispatch to be assigned to a technician, and a team member will call to confirm the time and the service area. Calling the office is not faster. If `urgent` is true, tell them it was flagged urgent and goes straight to dispatch; calling the office is not faster.\n- `invalid_request` (422): nothing was sent; fix the fields in `errors` and resubmit.\n- `not_a_service_request` (200): this endpoint is only for plumbing or septic service requests; nothing was created. Point them to the office for anything else.\n- `duplicate` (200): we already have a request for this phone number or address from the last 24 hours; no new request was created and a team member will be in touch.\n- `rate_limited` (429): too many requests; try again later or call the office.\n- `error` (500): the request may not have been recorded; ask the customer to call (770) 914-3877.",
         "requestBody": {
           "required": true,
           "content": {
@@ -56,7 +56,7 @@
         },
         "responses": {
           "201": {
-            "description": "Request received. Tell the customer a team member will contact them to confirm the time and the service area.",
+            "description": "Request received. It goes straight to dispatch to be assigned to a technician. Tell the customer a team member will contact them to confirm the time and the service area.",
             "content": {
               "application/json": {
                 "schema": {
@@ -202,6 +202,140 @@
           }
         }
       }
+    },
+    "/website/bookingRequest/{request_id}/photos": {
+      "post": {
+        "operationId": "uploadRequestPhoto",
+        "summary": "Upload a photo file the customer already took, for a request you made",
+        "description": "Use this if you have the photo file itself (for example in a code sandbox) and no public link for it; if you have a public https link, send it in `image_urls` on the additions call instead. Send the raw image bytes as the request body (not JSON, not a form) with an image Content-Type such as image/jpeg, and the update_token from the original 201 in the `X-Update-Token` header. One photo per call, JPEG, PNG, WebP, GIF or HEIC, 8 MB at most, up to 5 photos per request per day. The photo is attached to the request for our team and shown to them in Slack; we do not keep a copy after that.\n\nExample: `curl -X POST -H \"X-Update-Token: <update_token>\" -H \"Content-Type: image/jpeg\" --data-binary @photo.jpg <update_url with /additions replaced by /photos>`\n\nPlease do not ask the customer to take photos just to send them; send only photos they already have. Statuses: `updated` (200), `not_found` (404, wrong request_id or token), `no_longer_editable` (409, our team already started on it), `invalid_request` (422 not a supported photo, 413 too large), `rate_limited` (429), `error` (500/503: ask the customer to call (770) 914-3877).",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The request_id from the 201 response."
+          },
+          {
+            "name": "X-Update-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The update_token from the 201 response. `Authorization: Bearer <token>` also works."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/webp": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/gif": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/heic": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Photo added.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Updated"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Wrong request_id or update_token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdditionProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request is no longer editable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdditionProblem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The photo is over 8 MB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdditionProblem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The body is empty or is not a supported photo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdditionProblem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many photos or requests.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdditionProblem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The photo may not have been recorded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdditionProblem"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -300,7 +434,7 @@
           },
           "is_emergency": {
             "type": "boolean",
-            "description": "True if the customer describes an emergency such as a burst pipe, sewage backing up into the home, no water, or a gas smell. Emergencies are flagged urgent, and the customer should also call (770) 914-3877 for the fastest dispatch."
+            "description": "True if the customer describes an emergency such as a burst pipe, sewage backing up into the home, no water, or a gas smell. Emergencies are flagged urgent for dispatch. The customer does not need to call as well: a request here and a phone call both go directly to our dispatch."
           },
           "sms_consent": {
             "type": "boolean",
@@ -352,11 +486,12 @@
             "type": "string"
           },
           "emergency_phone": {
-            "type": "string"
+            "type": "string",
+            "description": "The office phone number. Customers can always call instead of using this API, but calling is not faster: phone calls and requests here both go directly to dispatch."
           },
           "urgent": {
             "type": "boolean",
-            "description": "Present and true when the request was flagged urgent. Tell the customer to call now."
+            "description": "Present and true when the request was flagged urgent. Every request goes straight to dispatch, so urgent or not, the customer does not need to call as well."
           },
           "images_attached": {
             "type": "integer",

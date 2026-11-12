@@ -158,12 +158,18 @@ describe("hostBookingImages", () => {
     fetchMock.mockResolvedValue(res(JPEG));
     const out = await hostBookingImages(["https://example.com/a.jpg"]);
     expect(out.urls).toEqual([
-      "https://integration.example/media/tok/photo-1.jpg",
+      expect.stringMatching(
+        /^https:\/\/integration\.example\/media\/tok\/photo-1-[0-9a-f]{6}\.jpg$/,
+      ),
+    ]);
+    expect(out.tokens).toEqual(["tok"]);
+    expect(out.filenames).toEqual([
+      expect.stringMatching(/^photo-1-[0-9a-f]{6}\.jpg$/),
     ]);
     expect(out.images).toEqual([
       {
         buffer: expect.any(Buffer),
-        filename: "photo-1.jpg",
+        filename: expect.stringMatching(/^photo-1-[0-9a-f]{6}\.jpg$/),
         sourceUrl: "https://example.com/a.jpg",
       },
     ]);
@@ -180,8 +186,10 @@ describe("hostBookingImages", () => {
     ]);
     expect(out.failedLinks).toEqual(["https://example.com/gone.jpg"]);
     expect(out.urls).toEqual([
-      "https://integration.example/media/tok/photo-2.png",
+      expect.stringMatching(/\/media\/tok\/photo-2-[0-9a-f]{6}\.png$/),
     ]);
-    expect(out.images.map((i) => i.filename)).toEqual(["photo-2.png"]);
+    expect(out.images.map((i) => i.filename)).toEqual([
+      expect.stringMatching(/^photo-2-[0-9a-f]{6}\.png$/),
+    ]);
   });
 });

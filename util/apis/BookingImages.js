@@ -4,6 +4,7 @@ import net from "net";
 import fetch from "node-fetch";
 import * as Sentry from "@sentry/node";
 import { hostReusableFile } from "../mediaStore.js";
+import crypto from "crypto";
 
 /**
  * Photos sent with a booking request. Each link is downloaded (carefully,
@@ -154,6 +155,27 @@ export async function downloadImage(link) {
 }
 
 /**
+ * Hosts a photo that is already in memory (an upload, or a download) so Jobber
+ * can fetch it, and names it for Slack. The name is unique so it can be found
+ * on the Jobber request later.
+ * @param {Buffer} buffer
+ * @param {string} contentType A type from sniffImageType
+ * @param {number} number Which photo this is
+ * @param {string} [sourceUrl] Where it came from, if it was a link
+ * @returns {{url: string, token: string, filename: string, image: {buffer: Buffer, filename: string, sourceUrl?: string}}}
+ */
+export function hostPhoto(buffer, contentType, number, sourceUrl) {
+  const token = hostReusableFile(buffer, contentType);
+  const filename = `photo-${number}-${crypto.randomBytes(3).toString("hex")}.${IMAGE_TYPES[contentType]}`;
+  return {
+    url: `${process.env.WEB_URL}/media/${token}/${filename}`,
+    token,
+    filename,
+    image: { buffer, filename, sourceUrl },
+  };
+}
+
+/**
  * Downloads each photo and hosts it for Jobber. A photo that can't be fetched
  * is skipped, since the request matters more than any one photo.
  * @param {string[]} links https links from the caller
@@ -165,12 +187,7 @@ export async function hostBookingImages(links) {
     links.map(async (link, i) => {
       try {
         const { buffer, contentType } = await downloadImage(link);
-        const token = hostReusableFile(buffer, contentType);
-        const filename = `photo-${i + 1}.${IMAGE_TYPES[contentType]}`;
-        return {
-          url: `${process.env.WEB_URL}/media/${token}/${filename}`,
-          image: { buffer, filename, sourceUrl: link },
-        };
+        return hostPhoto(buffer, contentType, i + 1, link);
       } catch (e) {
         // The link is still in the note, so staff can open it themselves
         console.warn(`BookingImages: Skipped a photo: ${e.message}`);
@@ -183,6 +200,8 @@ export async function hostBookingImages(links) {
   );
   return {
     urls: results.filter((r) => r.url).map((r) => r.url),
+    tokens: results.filter((r) => r.token).map((r) => r.token),
+    filenames: results.filter((r) => r.filename).map((r) => r.filename),
     images: results.filter((r) => r.image).map((r) => r.image),
     failedLinks: results.filter((r) => r.failedLink).map((r) => r.failedLink),
   };
