@@ -1724,6 +1724,7 @@ query ClientByEmail {
  * @param {boolean} params.smsAllowed Whether the customer consented to texts
  * @param {string} params.title The request title
  * @param {string} params.note The request note (details, source and flags)
+ * @param {string|null} [params.sourceText] Where the customer came from, recorded on a new client
  * @returns {Promise<{requestId: string, clientId: string, url: string|null}>}
  */
 export async function createServiceRequest({
@@ -1734,6 +1735,7 @@ export async function createServiceRequest({
   smsAllowed,
   title,
   note,
+  sourceText = null,
 }) {
   let client = await findClientByPhoneOrEmail(phone, email);
 
@@ -1744,6 +1746,9 @@ export async function createServiceRequest({
     const emails = email
       ? `emails: [{ address: ${gqlString(email)}, primary: true }]`
       : "";
+    const sourceAttribution = sourceText
+      ? `sourceAttribution: { sourceText: ${gqlString(sourceText)} }`
+      : "";
     const data = await makeRequest(`
 mutation CreateBookingClient {
   clientCreate(input: {
@@ -1751,6 +1756,7 @@ mutation CreateBookingClient {
     lastName: ${gqlString(lastName)}
     phones: [{ number: ${gqlString(phone)}, primary: true, smsAllowed: ${smsAllowed} }]
     ${emails}
+    ${sourceAttribution}
   }) {
     client { id }
     userErrors { message }

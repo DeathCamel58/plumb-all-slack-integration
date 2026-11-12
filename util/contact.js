@@ -6,6 +6,12 @@ import * as DataUtilities from "./DataUtilities.js";
 export const YELP_LEAD_TYPE = "Yelp Lead";
 
 /**
+ * The text in the title of a Jobber request made by the booking API, which
+ * already told staff about it
+ */
+export const AI_AGENT_REQUEST_TITLE = "AI agent request";
+
+/**
  * A contact from a client
  */
 export default class Contact {

@@ -94,4 +94,15 @@ describe("Jobber request webhook", () => {
     expect(contact.source).toBe("Jobber");
     expect(contact.message).not.toContain("No phone number yet");
   });
+
+  test.each([
+    "AI agent request (Claude): plumbing - drain cleaning",
+    "URGENT: AI agent request (OpenAI): septic",
+  ])("a booking API request (%s) isn't announced twice", async (title) => {
+    getRequestDataMock.mockResolvedValue(buildRequest({ title }));
+
+    await requestCreate(webhook);
+
+    expect(contactMadeMock).not.toHaveBeenCalled();
+  });
 });

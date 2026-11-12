@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/node";
 import events from "../events.js";
-import Contact from "../contact.js";
+import Contact, { AI_AGENT_REQUEST_TITLE } from "../contact.js";
+import * as APICoordinator from "../APICoordinator.js";
 import { toE164 } from "../DataUtilities.js";
 import { createServiceRequest } from "./Jobber.js";
 
@@ -47,6 +48,32 @@ const ALLOWED_FIELDS = [
   "idempotency_key",
   "source",
 ];
+
+/** Well-known AI services, matched against the caller's `source` */
+const AI_SERVICES = [
+  [/claude|anthropic/i, "Claude"],
+  [/openai|chatgpt|gpt|codex|\bo[1-9]\b/i, "OpenAI"],
+  [/gemini|bard|google/i, "Gemini"],
+  [/copilot|microsoft|bing/i, "Copilot"],
+  [/perplexity/i, "Perplexity"],
+  [/grok|\bxai\b/i, "Grok"],
+  [/\bmeta\b|llama/i, "Meta AI"],
+  [/mistral/i, "Mistral"],
+  [/deepseek/i, "DeepSeek"],
+  [/siri|alexa/i, "Voice assistant"],
+];
+
+/**
+ * Names the AI service that sent a request, from the caller's `source`.
+ * Unrecognized sources are kept as the caller wrote them.
+ * @param {string|null} source
+ * @returns {string}
+ */
+export function agentLabel(source) {
+  if (!source) return "unknown";
+  const known = AI_SERVICES.find(([re]) => re.test(source));
+  return known ? known[1] : source;
+}
 
 const MAX_DESCRIPTION = 2000;
 const HOUR_MS = 60 * 60 * 1000;
@@ -378,7 +405,7 @@ function describeRequest(v, { urgent, jobberUrl }) {
       ? `Preferred window (a preference, not a booking): ${v.preferredWindow.date}, ${v.preferredWindow.period}`
       : null,
     `Texts allowed: ${v.smsConsent ? "yes" : "no"}`,
-    `Submitted by an AI agent / API client: ${v.source ?? "unknown"}`,
+    `Submitted by an AI agent / API client: ${agentLabel(v.source)}${v.source && agentLabel(v.source) !== v.source ? ` (reported as "${v.source}")` : ""}`,
     "Caller confirmed the address is within about 30 miles of Jonesboro and that this is a real customer's request. Please confirm the service area and the time with the customer.",
     jobberUrl ? `Jobber: ${jobberUrl}` : null,
   ];
@@ -386,9 +413,9 @@ function describeRequest(v, { urgent, jobberUrl }) {
 }
 
 /**
- * Tells staff in Slack, the same channel and format as other contacts
+ * Tells staff, the same way as other contacts (Slack, PostHog and Trello)
  */
-function notifyStaff(v, { urgent, jobberUrl, jobberFailed }) {
+async function notifyStaff(v, { urgent, jobberUrl, jobberFailed }) {
   const contact = new Contact(
     `${urgent ? "URGENT " : ""}AI Agent Booking Request`,
     v.name,
@@ -400,14 +427,16 @@ function notifyStaff(v, { urgent, jobberUrl, jobberFailed }) {
       (jobberFailed
         ? "\nThe Jobber request could NOT be created. Please enter it by hand."
         : ""),
-    `ai_agent:${v.source ?? "unknown"}`,
+    `ai_agent:${agentLabel(v.source)}`,
   );
-  events.emit("slackbot-send-contact", contact, "AI Agent Booking");
+  // The Jobber webhook skips these requests, so this is staff's only notice
+  APICoordinator.contactMade(contact, JSON.stringify({ source: v.source }));
 }
 
 async function submitRequest(v) {
   const urgent = v.isEmergency || looksLikeEmergency(v.description);
-  const title = `${urgent ? "URGENT: " : ""}AI agent request: ${v.category}${v.service ? ` - ${v.service.replace(/_/g, " ")}` : ""}`;
+  const label = agentLabel(v.source);
+  const title = `${urgent ? "URGENT: " : ""}${AI_AGENT_REQUEST_TITLE} (${label}): ${v.category}${v.service ? ` - ${v.service.replace(/_/g, " ")}` : ""}`;
 
   let created;
   try {
@@ -419,12 +448,13 @@ async function submitRequest(v) {
       smsAllowed: v.smsConsent,
       title,
       note: describeRequest(v, { urgent, jobberUrl: null }),
+      sourceText: `AI agent: ${label}`,
     });
   } catch (e) {
     Sentry.captureException(e);
     console.error("BookingRequest: Failed to create the Jobber request:", e);
     // The customer's details are not lost: staff get them in Slack
-    notifyStaff(v, { urgent, jobberUrl: null, jobberFailed: true });
+    await notifyStaff(v, { urgent, jobberUrl: null, jobberFailed: true });
     return respond(500, {
       status: "error",
       message: `We could not record this request. Staff have been notified, but please also ask the customer to call the office at ${OFFICE_PHONE_DISPLAY}.`,
@@ -432,7 +462,7 @@ async function submitRequest(v) {
     });
   }
 
-  notifyStaff(v, { urgent, jobberUrl: created.url });
+  await notifyStaff(v, { urgent, jobberUrl: created.url });
   console.log(
     `BookingRequest: Created Jobber request ${created.requestId}${urgent ? " (urgent)" : ""} from ${v.source ?? "unknown source"}`,
   );

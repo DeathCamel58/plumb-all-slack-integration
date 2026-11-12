@@ -2,9 +2,14 @@ import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 
 const eventsEmitMock = jest.fn();
 const createServiceRequestMock = jest.fn();
+const contactMadeMock = jest.fn();
 
 jest.unstable_mockModule("../../util/events.js", () => ({
   default: { emit: eventsEmitMock, on: jest.fn() },
+}));
+
+jest.unstable_mockModule("../../util/APICoordinator.js", () => ({
+  contactMade: contactMadeMock,
 }));
 
 jest.unstable_mockModule("../../util/apis/Jobber.js", () => ({
@@ -12,6 +17,7 @@ jest.unstable_mockModule("../../util/apis/Jobber.js", () => ({
 }));
 
 const {
+  agentLabel,
   handleBookingRequest,
   isNotServiceRequest,
   looksLikeEmergency,
@@ -77,11 +83,14 @@ describe("handleBookingRequest", () => {
       postalCode: "30281",
     });
     expect(args.note).toContain("TestAgent");
-    expect(eventsEmitMock).toHaveBeenCalledWith(
-      "slackbot-send-contact",
+    expect(contactMadeMock).toHaveBeenCalledWith(
       expect.objectContaining({ type: "AI Agent Booking Request" }),
-      "AI Agent Booking",
+      expect.any(String),
     );
+    expect(args.title).toBe(
+      "AI agent request (TestAgent): plumbing - water heater",
+    );
+    expect(args.sourceText).toBe("AI agent: TestAgent");
   });
 
   test("normalizes the phone to E.164", async () => {
@@ -118,7 +127,7 @@ describe("handleBookingRequest", () => {
     expect(result.status).toBe("invalid_request");
     expect(result.errors[field]).toBeDefined();
     expect(createServiceRequestMock).not.toHaveBeenCalled();
-    expect(eventsEmitMock).not.toHaveBeenCalled();
+    expect(contactMadeMock).not.toHaveBeenCalled();
   });
 
   test("rejects unknown fields", async () => {
@@ -143,7 +152,7 @@ describe("handleBookingRequest", () => {
     expect(body.status).toBe("not_a_service_request");
     expect(body.message).toContain("(770) 914-3877");
     expect(createServiceRequestMock).not.toHaveBeenCalled();
-    expect(eventsEmitMock).not.toHaveBeenCalled();
+    expect(contactMadeMock).not.toHaveBeenCalled();
   });
 
   test("an emergency is flagged urgent and returns the phone number", async () => {
@@ -159,7 +168,7 @@ describe("handleBookingRequest", () => {
     expect(body.message).toContain("call");
     expect(body.emergency_phone).toBe("+1-770-914-3877");
     expect(createServiceRequestMock.mock.calls[0][0].title).toMatch(/^URGENT/);
-    expect(eventsEmitMock.mock.calls[0][1].type).toMatch(/^URGENT/);
+    expect(contactMadeMock.mock.calls[0][0].type).toMatch(/^URGENT/);
   });
 
   test("is_emergency flags it urgent too", async () => {
@@ -177,7 +186,7 @@ describe("handleBookingRequest", () => {
 
     expect(second).toEqual(first);
     expect(createServiceRequestMock).toHaveBeenCalledTimes(1);
-    expect(eventsEmitMock).toHaveBeenCalledTimes(1);
+    expect(contactMadeMock).toHaveBeenCalledTimes(1);
   });
 
   test("the same phone again is a duplicate", async () => {
@@ -232,11 +241,29 @@ describe("handleBookingRequest", () => {
     const failed = await handleBookingRequest(body, freshIp());
     expect(failed.httpStatus).toBe(500);
     expect(failed.body.status).toBe("error");
-    expect(eventsEmitMock).toHaveBeenCalledTimes(1);
-    expect(eventsEmitMock.mock.calls[0][1].message).toContain("could NOT");
+    expect(contactMadeMock).toHaveBeenCalledTimes(1);
+    expect(contactMadeMock.mock.calls[0][0].message).toContain("could NOT");
 
     const retried = await handleBookingRequest(body, freshIp());
     expect(retried.httpStatus).toBe(201);
+  });
+});
+
+describe("agentLabel", () => {
+  test.each([
+    ["claude-desktop", "Claude"],
+    ["Anthropic Claude Code", "Claude"],
+    ["ChatGPT", "OpenAI"],
+    ["openai-agent", "OpenAI"],
+    ["Gemini Assistant", "Gemini"],
+    ["Perplexity", "Perplexity"],
+    ["AcmeBot", "AcmeBot"],
+  ])("%s is %s", (source, label) => {
+    expect(agentLabel(source)).toBe(label);
+  });
+
+  test("no source is unknown", () => {
+    expect(agentLabel(null)).toBe("unknown");
   });
 });
 

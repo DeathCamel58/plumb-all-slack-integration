@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import * as Jobber from "./Jobber.js";
 import * as PostHog from "./PostHog.js";
-import Contact, { YELP_LEAD_TYPE } from "../contact.js";
+import Contact, { AI_AGENT_REQUEST_TITLE, YELP_LEAD_TYPE } from "../contact.js";
 import * as APICoordinator from "../APICoordinator.js";
 import events from "../events.js";
 import * as Sentry from "@sentry/node";
@@ -593,6 +593,14 @@ async function requestCreateHandle(req) {
     let request = await Jobber.getRequestData(
       body.data["webHookEvent"]["itemId"],
     );
+    // A request made by the booking API has already told staff, with its details
+    if (request.title?.includes(AI_AGENT_REQUEST_TITLE)) {
+      console.log(
+        `JobberWebHook: Request ${request.id} came from the booking API, skipping the duplicate notice`,
+      );
+      events.emit("db-REQUEST_CREATE_UPDATE", request);
+      return;
+    }
     // Determine which address to use. Prefer property address, fall back to billing address.
     let addressSource =
       request.property?.address ?? request.client.billingAddress ?? null;
