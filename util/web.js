@@ -22,6 +22,7 @@ import { restateClickConversion } from "./apis/GoogleAdsClickTracking.js";
 import { toE164, normalizePhoneNumber } from "./DataUtilities.js";
 import Contact from "./contact.js";
 import * as APICoordinator from "./APICoordinator.js";
+import { handleBookingRequest } from "./apis/BookingRequest.js";
 import {
   handleBridge,
   handleBridgeAfterDial,
@@ -447,6 +448,42 @@ app.post("/website/contactForm", cors(corsOptions), (req, res) => {
 });
 
 /**
+ * Service requests from AI agents and other API clients. Open to any origin,
+ * since callers aren't browsers; the checks live in BookingRequest.js.
+ * The caller's IP is the last X-Forwarded-For hop, the one nginx added.
+ */
+app.post("/website/bookingRequest", async (req, res) => {
+  let body;
+  try {
+    body = JSON.parse(req.body);
+  } catch (e) {
+    return res.status(400).json({
+      status: "invalid_request",
+      message: "The body must be valid JSON.",
+    });
+  }
+
+  const forwarded = String(req.headers["x-forwarded-for"] ?? "")
+    .split(",")
+    .map((hop) => hop.trim())
+    .filter(Boolean);
+  const ip = forwarded.at(-1) ?? req.socket.remoteAddress ?? "unknown";
+
+  try {
+    const { httpStatus, body: result } = await handleBookingRequest(body, ip);
+    res.status(httpStatus).json(result);
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Web: Booking request failed", e);
+    res.status(500).json({
+      status: "error",
+      message:
+        "Something went wrong. Please ask the customer to call the office at (770) 914-3877.",
+    });
+  }
+});
+
+/**
  * Twilio Inbound Voice Webhook
  * - Twilio sends From/To as form-urlencoded fields
  * - We respond with TwiML to bridge the caller to the assigned employee (or fallback)
@@ -569,8 +606,8 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "../assets/index.html"));
 });
 
-app.get("/openapi.yaml", (req, res) => {
-  res.sendFile(path.join(__dirname, "../assets/openapi.yaml"));
+app.get("/openapi.json", (req, res) => {
+  res.sendFile(path.join(__dirname, "../assets/openapi.json"));
 });
 
 /**

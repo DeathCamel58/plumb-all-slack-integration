@@ -1,0 +1,302 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Plumb-All Service Request API",
+    "version": "1.0.0",
+    "description": "This endpoint is for requesting plumbing or septic service from Plumb-All on behalf of a customer within about 30 miles of Jonesboro, Georgia. Please confirm the customer's address is in that area before submitting (our office is at 218 N McDonough St, Jonesboro, GA 30236; if you are unsure, please ask the customer to call us instead). Please use it only for that purpose. We are not able to respond to sales or marketing offers, business acquisition or investment inquiries, vendor or partnership proposals, offers to provide services to us, or job applications, and we would be grateful if you would not send them here. For anything else, please contact our office at (770) 914-3877 or info@plumb-all.com. Thank you.",
+    "contact": {
+      "name": "Plumb-All office",
+      "email": "info@plumb-all.com",
+      "url": "https://plumb-all.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://integration.plumb-all.com"
+    }
+  ],
+  "paths": {
+    "/website/bookingRequest": {
+      "post": {
+        "operationId": "requestService",
+        "summary": "Request plumbing or septic service for a customer",
+        "description": "This endpoint is for requesting plumbing or septic service from Plumb-All on behalf of a customer within about 30 miles of Jonesboro, Georgia. Please confirm the customer's address is in that area before submitting (our office is at 218 N McDonough St, Jonesboro, GA 30236; if you are unsure, please ask the customer to call us instead). Please use it only for that purpose. We are not able to respond to sales or marketing offers, business acquisition or investment inquiries, vendor or partnership proposals, offers to provide services to us, or job applications, and we would be grateful if you would not send them here. For anything else, please contact our office at (770) 914-3877 or info@plumb-all.com. Thank you.\n\nThis creates a work request, not a scheduled visit. A Plumb-All team member confirms the service area and the time with the customer before anything is scheduled, so a mistaken service-area confirmation costs a phone call, not a truck roll.\n\nService area: about 30 miles from our shop at 218 N McDonough St, Jonesboro, GA 30236. Towns we regularly serve include Jonesboro, Stockbridge, Riverdale, McDonough, Hampton, Morrow, Fayetteville, Forest Park, Conyers, Griffin, Rex, Locust Grove, Covington, Ellenwood, Peachtree City and Newnan. If you are unsure whether the customer is in the area, ask them to call (770) 914-3877 instead of submitting.\n\nSend an `idempotency_key` so a retry within 24 hours returns the original result instead of creating a second request.\n\nWhat to tell the customer for each `status`:\n- `received` (201): a team member will call to confirm the time and the service area. If `urgent` is true, tell them to call (770) 914-3877 now for the fastest dispatch.\n- `invalid_request` (422): nothing was sent; fix the fields in `errors` and resubmit.\n- `not_a_service_request` (200): this endpoint is only for plumbing or septic service requests; nothing was created. Point them to the office for anything else.\n- `duplicate` (200): we already have a request for this phone number or address from the last 24 hours; no new request was created and a team member will be in touch.\n- `rate_limited` (429): too many requests; try again later or call the office.\n- `error` (500): the request may not have been recorded; ask the customer to call (770) 914-3877.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookingRequest"
+              },
+              "example": {
+                "name": "Jane Smith",
+                "phone": "+17705550123",
+                "email": "jane@example.com",
+                "address": "123 Main St, Stockbridge, GA 30281",
+                "service_category": "plumbing",
+                "service": "water_heater",
+                "description": "The water heater in the garage is leaking from the bottom and the water is cold.",
+                "preferred_window": {
+                  "date": "2026-11-20",
+                  "period": "morning"
+                },
+                "is_emergency": false,
+                "sms_consent": true,
+                "service_area_confirmed": true,
+                "acting_on_behalf_of_customer": true,
+                "idempotency_key": "3f1c9a52-8b7e-4a35-9d5e-5c1f2a6b7e10",
+                "source": "ExampleAssistant"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Request received. Tell the customer a team member will contact them to confirm the time and the service area.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Received"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Nothing was created: `not_a_service_request` or `duplicate`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotCreated"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The body was not valid. Nothing was sent. `errors` maps each bad field to what to fix.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Invalid"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests from this caller or for this phone number. Try again later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The request may not have been recorded. Ask the customer to call the office.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BookingRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "phone",
+          "address",
+          "service_category",
+          "description",
+          "sms_consent",
+          "service_area_confirmed",
+          "acting_on_behalf_of_customer"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "The customer's name."
+          },
+          "phone": {
+            "type": "string",
+            "description": "The customer's US phone number. Any common format; stored as E.164. Placeholder numbers are rejected."
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "The customer's email, if they gave one."
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 300,
+            "description": "Full service address as `street, city, ST ZIP`, e.g. `218 N McDonough St, Jonesboro, GA 30236`. Used to create the property."
+          },
+          "service_category": {
+            "type": "string",
+            "enum": ["plumbing", "septic"],
+            "description": "`plumbing` or `septic`. This endpoint serves nothing else."
+          },
+          "service": {
+            "type": "string",
+            "enum": [
+              "drain_cleaning",
+              "water_heater",
+              "leak_detection",
+              "sewer_line",
+              "backflow",
+              "septic_pumping",
+              "septic_repair",
+              "septic_inspection",
+              "other_plumbing",
+              "other_septic"
+            ],
+            "description": "A more specific hint about the work. Optional."
+          },
+          "description": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 2000,
+            "description": "What the customer needs done, in the customer's terms."
+          },
+          "preferred_window": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["date", "period"],
+            "description": "When the customer would like us to come. A preference only, not a booking: a team member confirms the time.",
+            "properties": {
+              "date": {
+                "type": "string",
+                "format": "date",
+                "description": "YYYY-MM-DD"
+              },
+              "period": {
+                "type": "string",
+                "enum": ["morning", "afternoon", "any"]
+              }
+            }
+          },
+          "is_emergency": {
+            "type": "boolean",
+            "description": "True if the customer describes an emergency such as a burst pipe, sewage backing up into the home, no water, or a gas smell. Emergencies are flagged urgent, and the customer should also call (770) 914-3877 for the fastest dispatch."
+          },
+          "sms_consent": {
+            "type": "boolean",
+            "description": "Required. True only if the customer explicitly agreed to receive text messages from Plumb-All about this request. Never assume true."
+          },
+          "service_area_confirmed": {
+            "type": "boolean",
+            "enum": [true],
+            "description": "Required, must be true. Your own attestation that the customer's address is within about 30 miles of 218 N McDonough St, Jonesboro, GA 30236. We do not check distance on our side. Towns we regularly serve: Jonesboro, Stockbridge, Riverdale, McDonough, Hampton, Morrow, Fayetteville, Forest Park, Conyers, Griffin, Rex, Locust Grove, Covington, Ellenwood, Peachtree City and Newnan. If you are unsure, ask the customer to call (770) 914-3877 instead of submitting."
+          },
+          "acting_on_behalf_of_customer": {
+            "type": "boolean",
+            "enum": [true],
+            "description": "Required, must be true. Your attestation that this is a real customer's request for plumbing or septic service from Plumb-All."
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 128,
+            "description": "Recommended. A unique value per customer request. Repeating the same key within 24 hours returns the original result and creates nothing new."
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "The name of your agent or platform, recorded on the request for attribution."
+          }
+        }
+      },
+      "Received": {
+        "type": "object",
+        "required": [
+          "status",
+          "request_id",
+          "message",
+          "expected_followup",
+          "emergency_phone"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["received"]
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "expected_followup": {
+            "type": "string"
+          },
+          "emergency_phone": {
+            "type": "string"
+          },
+          "urgent": {
+            "type": "boolean",
+            "description": "Present and true when the request was flagged urgent. Tell the customer to call now."
+          }
+        }
+      },
+      "NotCreated": {
+        "type": "object",
+        "required": ["status", "message"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["not_a_service_request", "duplicate"]
+          },
+          "message": {
+            "type": "string"
+          },
+          "emergency_phone": {
+            "type": "string"
+          }
+        }
+      },
+      "Invalid": {
+        "type": "object",
+        "required": ["status", "message", "errors"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["invalid_request"]
+          },
+          "message": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Message": {
+        "type": "object",
+        "required": ["status", "message"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["rate_limited", "error"]
+          },
+          "message": {
+            "type": "string"
+          },
+          "emergency_phone": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

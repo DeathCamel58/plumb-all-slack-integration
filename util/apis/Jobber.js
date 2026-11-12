@@ -1637,3 +1637,187 @@ query invoiceQuery {
     return invoiceResponse.invoices.nodes;
   }
 }
+
+/**
+ * Escapes a value as a GraphQL string literal
+ * @param {string} value
+ * @returns {string}
+ */
+function gqlString(value) {
+  return JSON.stringify(String(value));
+}
+
+/**
+ * Throws when a Jobber mutation reports user errors
+ * @param {string} what The mutation, for the message
+ * @param {{userErrors?: Array<{message: string}>}|undefined} payload
+ */
+function assertNoUserErrors(what, payload) {
+  if (!payload) {
+    throw new Error(`Jobber: ${what} returned no payload`);
+  }
+  if (payload.userErrors?.length) {
+    throw new Error(
+      `Jobber: ${what} failed: ${payload.userErrors.map((e) => e.message).join("; ")}`,
+    );
+  }
+}
+
+/**
+ * Finds a Jobber client by phone, then by email
+ * @param {string} phoneE164 The phone number in E.164 format
+ * @param {string|null} email
+ * @returns {Promise<{id: string, clientProperties: Array<{id: string, street1: string|null, postalCode: string|null}>}|null>}
+ */
+async function findClientByPhoneOrEmail(phoneE164, email) {
+  const fields = `
+    id
+    phones { normalizedPhoneNumber number }
+    emails { address }
+    clientProperties(first: 50) { nodes { id address { street1 postalCode } } }`;
+  const shape = (client) => ({
+    id: client.id,
+    clientProperties: client.clientProperties.nodes.map((p) => ({
+      id: p.id,
+      street1: p.address?.street1 ?? null,
+      postalCode: p.address?.postalCode ?? null,
+    })),
+  });
+  const last10 = phoneE164.replace(/\D/g, "").slice(-10);
+
+  let data = await makeRequest(`
+query ClientByPhone {
+  clients(searchTerm: ${gqlString(last10)}, first: 10) { nodes { ${fields} } }
+}`);
+  let match = data.clients.nodes.find((c) =>
+    c.phones.some(
+      (p) =>
+        (p.normalizedPhoneNumber ?? p.number ?? "")
+          .replace(/\D/g, "")
+          .slice(-10) === last10,
+    ),
+  );
+  if (match) return shape(match);
+
+  if (email) {
+    data = await makeRequest(`
+query ClientByEmail {
+  clients(searchTerm: ${gqlString(email)}, first: 10) { nodes { ${fields} } }
+}`);
+    match = data.clients.nodes.find((c) =>
+      c.emails.some((e) => e.address?.toLowerCase() === email.toLowerCase()),
+    );
+    if (match) return shape(match);
+  }
+  return null;
+}
+
+/**
+ * Creates a Jobber work request for a customer, reusing the client (matched by
+ * phone, then email) and the property (matched by street and ZIP) when they
+ * already exist. Nothing is scheduled.
+ * @param {object} params
+ * @param {string} params.name Customer name
+ * @param {string} params.phone Phone in E.164 format
+ * @param {string|null} params.email
+ * @param {{street1: string, city: string, province: string, postalCode: string}} params.address
+ * @param {boolean} params.smsAllowed Whether the customer consented to texts
+ * @param {string} params.title The request title
+ * @param {string} params.note The request note (details, source and flags)
+ * @returns {Promise<{requestId: string, clientId: string, url: string|null}>}
+ */
+export async function createServiceRequest({
+  name,
+  phone,
+  email,
+  address,
+  smsAllowed,
+  title,
+  note,
+}) {
+  let client = await findClientByPhoneOrEmail(phone, email);
+
+  if (!client) {
+    const parts = name.trim().split(/\s+/);
+    const firstName = parts.shift();
+    const lastName = parts.join(" ");
+    const emails = email
+      ? `emails: [{ address: ${gqlString(email)}, primary: true }]`
+      : "";
+    const data = await makeRequest(`
+mutation CreateBookingClient {
+  clientCreate(input: {
+    firstName: ${gqlString(firstName)}
+    lastName: ${gqlString(lastName)}
+    phones: [{ number: ${gqlString(phone)}, primary: true, smsAllowed: ${smsAllowed} }]
+    ${emails}
+  }) {
+    client { id }
+    userErrors { message }
+  }
+}`);
+    assertNoUserErrors("clientCreate", data.clientCreate);
+    client = { id: data.clientCreate.client.id, clientProperties: [] };
+  }
+
+  const sameProperty = client.clientProperties.find(
+    (p) =>
+      p.street1?.trim().toLowerCase() === address.street1.toLowerCase() &&
+      p.postalCode?.slice(0, 5) === address.postalCode,
+  );
+  let propertyId = sameProperty?.id;
+
+  if (!propertyId) {
+    const data = await makeRequest(`
+mutation CreateBookingProperty {
+  propertyCreate(clientId: ${gqlString(client.id)}, input: {
+    properties: [{ address: {
+      street1: ${gqlString(address.street1)}
+      city: ${gqlString(address.city)}
+      province: ${gqlString(address.province)}
+      postalCode: ${gqlString(address.postalCode)}
+      country: "US"
+    } }]
+  }) {
+    properties { id }
+    userErrors { message }
+  }
+}`);
+    assertNoUserErrors("propertyCreate", data.propertyCreate);
+    propertyId = data.propertyCreate.properties[0].id;
+  }
+
+  const created = await makeRequest(`
+mutation CreateBookingRequest {
+  requestCreate(input: {
+    clientId: ${gqlString(client.id)}
+    propertyId: ${gqlString(propertyId)}
+    title: ${gqlString(title)}
+  }) {
+    request { id jobberWebUri }
+    userErrors { message }
+  }
+}`);
+  assertNoUserErrors("requestCreate", created.requestCreate);
+  const request = created.requestCreate.request;
+
+  try {
+    const noted = await makeRequest(`
+mutation CreateBookingRequestNote {
+  requestCreateNote(requestId: ${gqlString(request.id)}, input: { message: ${gqlString(note)} }) {
+    userErrors { message }
+  }
+}`);
+    assertNoUserErrors("requestCreateNote", noted.requestCreateNote);
+  } catch (e) {
+    // The request exists; staff are told the details in Slack too
+    Sentry.captureException(e);
+    console.error("Jobber: Failed to add the note to the booking request", e);
+  }
+
+  return {
+    requestId: request.id,
+    clientId: client.id,
+    url: request.jobberWebUri ?? null,
+  };
+}
