@@ -157,7 +157,8 @@ export async function downloadImage(link) {
  * Downloads each photo and hosts it for Jobber. A photo that can't be fetched
  * is skipped, since the request matters more than any one photo.
  * @param {string[]} links https links from the caller
- * @returns {Promise<{urls: string[], failed: number}>} Links Jobber can fetch
+ * @returns {Promise<{urls: string[], images: Array<{buffer: Buffer, filename: string, sourceUrl: string}>, failedLinks: string[]}>}
+ *   urls are links Jobber can fetch; images are the files for Slack; failedLinks are the links that could not be downloaded
  */
 export async function hostBookingImages(links) {
   const results = await Promise.all(
@@ -165,17 +166,24 @@ export async function hostBookingImages(links) {
       try {
         const { buffer, contentType } = await downloadImage(link);
         const token = hostReusableFile(buffer, contentType);
-        return `${process.env.WEB_URL}/media/${token}/photo-${i + 1}.${IMAGE_TYPES[contentType]}`;
+        const filename = `photo-${i + 1}.${IMAGE_TYPES[contentType]}`;
+        return {
+          url: `${process.env.WEB_URL}/media/${token}/${filename}`,
+          image: { buffer, filename, sourceUrl: link },
+        };
       } catch (e) {
         // The link is still in the note, so staff can open it themselves
         console.warn(`BookingImages: Skipped a photo: ${e.message}`);
         if (!/HTTP 4\d\d|Not a supported|too large|private/i.test(e.message)) {
           Sentry.captureException(e);
         }
-        return null;
+        return { failedLink: link };
       }
     }),
   );
-  const urls = results.filter(Boolean);
-  return { urls, failed: links.length - urls.length };
+  return {
+    urls: results.filter((r) => r.url).map((r) => r.url),
+    images: results.filter((r) => r.image).map((r) => r.image),
+    failedLinks: results.filter((r) => r.failedLink).map((r) => r.failedLink),
+  };
 }

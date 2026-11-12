@@ -450,7 +450,10 @@ function notService() {
  * Builds the Jobber request note and the Slack text. Only the Jobber note
  * names the AI service.
  */
-function describeRequest(v, { urgent, jobberUrl, includeAgent = false }) {
+function describeRequest(
+  v,
+  { urgent, jobberUrl, includeAgent = false, photoLinks = [] },
+) {
   const lines = [
     urgent ? "URGENT: customer reports an emergency." : null,
     `Service category: ${v.category}${v.service ? ` (${v.service})` : ""}`,
@@ -458,8 +461,8 @@ function describeRequest(v, { urgent, jobberUrl, includeAgent = false }) {
     v.additionalContext
       ? `Additional context from the AI agent: ${v.additionalContext}`
       : null,
-    v.imageUrls.length
-      ? `Photos the customer already took:\n${v.imageUrls.join("\n")}`
+    photoLinks.length
+      ? `Photos the customer already took:\n${photoLinks.join("\n")}`
       : null,
     v.preferredWindow
       ? `Preferred window (a preference, not a booking): ${v.preferredWindow.date}, ${v.preferredWindow.period}`
@@ -476,7 +479,10 @@ function describeRequest(v, { urgent, jobberUrl, includeAgent = false }) {
 /**
  * Tells staff, the same way as other contacts (Slack, PostHog and Trello)
  */
-async function notifyStaff(v, { urgent, jobberUrl, jobberFailed }) {
+async function notifyStaff(
+  v,
+  { urgent, jobberUrl, jobberFailed, photos = { images: [], failedLinks: [] } },
+) {
   const contact = new Contact(
     `${urgent ? "URGENT " : ""}AI Agent Booking Request`,
     v.name,
@@ -484,12 +490,18 @@ async function notifyStaff(v, { urgent, jobberUrl, jobberFailed }) {
     undefined,
     v.email ?? undefined,
     v.addressText,
-    describeRequest(v, { urgent, jobberUrl }) +
+    describeRequest(v, {
+      urgent,
+      jobberUrl,
+      // Photos that downloaded are attached in Slack; only the rest need a link
+      photoLinks: photos.failedLinks,
+    }) +
       (jobberFailed
         ? "\nThe Jobber request could NOT be created. Please enter it by hand."
         : ""),
     "AI Agent",
   );
+  contact.images = photos.images;
   // The Jobber webhook skips these requests, so this is staff's only notice
   APICoordinator.contactMade(contact, JSON.stringify({ source: v.source }));
 }
@@ -502,7 +514,7 @@ async function submitRequest(v) {
   // Best effort: a photo that can't be fetched stays a link in the note
   const photos = v.imageUrls.length
     ? await hostBookingImages(v.imageUrls)
-    : { urls: [], failed: 0 };
+    : { urls: [], images: [], failedLinks: [] };
 
   let created;
   try {
@@ -518,6 +530,7 @@ async function submitRequest(v) {
         urgent,
         jobberUrl: null,
         includeAgent: true,
+        photoLinks: v.imageUrls,
       }),
       sourceText: `AI agent: ${label}`,
       details: [
@@ -538,7 +551,7 @@ async function submitRequest(v) {
           ? [
               {
                 label: "Share images of the work to be done",
-                answerText: v.imageUrls.join("\n"),
+                answerText: "In notes",
               },
             ]
           : []),
@@ -552,7 +565,12 @@ async function submitRequest(v) {
     Sentry.captureException(e);
     console.error("BookingRequest: Failed to create the Jobber request:", e);
     // The customer's details are not lost: staff get them in Slack
-    await notifyStaff(v, { urgent, jobberUrl: null, jobberFailed: true });
+    await notifyStaff(v, {
+      urgent,
+      jobberUrl: null,
+      jobberFailed: true,
+      photos,
+    });
     return respond(500, {
       status: "error",
       message: `We could not record this request. Staff have been notified, but please also ask the customer to call the office at ${OFFICE_PHONE_DISPLAY}.`,
@@ -560,7 +578,7 @@ async function submitRequest(v) {
     });
   }
 
-  await notifyStaff(v, { urgent, jobberUrl: created.url });
+  await notifyStaff(v, { urgent, jobberUrl: created.url, photos });
   console.log(
     `BookingRequest: Created Jobber request ${created.requestId}${urgent ? " (urgent)" : ""} from ${v.source ?? "unknown source"}`,
   );

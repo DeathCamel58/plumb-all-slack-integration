@@ -65,6 +65,12 @@ beforeEach(() => {
     attached: true,
   });
   hostBookingImagesMock.mockImplementation(async (links) => ({
+    images: links.map((l, i) => ({
+      buffer: Buffer.from("img"),
+      filename: `photo-${i + 1}.jpg`,
+      sourceUrl: l,
+    })),
+    failedLinks: [],
     urls: links.map(
       (l, i) => `https://hosted.example/media/t${i}/photo-${i + 1}.jpg`,
     ),
@@ -158,14 +164,20 @@ describe("handleBookingRequest", () => {
       args.details.find(
         (d) => d.label === "Share images of the work to be done",
       ).answerText,
-    ).toBe(urls.join("\n"));
+    ).toBe("In notes");
     expect(args.note).toContain(urls[1]);
     expect(hostBookingImagesMock).toHaveBeenCalledWith(urls);
     expect(args.attachmentUrls).toEqual([
       "https://hosted.example/media/t0/photo-1.jpg",
       "https://hosted.example/media/t1/photo-2.jpg",
     ]);
-    expect(contactMadeMock.mock.calls[0][0].message).toContain(urls[0]);
+    // Downloaded photos are attached in Slack, not linked
+    const contact = contactMadeMock.mock.calls[0][0];
+    expect(contact.images.map((i) => i.filename)).toEqual([
+      "photo-1.jpg",
+      "photo-2.jpg",
+    ]);
+    expect(contact.message).not.toContain(urls[0]);
   });
 
   test.each([
@@ -196,6 +208,21 @@ describe("handleBookingRequest", () => {
     expect(body.images_attached).toBe(1);
   });
 
+  test("a photo that could not be downloaded stays a link in Slack", async () => {
+    hostBookingImagesMock.mockResolvedValue({
+      urls: [],
+      images: [],
+      failedLinks: ["https://example.com/gone.jpg"],
+    });
+    await handleBookingRequest(
+      validBody({ image_urls: ["https://example.com/gone.jpg"] }),
+      freshIp(),
+    );
+    expect(contactMadeMock.mock.calls[0][0].message).toContain(
+      "https://example.com/gone.jpg",
+    );
+  });
+
   test("a request without photos has no images_attached and downloads nothing", async () => {
     const { body } = await handleBookingRequest(validBody(), freshIp());
     expect(body.images_attached).toBeUndefined();
@@ -203,7 +230,11 @@ describe("handleBookingRequest", () => {
   });
 
   test("photos that could not be attached report zero but the request succeeds", async () => {
-    hostBookingImagesMock.mockResolvedValue({ urls: [], failed: 1 });
+    hostBookingImagesMock.mockResolvedValue({
+      urls: [],
+      images: [],
+      failedLinks: ["https://example.com/a.jpg"],
+    });
     createServiceRequestMock.mockResolvedValue({
       requestId: "REQ123",
       clientId: "CLI123",

@@ -600,7 +600,7 @@ async function sendContactMessage(
         callTextButtons(contact.phone),
       );
     }
-    await app.client.chat.postMessage({
+    const posted = await app.client.chat.postMessage({
       channel: channelName,
       text: contact.messageToSend(),
       thread_ts: thread_ts ?? undefined,
@@ -612,6 +612,26 @@ async function sendContactMessage(
     });
 
     console.info("Slack: Sent Message to Slack!");
+
+    // Photos that came with the contact go in the post's thread
+    for (const image of contact.images ?? []) {
+      const uploaded = await uploadFile(
+        image.buffer,
+        image.filename,
+        image.filename,
+        "Photo from the customer",
+        channelName,
+        posted?.ts,
+      );
+      if (!uploaded && image.sourceUrl) {
+        await app.client.chat.postMessage({
+          channel: channelName,
+          thread_ts: posted?.ts,
+          text: `Couldn't attach a photo: ${image.sourceUrl}`,
+          unfurl_links: false,
+        });
+      }
+    }
   } catch (error) {
     Sentry.captureException(error);
     console.error(error);

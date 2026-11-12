@@ -154,16 +154,23 @@ describe("downloadImage", () => {
 });
 
 describe("hostBookingImages", () => {
-  test("hosts each photo and gives Jobber a link with an extension", async () => {
+  test("hosts each photo, giving Jobber a link with an extension and Slack the file", async () => {
     fetchMock.mockResolvedValue(res(JPEG));
     const out = await hostBookingImages(["https://example.com/a.jpg"]);
-    expect(out).toEqual({
-      urls: ["https://integration.example/media/tok/photo-1.jpg"],
-      failed: 0,
-    });
+    expect(out.urls).toEqual([
+      "https://integration.example/media/tok/photo-1.jpg",
+    ]);
+    expect(out.images).toEqual([
+      {
+        buffer: expect.any(Buffer),
+        filename: "photo-1.jpg",
+        sourceUrl: "https://example.com/a.jpg",
+      },
+    ]);
+    expect(out.failedLinks).toEqual([]);
   });
 
-  test("skips a photo that fails and keeps the rest", async () => {
+  test("skips a photo that fails, keeps the rest, and reports the failed link", async () => {
     fetchMock
       .mockResolvedValueOnce(res(Buffer.alloc(0), { status: 404 }))
       .mockResolvedValueOnce(res(PNG));
@@ -171,9 +178,10 @@ describe("hostBookingImages", () => {
       "https://example.com/gone.jpg",
       "https://example.com/b.png",
     ]);
-    expect(out.failed).toBe(1);
+    expect(out.failedLinks).toEqual(["https://example.com/gone.jpg"]);
     expect(out.urls).toEqual([
       "https://integration.example/media/tok/photo-2.png",
     ]);
+    expect(out.images.map((i) => i.filename)).toEqual(["photo-2.png"]);
   });
 });

@@ -77,6 +77,19 @@ export default class Contact {
      * The Jobber client, when the contact came from Jobber
      */
     this.contactJobberClient = null;
+
+    /**
+     * Photos to attach to the Slack post, as {buffer, filename, sourceUrl}
+     */
+    this.contactImages = [];
+  }
+
+  get images() {
+    return this.contactImages;
+  }
+
+  set images(images) {
+    this.contactImages = images ?? [];
   }
 
   get type() {

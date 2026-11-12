@@ -11,6 +11,7 @@ const usersInfoMock = jest.fn();
 const postEphemeralMock = jest.fn();
 const viewsOpenMock = jest.fn();
 const textCustomerMock = jest.fn();
+const uploadV2Mock = jest.fn();
 
 jest.unstable_mockModule("@slack/bolt", () => ({
   default: {
@@ -24,6 +25,7 @@ jest.unstable_mockModule("@slack/bolt", () => ({
           },
           conversations: { history: historyMock, list: listChannelsMock },
           views: { open: viewsOpenMock },
+          files: { uploadV2: uploadV2Mock },
         };
       }
       async start() {}
@@ -69,6 +71,7 @@ jest.unstable_mockModule("../../util/apis/CallRailBadLead.js", () => ({
 
 const { event: handleEvent, handleInteractivity } =
   await import("../../util/apis/SlackBot.js");
+const { default: Contact } = await import("../../util/contact.js");
 
 // Captured before beforeEach clears the mocks
 const handlers = Object.fromEntries(eventsOnMock.mock.calls);
@@ -190,6 +193,72 @@ describe("Slack interactivity", () => {
 
     expect(console.warn).not.toHaveBeenCalled();
     expect(sentryMock.captureException).not.toHaveBeenCalled();
+  });
+});
+
+describe("contact posts with photos", () => {
+  const sendContact = eventsOnMock.mock.calls.find(
+    ([name]) => name === "slackbot-send-contact",
+  )[1];
+
+  function contactWithPhotos() {
+    const contact = new Contact(
+      "AI Agent Booking Request",
+      "Jane",
+      "+17702345678",
+    );
+    contact.images = [
+      {
+        buffer: Buffer.from("img"),
+        filename: "photo-1.jpg",
+        sourceUrl: "https://example.com/a.jpg",
+      },
+    ];
+    return contact;
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    postMessageMock.mockResolvedValue({ ts: "111.222" });
+    listChannelsMock.mockResolvedValue({
+      channels: [{ name: "calls", id: "C0CALLS0001" }],
+    });
+  });
+
+  test("each photo is uploaded into the post's thread", async () => {
+    uploadV2Mock.mockResolvedValue({ ok: true });
+
+    await sendContact(contactWithPhotos(), "Booking", "calls");
+
+    expect(uploadV2Mock).toHaveBeenCalledTimes(1);
+    expect(uploadV2Mock.mock.calls[0][0]).toMatchObject({
+      channel_id: "C0CALLS0001",
+      thread_ts: "111.222",
+      filename: "photo-1.jpg",
+    });
+    expect(postMessageMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("a photo Slack won't take is linked in the thread instead", async () => {
+    uploadV2Mock.mockRejectedValue(new Error("slack down"));
+
+    await sendContact(contactWithPhotos(), "Booking", "calls");
+
+    expect(postMessageMock).toHaveBeenCalledTimes(2);
+    expect(postMessageMock.mock.calls[1][0]).toMatchObject({
+      thread_ts: "111.222",
+      text: expect.stringContaining("https://example.com/a.jpg"),
+    });
+  });
+
+  test("a contact without photos uploads nothing", async () => {
+    await sendContact(
+      new Contact("Website", "Jane", "+17702345678"),
+      "Website",
+      "calls",
+    );
+
+    expect(uploadV2Mock).not.toHaveBeenCalled();
   });
 });
 
