@@ -24,6 +24,10 @@ const requestCreate = eventsOnMock.mock.calls.find(
   ([name]) => name === "jobber-REQUEST_CREATE",
 )[1];
 
+const requestUpdate = eventsOnMock.mock.calls.find(
+  ([name]) => name === "jobber-REQUEST_UPDATE",
+)[1];
+
 const webhook = {
   body: { data: { webHookEvent: { itemId: "request-1" } } },
   header: () => null,
@@ -104,5 +108,20 @@ describe("Jobber request webhook", () => {
     await requestCreate(webhook);
 
     expect(contactMadeMock).not.toHaveBeenCalled();
+  });
+
+  test("a request deleted since the webhook is skipped, not a crash", async () => {
+    getRequestDataMock.mockResolvedValue(null);
+
+    await expect(requestCreate(webhook)).resolves.toBeUndefined();
+    await expect(requestUpdate(webhook)).resolves.toBeUndefined();
+    expect(contactMadeMock).not.toHaveBeenCalled();
+  });
+
+  test("a handler that throws is reported instead of rejecting", async () => {
+    getRequestDataMock.mockRejectedValue(new Error("Jobber down"));
+
+    await expect(requestCreate(webhook)).resolves.toBeUndefined();
+    await expect(requestUpdate(webhook)).resolves.toBeUndefined();
   });
 });

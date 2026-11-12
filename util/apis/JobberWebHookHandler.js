@@ -36,6 +36,24 @@ function jobberVerify(webhookBody, jobberHmac) {
 // TODO: Ensure the webhook is authentic for all handlers
 
 /**
+ * Wraps a webhook handler so an error is reported instead of becoming an
+ * unhandled rejection, which restarts the app. Jobber can send a webhook for
+ * something already deleted, so a handler failing is routine, not fatal.
+ * @param {(req: import("express").Request) => Promise<void>} handler
+ * @returns {(req: import("express").Request) => Promise<void>}
+ */
+function guarded(handler) {
+  return async (req) => {
+    try {
+      await handler(req);
+    } catch (e) {
+      Sentry.captureException(e);
+      console.error(`Jobber webhook handler error in ${handler.name}:`, e);
+    }
+  };
+}
+
+/**
  * Creates an invoice event
  * @param req The incoming web data
  * @returns {Promise<void>}
@@ -66,7 +84,7 @@ async function invoiceHandle(req) {
     console.error("Jobber webhook handler error:", e);
   }
 }
-events.on("jobber-INVOICE_CREATE", invoiceHandle);
+events.on("jobber-INVOICE_CREATE", guarded(invoiceHandle));
 
 /**
  * Creates an invoice update event
@@ -97,7 +115,7 @@ async function invoiceUpdateHandle(req) {
     console.error("Jobber webhook handler error:", e);
   }
 }
-events.on("jobber-INVOICE_UPDATE", invoiceUpdateHandle);
+events.on("jobber-INVOICE_UPDATE", guarded(invoiceUpdateHandle));
 
 /**
  * Creates an invoice destroy event
@@ -118,7 +136,7 @@ async function invoiceDestroyHandle(req) {
     console.error("Jobber webhook handler error:", e);
   }
 }
-events.on("jobber-INVOICE_DESTROY", invoiceDestroyHandle);
+events.on("jobber-INVOICE_DESTROY", guarded(invoiceDestroyHandle));
 
 /**
  * Adds/Updates client
@@ -147,8 +165,8 @@ async function clientHandle(req) {
     console.error("Jobber webhook handler error:", e);
   }
 }
-events.on("jobber-CLIENT_CREATE", clientHandle);
-events.on("jobber-CLIENT_UPDATE", clientHandle);
+events.on("jobber-CLIENT_CREATE", guarded(clientHandle));
+events.on("jobber-CLIENT_UPDATE", guarded(clientHandle));
 
 /**
  * Creates a client destroy event
@@ -169,7 +187,7 @@ async function clientDestroyHandle(req) {
     console.error("Jobber webhook handler error:", e);
   }
 }
-events.on("jobber-CLIENT_DESTROY", clientDestroyHandle);
+events.on("jobber-CLIENT_DESTROY", guarded(clientDestroyHandle));
 
 /**
  * Adds quote event
@@ -197,7 +215,7 @@ async function quoteCreateHandle(req) {
     console.error("Jobber webhook handler error:", e);
   }
 }
-events.on("jobber-QUOTE_CREATE", quoteCreateHandle);
+events.on("jobber-QUOTE_CREATE", guarded(quoteCreateHandle));
 
 /**
  * Adds quote acceptance event
@@ -225,7 +243,7 @@ async function quoteUpdateHandle(req) {
     console.error("Jobber webhook handler error:", e);
   }
 }
-events.on("jobber-QUOTE_UPDATE", quoteUpdateHandle);
+events.on("jobber-QUOTE_UPDATE", guarded(quoteUpdateHandle));
 
 /**
  * Creates a quote destroy event
@@ -246,7 +264,7 @@ async function quoteDestroyHandle(req) {
     console.error("Jobber webhook handler error:", e);
   }
 }
-events.on("jobber-QUOTE_DESTROY", quoteDestroyHandle);
+events.on("jobber-QUOTE_DESTROY", guarded(quoteDestroyHandle));
 
 /**
  * Adds job create event
@@ -272,7 +290,7 @@ async function jobCreateHandle(req) {
     console.error("Jobber webhook handler error:", e);
   }
 }
-events.on("jobber-JOB_CREATE", jobCreateHandle);
+events.on("jobber-JOB_CREATE", guarded(jobCreateHandle));
 
 /**
  * Adds job update event
@@ -302,7 +320,7 @@ async function jobUpdateHandle(req) {
     console.error("Jobber webhook handler error:", e);
   }
 }
-events.on("jobber-JOB_UPDATE", jobUpdateHandle);
+events.on("jobber-JOB_UPDATE", guarded(jobUpdateHandle));
 
 /**
  * Adds job destroy event
@@ -323,7 +341,7 @@ async function jobDestroyHandle(req) {
     console.error("Jobber webhook handler error:", e);
   }
 }
-events.on("jobber-JOB_DESTROY", jobDestroyHandle);
+events.on("jobber-JOB_DESTROY", guarded(jobDestroyHandle));
 
 /**
  * Adds new payment event
@@ -356,7 +374,7 @@ async function paymentCreateHandle(req) {
     console.error("Jobber webhook handler error:", e);
   }
 }
-events.on("jobber-PAYMENT_CREATE", paymentCreateHandle);
+events.on("jobber-PAYMENT_CREATE", guarded(paymentCreateHandle));
 
 /**
  * Adds payment update event
@@ -384,7 +402,7 @@ async function paymentUpdateHandle(req) {
     console.error("Jobber webhook handler error:", e);
   }
 }
-events.on("jobber-PAYMENT_UPDATE", paymentUpdateHandle);
+events.on("jobber-PAYMENT_UPDATE", guarded(paymentUpdateHandle));
 
 /**
  * Adds payment destroy event
@@ -405,7 +423,7 @@ async function paymentDestroyHandle(req) {
     console.error("Jobber webhook handler error:", e);
   }
 }
-events.on("jobber-PAYMENT_DESTROY", paymentDestroyHandle);
+events.on("jobber-PAYMENT_DESTROY", guarded(paymentDestroyHandle));
 
 /**
  * Adds payout create event
@@ -431,7 +449,7 @@ async function payoutCreateHandle(req) {
     console.error("Jobber webhook handler error:", e);
   }
 }
-events.on("jobber-PAYOUT_CREATE", payoutCreateHandle);
+events.on("jobber-PAYOUT_CREATE", guarded(payoutCreateHandle));
 
 /**
  * Adds payout updated event
@@ -452,7 +470,7 @@ async function payoutUpdateHandle(req) {
     await PostHog.logPayoutUpdate(payout);
   }
 }
-events.on("jobber-PAYOUT_UPDATE", payoutUpdateHandle);
+events.on("jobber-PAYOUT_UPDATE", guarded(payoutUpdateHandle));
 
 /**
  * Adds new property event
@@ -475,7 +493,7 @@ async function propertyCreateHandle(req) {
     await PostHog.logProperty(property, clientID);
   }
 }
-events.on("jobber-PROPERTY_CREATE", propertyCreateHandle);
+events.on("jobber-PROPERTY_CREATE", guarded(propertyCreateHandle));
 
 /**
  * Adds property update event
@@ -498,7 +516,7 @@ async function propertyUpdateHandle(req) {
     await PostHog.logPropertyUpdate(property, clientID);
   }
 }
-events.on("jobber-PROPERTY_UPDATE", propertyUpdateHandle);
+events.on("jobber-PROPERTY_UPDATE", guarded(propertyUpdateHandle));
 
 /**
  * Adds property destroy event
@@ -514,7 +532,7 @@ async function propertyDestroyHandle(req) {
     events.emit("db-PROPERTY_DESTROY", body.data["webHookEvent"]["itemId"]);
   }
 }
-events.on("jobber-PROPERTY_DESTROY", propertyDestroyHandle);
+events.on("jobber-PROPERTY_DESTROY", guarded(propertyDestroyHandle));
 
 /**
  * Adds new visit event
@@ -535,7 +553,7 @@ async function visitCreateHandle(req) {
     await PostHog.logVisit(visit, clientID);
   }
 }
-events.on("jobber-VISIT_CREATE", visitCreateHandle);
+events.on("jobber-VISIT_CREATE", guarded(visitCreateHandle));
 
 /**
  * Adds visit update event
@@ -556,7 +574,7 @@ async function visitUpdateHandle(req) {
     await PostHog.logVisitUpdate(visit, clientID);
   }
 }
-events.on("jobber-VISIT_UPDATE", visitUpdateHandle);
+events.on("jobber-VISIT_UPDATE", guarded(visitUpdateHandle));
 
 /**
  * Adds visit complete event
@@ -577,7 +595,7 @@ async function visitCompleteHandle(req) {
     await PostHog.logVisitComplete(visit, clientID);
   }
 }
-events.on("jobber-VISIT_COMPLETE", visitCompleteHandle);
+events.on("jobber-VISIT_COMPLETE", guarded(visitCompleteHandle));
 
 /**
  * Adds new request create event
@@ -593,6 +611,13 @@ async function requestCreateHandle(req) {
     let request = await Jobber.getRequestData(
       body.data["webHookEvent"]["itemId"],
     );
+    // Jobber returns null for a request deleted (or merged away) since the webhook
+    if (!request) {
+      console.log(
+        `JobberWebHook: Request ${body.data["webHookEvent"]["itemId"]} no longer exists, skipping`,
+      );
+      return;
+    }
     // A request made by the booking API has already told staff, with its details
     if (request.title?.includes(AI_AGENT_REQUEST_TITLE)) {
       console.log(
@@ -630,7 +655,7 @@ async function requestCreateHandle(req) {
     await APICoordinator.contactMade(contact, JSON.stringify(body));
   }
 }
-events.on("jobber-REQUEST_CREATE", requestCreateHandle);
+events.on("jobber-REQUEST_CREATE", guarded(requestCreateHandle));
 
 /**
  * Adds expense create event
@@ -660,7 +685,7 @@ async function expenseCreateHandle(req) {
     await PostHog.logExpenseCreate(expense, expense.enteredBy.uuid);
   }
 }
-events.on("jobber-EXPENSE_CREATE", expenseCreateHandle);
+events.on("jobber-EXPENSE_CREATE", guarded(expenseCreateHandle));
 
 /**
  * Adds expense update event
@@ -690,7 +715,7 @@ async function expenseUpdateHandle(req) {
     await PostHog.logExpenseUpdate(expense, expense.enteredBy.uuid);
   }
 }
-events.on("jobber-EXPENSE_UPDATE", expenseUpdateHandle);
+events.on("jobber-EXPENSE_UPDATE", guarded(expenseUpdateHandle));
 
 /**
  * Adds expense destroy event
@@ -712,7 +737,7 @@ async function expenseDestroyHandle(req) {
     }
   }
 }
-events.on("jobber-EXPENSE_DESTROY", expenseDestroyHandle);
+events.on("jobber-EXPENSE_DESTROY", guarded(expenseDestroyHandle));
 
 /**
  * Adds request update event
@@ -728,6 +753,12 @@ async function requestUpdateHandle(req) {
     let request = await Jobber.getRequestData(
       body.data["webHookEvent"]["itemId"],
     );
+    if (!request) {
+      console.log(
+        `JobberWebHook: Request ${body.data["webHookEvent"]["itemId"]} no longer exists, skipping`,
+      );
+      return;
+    }
     // Insert/Update client
     let clientID = await PostHog.logClient(request.client);
     // Insert request
@@ -735,7 +766,7 @@ async function requestUpdateHandle(req) {
     await PostHog.logRequestUpdate(request, clientID);
   }
 }
-events.on("jobber-REQUEST_UPDATE", requestUpdateHandle);
+events.on("jobber-REQUEST_UPDATE", guarded(requestUpdateHandle));
 
 /**
  * Adds timesheet create/update event
@@ -755,8 +786,8 @@ async function timesheetUpdateHandle(req) {
     events.emit("db-TIMESHEET_CREATE_UPDATE", timesheet);
   }
 }
-events.on("jobber-TIMESHEET_CREATE", timesheetUpdateHandle);
-events.on("jobber-TIMESHEET_UPDATE", timesheetUpdateHandle);
+events.on("jobber-TIMESHEET_CREATE", guarded(timesheetUpdateHandle));
+events.on("jobber-TIMESHEET_UPDATE", guarded(timesheetUpdateHandle));
 
 /**
  * Adds timesheet destroy event
@@ -772,7 +803,7 @@ async function timesheetDestroyHandle(req) {
     events.emit("db-TIMESHEET_DESTROY", body.data["webHookEvent"]["itemId"]);
   }
 }
-events.on("jobber-TIMESHEET_DESTROY", timesheetDestroyHandle);
+events.on("jobber-TIMESHEET_DESTROY", guarded(timesheetDestroyHandle));
 
 /**
  * Builds a handler that only saves the record to the database, for topics that
