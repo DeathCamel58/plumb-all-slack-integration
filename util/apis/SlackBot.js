@@ -640,6 +640,95 @@ async function sendContactMessage(
 events.on("slackbot-send-contact", sendContactMessage);
 
 /**
+ * Finds the Slack post for a booking request by its Jobber link, looking back
+ * through the channel's recent messages.
+ * @param {string} channelId
+ * @param {string} jobberUrl
+ * @returns {Promise<string|null>} The post's ts, or null if it isn't found
+ */
+async function findBookingPost(channelId, jobberUrl) {
+  let cursor;
+  for (let page = 0; page < 3; page++) {
+    const result = await app.client.conversations.history({
+      channel: channelId,
+      limit: 200,
+      cursor,
+    });
+    const post = (result.messages ?? []).find(
+      (m) =>
+        m.text?.includes(jobberUrl) &&
+        m.text.includes("New AI Agent Booking Request"),
+    );
+    if (post) return post.ts;
+    cursor = result.response_metadata?.next_cursor;
+    if (!cursor) break;
+  }
+  return null;
+}
+
+/**
+ * Adds an update (more context, photos) to a booking request as replies in the
+ * thread of its original post. If that post can't be found, the update is
+ * posted on its own instead, so staff still see it.
+ * @param {object} params
+ * @param {string|null} params.jobberUrl The request's Jobber link, which is in its post
+ * @param {string|null} params.text What to say in the thread, if anything
+ * @param {Array<{buffer: Buffer, filename: string, sourceUrl?: string}>} params.images Photos to attach
+ * @param {Contact} params.fallbackContact What to post on its own if the original isn't found
+ * @returns {Promise<void>}
+ */
+async function sendBookingUpdate({ jobberUrl, text, images, fallbackContact }) {
+  try {
+    let threadTs = null;
+    const channelId = await resolveChannelId(slackCallChannelName);
+    if (jobberUrl && channelId) {
+      threadTs = await findBookingPost(channelId, jobberUrl);
+    }
+    if (!threadTs) {
+      console.warn(
+        "Slack: Original booking post not found, posting the update on its own",
+      );
+      await sendContactMessage(fallbackContact, "AI Agent Booking Update");
+      return;
+    }
+
+    if (text) {
+      await app.client.chat.postMessage({
+        channel: slackCallChannelName,
+        thread_ts: threadTs,
+        text,
+        unfurl_links: false,
+        username: "AI Agent Booking Update",
+        icon_url:
+          "https://plumb-all.com/wp-content/uploads/2018/08/cropped-icon.png",
+      });
+    }
+    for (const image of images ?? []) {
+      const uploaded = await uploadFile(
+        image.buffer,
+        image.filename,
+        image.filename,
+        "Photo from the customer",
+        slackCallChannelName,
+        threadTs,
+      );
+      if (!uploaded && image.sourceUrl) {
+        await app.client.chat.postMessage({
+          channel: slackCallChannelName,
+          thread_ts: threadTs,
+          text: `Couldn't attach a photo: ${image.sourceUrl}`,
+          unfurl_links: false,
+        });
+      }
+    }
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error(error);
+  }
+}
+events.on("slackbot-send-booking-update", sendBookingUpdate);
+
+/**
  * Validates inputs and starts the outbound call flow, returning a user message.
  * @param {{userId: string, employeePhoneNumber: string, rawCustomerNumber: string}} params
  * @returns {Promise<{ok: boolean, userMessage: string}>}

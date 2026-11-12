@@ -262,6 +262,112 @@ describe("contact posts with photos", () => {
   });
 });
 
+describe("booking updates", () => {
+  const sendUpdate = eventsOnMock.mock.calls.find(
+    ([name]) => name === "slackbot-send-booking-update",
+  )[1];
+  const jobberUrl = "https://secure.getjobber.com/work_requests/36107298";
+  const image = {
+    buffer: Buffer.from("img"),
+    filename: "photo-1-abc123.jpg",
+    sourceUrl: "https://example.com/a.jpg",
+  };
+
+  function fallback() {
+    return new Contact("AI Agent Booking Update", "Jane", "+17702345678");
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    postMessageMock.mockResolvedValue({ ts: "999.000" });
+    uploadV2Mock.mockResolvedValue({ ok: true });
+    listChannelsMock.mockResolvedValue({
+      channels: [{ name: "calls", id: "C0CALLS0001" }],
+    });
+    historyMock.mockResolvedValue({
+      messages: [
+        { ts: "1.1", text: "something else" },
+        {
+          ts: "111.222",
+          text: `=== New AI Agent Booking Request ===\nJobber: ${jobberUrl}`,
+        },
+        {
+          ts: "333.444",
+          text: `=== New AI Agent Booking Update ===\nJobber: ${jobberUrl}`,
+        },
+      ],
+    });
+  });
+
+  test("text and photos are replies in the original request's thread", async () => {
+    await sendUpdate({
+      jobberUrl,
+      text: "Additional context from the AI agent: meter moves",
+      images: [image],
+      fallbackContact: fallback(),
+    });
+
+    expect(postMessageMock).toHaveBeenCalledTimes(1);
+    expect(postMessageMock.mock.calls[0][0]).toMatchObject({
+      thread_ts: "111.222",
+      text: "Additional context from the AI agent: meter moves",
+    });
+    expect(uploadV2Mock.mock.calls[0][0]).toMatchObject({
+      channel_id: "C0CALLS0001",
+      thread_ts: "111.222",
+      filename: "photo-1-abc123.jpg",
+    });
+  });
+
+  test("a photo-only update posts no text, just the photo in the thread", async () => {
+    await sendUpdate({
+      jobberUrl,
+      text: null,
+      images: [image],
+      fallbackContact: fallback(),
+    });
+
+    expect(postMessageMock).not.toHaveBeenCalled();
+    expect(uploadV2Mock).toHaveBeenCalledTimes(1);
+  });
+
+  test("an earlier update is not mistaken for the original post", async () => {
+    historyMock.mockResolvedValue({
+      messages: [
+        {
+          ts: "333.444",
+          text: `=== New AI Agent Booking Update ===\nJobber: ${jobberUrl}`,
+        },
+      ],
+    });
+
+    await sendUpdate({
+      jobberUrl,
+      text: "x",
+      images: [],
+      fallbackContact: fallback(),
+    });
+
+    // Not found, so it falls back to a post of its own (no thread_ts)
+    expect(postMessageMock.mock.calls[0][0].thread_ts).toBeUndefined();
+  });
+
+  test("when the original post can't be found the update is posted on its own", async () => {
+    historyMock.mockResolvedValue({ messages: [] });
+
+    await sendUpdate({
+      jobberUrl,
+      text: "x",
+      images: [image],
+      fallbackContact: Object.assign(fallback(), { images: [image] }),
+    });
+
+    expect(postMessageMock).toHaveBeenCalledTimes(1);
+    expect(postMessageMock.mock.calls[0][0].thread_ts).toBeUndefined();
+    expect(uploadV2Mock).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("website form review", () => {
   test("every form is posted to call-logs with the reCAPTCHA result and a send button", async () => {
     process.env.SLACK_CALL_LOGS = "call-logs";

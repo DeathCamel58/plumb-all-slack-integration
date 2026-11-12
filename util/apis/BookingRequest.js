@@ -992,7 +992,19 @@ export async function handleBookingAddition(requestId, body, ip) {
       });
     }
 
-    // Slack only: this isn't a new contact, so no new Trello card or PostHog event
+    // Slack only, as replies in the original post's thread: this isn't a new
+    // contact, so no new Trello card or PostHog event
+    const failedLinks = photos.failedLinks.length
+      ? `Photos that couldn't be attached:\n${photos.failedLinks.join("\n")}`
+      : null;
+    const threadText = [
+      v.additionalContext
+        ? `Additional context from the AI agent: ${v.additionalContext}`
+        : null,
+      failedLinks,
+    ]
+      .filter(Boolean)
+      .join("\n");
     const contact = new Contact(
       "AI Agent Booking Update",
       request.name ?? "Unknown",
@@ -1000,21 +1012,18 @@ export async function handleBookingAddition(requestId, body, ip) {
       undefined,
       undefined,
       request.address ?? undefined,
-      [
-        v.additionalContext
-          ? `Additional context: ${v.additionalContext}`
-          : null,
-        photos.failedLinks.length
-          ? `Photos that couldn't be attached:\n${photos.failedLinks.join("\n")}`
-          : null,
-        request.url ? `Jobber: ${request.url}` : null,
-      ]
+      [threadText || null, request.url ? `Jobber: ${request.url}` : null]
         .filter(Boolean)
         .join("\n"),
       "AI Agent",
     );
     contact.images = photos.images;
-    events.emit("slackbot-send-contact", contact, "AI Agent Booking Update");
+    events.emit("slackbot-send-booking-update", {
+      jobberUrl: request.url,
+      text: threadText || null,
+      images: photos.images,
+      fallbackContact: contact,
+    });
 
     console.log(
       `BookingRequest: Added an update to Jobber request ${requestId}`,
@@ -1159,7 +1168,7 @@ export async function handleBookingPhoto(requestId, token, bytes, ip) {
     discardHosted([hosted.token]);
   }
 
-  // Slack only, with the photo in the thread; Slack's upload is the last holder of the bytes
+  // Slack only, as a reply in the original post's thread; Slack's upload is the last holder of the bytes
   const contact = new Contact(
     "AI Agent Booking Update",
     request.name ?? "Unknown",
@@ -1173,7 +1182,12 @@ export async function handleBookingPhoto(requestId, token, bytes, ip) {
     "AI Agent",
   );
   contact.images = [hosted.image];
-  events.emit("slackbot-send-contact", contact, "AI Agent Booking Update");
+  events.emit("slackbot-send-booking-update", {
+    jobberUrl: request.url,
+    text: null,
+    images: [hosted.image],
+    fallbackContact: contact,
+  });
 
   console.log(`BookingRequest: Added an uploaded photo to ${requestId}`);
   return respond(200, {

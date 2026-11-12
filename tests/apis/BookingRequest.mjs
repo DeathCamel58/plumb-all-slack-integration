@@ -555,9 +555,15 @@ describe("handleBookingAddition", () => {
     expect(note.note).toContain("https://example.com/meter.jpg");
     expect(note.attachmentUrls).toHaveLength(1);
     expect(eventsEmitMock).toHaveBeenCalledWith(
-      "slackbot-send-contact",
-      expect.objectContaining({ type: "AI Agent Booking Update" }),
-      "AI Agent Booking Update",
+      "slackbot-send-booking-update",
+      expect.objectContaining({
+        jobberUrl: "https://secure.getjobber.com/requests/1",
+        text: expect.stringContaining("Water meter dial moves"),
+        images: expect.any(Array),
+        fallbackContact: expect.objectContaining({
+          type: "AI Agent Booking Update",
+        }),
+      }),
     );
     // Not a new contact: no Trello card or PostHog event
     expect(contactMadeMock).not.toHaveBeenCalled();
@@ -736,9 +742,12 @@ describe("handleBookingPhoto", () => {
         "https://integration.example/media/tok1/photo-1-abc123.jpg",
       ],
     });
-    const [, contact] = eventsEmitMock.mock.calls[0];
-    expect(contact.type).toBe("AI Agent Booking Update");
-    expect(contact.images).toHaveLength(1);
+    const [eventName, update] = eventsEmitMock.mock.calls[0];
+    expect(eventName).toBe("slackbot-send-booking-update");
+    expect(update.jobberUrl).toBe("https://secure.getjobber.com/requests/1");
+    expect(update.text).toBeNull();
+    expect(update.images).toHaveLength(1);
+    expect(update.fallbackContact.type).toBe("AI Agent Booking Update");
     expect(contactMadeMock).not.toHaveBeenCalled();
 
     await flush();
